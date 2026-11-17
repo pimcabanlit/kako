@@ -212,7 +212,14 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `api/app.py` the app and `/api/v1/health`; `db/` the engine, the declarative base, the table
   models (`db/models/`, one module per layer of `docs/data-model.md`), every enumerated column's
   values (`db/enums.py`, held as check constraints) and Alembic (`db/migrations/`, append-only once
-  merged; `0002_tables.py` creates every table); `meko/` the only package that talks to Meko
+  merged; `0002_tables.py` creates every table, `0003_fact_guard.py` the trigger that allows only
+  the fact status transitions, a non-seed fact only with its approved proposal, and refuses deletes);
+  `db/fact_store.py` records, replaces and retracts facts and reads snapshots, one transaction per
+  write, each exactly what its proposal's payload names (only the seed loader calls
+  `record_seed_fact`); `facts/` the pure fact rules (`attributes.py` the attribute catalog, `values.py`
+  a value against its attribute, `proposals.py` proposal payloads and the check that a write is the
+  one approved, `snapshot.py` snapshots `on` a date and `known_at` a time, `rules.py` V-01 to V-08 and
+  V-16; no database, clock or randomness, which `tests/test_purity.py` checks); `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
   any past their `max_tool_calls` ceiling, 0 by default; `health.py`, the handshake probe).
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
@@ -220,6 +227,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `tests/support/data_model.py` reads the tables out of `docs/data-model.md`: `test_schema_doc.py`
   holds the models to it and `tests/integration/test_schema.py` the migrated database (a fresh
   database per test, migrated twice), with the checks the database must refuse.
+  `test_facts_*.py` test the fact rules on rows in memory (`tests/support/facts.py` builds them);
+  `tests/integration/test_fact_store.py` each status transition, the rules on each write and the
+  database guard behind them.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and
   cleans up (at most 6 tool calls).
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons. `next.config.ts`

@@ -10,12 +10,16 @@ KAKO_REQUIRE_INTEGRATION=1, which turns a missing variable into a failure instea
 
 from __future__ import annotations
 
+import asyncio
 import os
+from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kako.settings import LOCAL_HOSTS
+from tests.conftest import MakeSettings
 
 
 def _required(name: str) -> str:
@@ -73,3 +77,23 @@ def head_revision() -> str:
     head = ScriptDirectory.from_config(config).get_current_head()
     assert head is not None
     return head
+
+
+@pytest.fixture
+async def migrated(
+    make_settings: MakeSettings, test_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[AsyncEngine]:
+    """A fresh database, migrated twice (the second run must change nothing)."""
+    from kako.cli import main
+
+    await reset_database(test_database_url)
+    monkeypatch.setenv("KAKO_DATABASE_URL", test_database_url)
+    assert await asyncio.to_thread(main, ["migrate"]) == 0
+    assert await asyncio.to_thread(main, ["migrate"]) == 0
+    from kako.db.engine import make_engine
+
+    url = make_settings(database_url=test_database_url).database_url
+    assert url is not None
+    engine = make_engine(url)
+    yield engine
+    await engine.dispose()

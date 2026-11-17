@@ -41,6 +41,12 @@ class Fact(Base):
             "(retracted_at IS NULL) = (retraction_reason IS NULL)",
             name="retracted_reason",
         ),
+        # Migration 0003. Only a seed fact has no proposal, and a seed fact replaces nothing.
+        CheckConstraint(
+            "(source_kind = 'seed') = (proposal_id IS NULL) "
+            "AND (source_kind <> 'seed' OR replaces IS NULL)",
+            name="seed",
+        ),
         Index("ix_fact_snapshot", "household_id", "entity_id", "attribute", "valid_from"),
     )
 
@@ -63,7 +69,8 @@ class Fact(Base):
     retraction_reason: Mapped[str | None] = mapped_column(Text)
     source_kind: Mapped[str] = mapped_column(Text)
     source_ref: Mapped[str] = mapped_column(Text)
-    proposal_id: Mapped[uuid.UUID | None] = fk("proposal.id", nullable=True)
+    # Unique (migration 0003): a proposal writes one fact at most.
+    proposal_id: Mapped[uuid.UUID | None] = fk("proposal.id", nullable=True, unique=True)
     life_event_id: Mapped[uuid.UUID | None] = fk("life_event.id", nullable=True)
 
 

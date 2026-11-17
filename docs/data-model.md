@@ -1,4 +1,4 @@
-# Kako data model v0.2
+# Kako data model v0.4
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -10,13 +10,15 @@ in the same change once agreed.
   [architecture.md](architecture.md#where-data-lives).
 - **Scope:** the hackathon MVP: one synthetic household, four planning areas (budget, debt, savings,
   goals), sessions, dreaming, decisions and plans. Tax is never calculated.
-- **Version:** v0.3 (Nov 17, 2026). v0.1 was the first draft. v0.2 closed eight gaps found in the
+- **Version:** v0.4 (Nov 17, 2026). v0.1 was the first draft. v0.2 closed eight gaps found in the
   Stage 5 review: `account.purpose` and `preference.debt_strategy` facts, `decision_option.tags`, an
   amount on each recommendation, `session_participant` and the speaker on evidence, `agent_step`,
   `context_gap`, and the deployment and cost on `llm_call`. It also handles Meko's own extracted
   memories and sends decision records to shared knowledge. v0.3 is the schema as migrated (Phase 2,
   task 1): every table has a column list, `figure.flag` says why a figure has no value, the system
-  tables have their columns, and each table names its keys and checks.
+  tables have their columns, and each table names its keys and checks. v0.4 is the fact store (task 2):
+  the status transitions, proposal payloads (a proposal writes exactly the fact it names, once), and
+  a seed fact has no proposal and replaces nothing.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -139,13 +141,15 @@ One row per value per period. The heart of "nothing is silently overwritten".
 | `retraction_reason` | TEXT, null | Required when retracted |
 | `source_kind` | TEXT | `seed`, `session`, `statement`, `household_entry`, `dreaming` |
 | `source_ref` | TEXT | A Meko conversation id and turn seed, a knowledge-base document id, or a form submission id |
-| `proposal_id` | UUID FK, null | The approved proposal that created it (null for the seed) |
+| `proposal_id` | UUID FK, null | The approved proposal that created it (null for the seed). Unique: a proposal writes one fact at most |
 | `life_event_id` | UUID FK, null | The life event that caused it, if any |
 
 Checks in the database: exactly one `value_*` column is set; money is not negative and a rate is
 between 0 and 1 (V-07); `valid_to` is after `valid_from`; a fact doesn't replace itself; a `replaced`
 fact has `valid_to` and `replaced_by`; a `retracted` fact, and only a retracted one, has
-`retracted_at` and a reason. `replaced_by` is unique (one fact replaces another at most once). An index
+`retracted_at` and a reason; a seed fact, and only a seed fact, has no `proposal_id`, and a seed fact
+replaces nothing (`ck_fact_seed`). `replaced_by` is unique (one fact replaces another at most once), and
+so is `proposal_id`. An index
 on (`household_id`, `entity_id`, `attribute`, `valid_from`) serves the snapshot.
 
 Exactly one `value_*` column is set, the one the attribute's type names. Only `valid_to`, `replaced_by`,
@@ -156,9 +160,25 @@ below; a database trigger rejects any other update, and deletes.
 
 | From | To | When | What changes |
 | --- | --- | --- | --- |
-| (new) | `active` | A proposal is approved, or the seed is loaded | Insert |
-| `active` | `replaced` | An approved new fact for the same entity and attribute takes effect | `valid_to` = the new fact's `valid_from`; `replaced_by` = the new fact |
-| `active` or `replaced` | `retracted` | The household says it was wrong | `retracted_at`, `retraction_reason`. If it had replaced a fact, that fact's `replaced_by` is cleared and its `valid_to` restored, in the same transaction |
+| (new) | `active` | A proposal is approved, or the seed is loaded | Insert, always as `active` with no replacement or retraction |
+| `active` | `replaced` | An approved new fact for the same entity and attribute takes effect | `valid_to` = the new fact's `valid_from`; `replaced_by` = the new fact. Only an open fact (no `valid_to`) can be replaced, by one that starts later; the new fact is inserted first, in the same transaction |
+| `active` | `retracted` | The household says it was wrong | `retracted_at`, `retraction_reason` |
+| `replaced` | `active` | The fact that replaced it is retracted | `replaced_by` cleared and `valid_to` back to null, in the same transaction as the retraction: the old value was true all along |
+
+A fact that has already been replaced can't be retracted: its replacement is retracted first (Pim, Nov
+17). This keeps every chain repairable without changing a fact's `replaces`, which never changes. The
+proposals that may write: `new_fact` or `preference_pattern` records a fact; `replace_fact` or
+`preference_pattern` replaces one; `retract_fact` retracts one. Each writes exactly what its payload
+names, once (see "Proposal payloads"). Seed facts have no proposal: only the seed loader records them,
+and a seed fact never replaces another.
+
+The store (`kako/db/fact_store.py`) checks each write first and says why it refuses, and locks the
+household's row so two writes can't interleave. Behind it, migration 0003's guard refuses the same
+things in the database: an insert that isn't `active`, a non-seed insert without an approved proposal
+of its household and of a kind that may make it, any other update (a value, a start, a source or
+what a fact replaces never changes), and, at commit, a replacement whose old fact doesn't end where it
+starts and name it back (V-03, V-04). Facts, decisions, life events and proposals are never deleted or
+truncated.
 
 ### Attribute catalog
 
@@ -169,7 +189,7 @@ same change.
 | --- | --- | --- | --- |
 | `income.monthly_net` | income | money | Take-home pay per month, after the deductions on the payslip (withholding tax, SSS, PhilHealth, Pag-IBIG). Kako reads the net figure; it never computes the deductions |
 | `income.thirteenth_month` | income | money | The 13th-month pay amount, received in December |
-| `income.pay_day` | income | int | Day of the month |
+| `income.pay_day` | income | int | Day of the month, 1 to 31 |
 | `expense.monthly_amount` | expense | money | Budgeted amount per month |
 | `expense.essential` | expense | text | `yes` or `no`. Essential expenses count toward the emergency-fund runway |
 | `debt.balance` | debt | money | Balance on `valid_from`, from a statement or the household |
@@ -184,7 +204,7 @@ same change.
 | `goal.saved_amount` | goal | money | Already set aside, on `valid_from` |
 | `goal.priority` | goal | int | 1 is highest |
 | `plan.allocation` | debt, account, goal | money | How much of the monthly surplus the household agreed to put here (extra debt payment or a contribution) |
-| `household.emergency_months_target` | (household) | int | The household's own target, such as 3 months |
+| `household.emergency_months_target` | (household) | int | The household's own target, such as 3 months (1 to 24) |
 | `preference.debt_vs_flexibility` | (household) | text | `speed`, `balanced` or `flexibility` |
 | `preference.debt_strategy` | (household) | text | `avalanche` (highest rate first) or `snowball` (smallest balance first). Required once the household has two open debts; the engine reports a missing strategy instead of assuming one |
 | `preference.note` | (household) | text | Any other stated preference, in the household's words |
@@ -213,8 +233,11 @@ The engine never reads `fact` directly. It reads a **snapshot**: the household a
 - `snapshot(household, on=d)`: every fact with `status` in (`active`, `replaced`) whose validity window
   contains *d*. This is "what was true on *d*" and is what calculations use.
 - `snapshot(household, on=d, known_at=t)`: the same, but only facts recorded at or before *t* and not
-  retracted at or before *t*. This is "what Kako believed at *t*", which explains an old plan exactly as
-  it was made.
+  retracted at or before *t*, each with the window it had at *t*. This is "what Kako believed at *t*",
+  which explains an old plan exactly as it was made. A replacement recorded after *t* hadn't closed the
+  old fact yet: on Sep 15, Mara's ₱52,000 was still open, so a snapshot on Dec 1 known at Sep 15 holds
+  ₱52,000. The window at *t* comes from the chain (a fact ends where its replacement starts, if that
+  replacement was recorded and not retracted by *t*), so no extra history columns are needed.
 
 A snapshot has a stable hash (the sorted fact ids), stored on every calculation run.
 
@@ -282,7 +305,7 @@ Every number the engine produces, addressable by a key.
 | `unit` | TEXT | `centavos`, `months`, `ratio`, `date`, `count` |
 | `value_numeric` | NUMERIC(20,6), null | |
 | `value_date` | DATE, null | |
-| `flag` | TEXT, null | Why the value is missing or needs attention: `never_pays_off`, `no_allocation`, `no_emergency_account`, `strategy_missing`, `past_due`, `negative` |
+| `flag` | TEXT, null | Why the value is missing or needs attention: `never_pays_off`, `no_allocation`, `no_emergency_account`, `strategy_missing`, `past_due`, `negative` (shown, not hidden), `no_income` or `no_essential_expenses` (nothing to divide by), `missing_input` (a fact the formula needs isn't there; the engine never assumes one) |
 | `formula` | TEXT | The formula id from [Calculations](#calculations) |
 | `input_fact_ids` | UUID[] | The facts this figure read |
 | `input_figure_ids` | UUID[] | The figures it was built from |
@@ -475,6 +498,21 @@ Everything dreaming or an agent wants to add to household knowledge waits here f
 Checks: a `pending` proposal has no decision yet; an `approved` one names the person who approved it and
 when; a `rejected` or `expired` one has `decided_at`.
 
+**Proposal payloads.** A proposal that writes a fact carries the write itself, and the fact store writes
+only that, once (V-08; REVIEW.md rule 4). A write that differs in any field is refused, and so is a
+second write with the same proposal.
+
+| Kind | Payload |
+| --- | --- |
+| `new_fact` | `entity_id` (null for a household-wide fact), `attribute`, `value`, `valid_from`, `valid_to` (null unless the period has already ended), `life_event_id` (null if none) |
+| `replace_fact` | The same, plus `replaces`: the open fact it replaces. `valid_to` is null |
+| `preference_pattern` | Either of the two above |
+| `retract_fact` | `fact_id`, `reason` |
+
+Values are JSON: money and whole numbers as integers (money in centavos), a rate as a decimal string
+such as `"0.035"` (never a float), a date as `"YYYY-MM-DD"`, ids as UUID strings. The other kinds
+(`life_event`, `decision`, `promote`) write their own tables; their payloads are defined with them.
+
 ### `proposal_evidence`
 
 | Column | Type | Notes |
@@ -652,7 +690,7 @@ Checked by code before a write, and as a suite over the whole database in CI.
 | V-05 | A retracted fact has `retracted_at` and a reason, and no snapshot after `retracted_at` includes it |
 | V-06 | `valid_from` is on or after the entity's `opened_on`, and before its `closed_on` |
 | V-07 | Money facts are never negative (a debt is a positive balance). Rates are between 0 and 1 |
-| V-08 | Every non-seed fact, decision and life event has an approved proposal |
+| V-08 | Every non-seed fact, decision and life event has an approved proposal; a fact is exactly the write its proposal names, and a proposal writes one fact at most. A seed fact has no proposal and replaces nothing |
 | V-09 | Every number in a proposal appears in its quoted evidence |
 | V-10 | Every number in a recommendation, summary or reconciliation text matches a figure of the plan's run or a fact in its snapshot (the number check). Dates and counts are checked too |
 | V-11 | Every recommendation has at least one `figure` source and one non-figure source (a fact, memory, decision or document) |

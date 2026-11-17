@@ -6,9 +6,8 @@ test compares the tables and columns with data-model.md.
 
 from __future__ import annotations
 
-import asyncio
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -20,32 +19,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 import kako.db.models  # noqa: F401 - registers every table
-from kako.cli import main
 from kako.db.base import Base
-from kako.db.engine import make_engine
-from tests.conftest import MakeSettings
-from tests.integration.conftest import head_revision, reset_database
+from tests.integration.conftest import head_revision
 from tests.support.data_model import doc_tables, normalise_type
 
 pytestmark = pytest.mark.integration
 
 NOW = datetime(2026, 11, 17, 12, 0, tzinfo=UTC)
-
-
-@pytest.fixture
-async def migrated(
-    make_settings: MakeSettings, test_database_url: str, monkeypatch: pytest.MonkeyPatch
-) -> AsyncIterator[AsyncEngine]:
-    """A fresh database, migrated twice (the second run must change nothing)."""
-    await reset_database(test_database_url)
-    monkeypatch.setenv("KAKO_DATABASE_URL", test_database_url)
-    assert await asyncio.to_thread(main, ["migrate"]) == 0
-    assert await asyncio.to_thread(main, ["migrate"]) == 0
-    url = make_settings(database_url=test_database_url).database_url
-    assert url is not None
-    engine = make_engine(url)
-    yield engine
-    await engine.dispose()
 
 
 async def _rows(conn: AsyncConnection, sql: str) -> list[Any]:
@@ -147,7 +127,8 @@ def _fact(household_id: uuid.UUID, **overrides: Any) -> dict[str, Any]:
 
 Refusal = Callable[[AsyncConnection, uuid.UUID], Awaitable[object]]
 
-# Each case, the insert, and the check that must refuse it.
+# Each case, the insert, and the check that must refuse it. From migration 0003 the fact guard
+# refuses a fact inserted as anything but active before the status checks are reached.
 REFUSED: dict[str, tuple[Refusal, str]] = {
     "a fact with two values": (
         lambda c, h: _insert(c, "fact", **_fact(h, value_text="three")), "ck_fact_one_value"
@@ -167,15 +148,16 @@ REFUSED: dict[str, tuple[Refusal, str]] = {
         lambda c, h: _insert(c, "fact", **_fact(h, valid_to=date(2026, 3, 1))), "ck_fact_window"
     ),
     "a status not on the list": (
-        lambda c, h: _insert(c, "fact", **_fact(h, status="deleted")), "ck_fact_status"
+        lambda c, h: _insert(c, "fact", **_fact(h, status="deleted")),
+        "ck_fact_status|kako_fact_guard",
     ),
     "a retraction without a reason": (
         lambda c, h: _insert(c, "fact", **_fact(h, status="retracted", retracted_at=NOW)),
-        "ck_fact_retracted_reason",
+        "ck_fact_retracted_reason|kako_fact_guard",
     ),
     "replaced without a successor": (
         lambda c, h: _insert(c, "fact", **_fact(h, status="replaced", valid_to=date(2026, 12, 1))),
-        "ck_fact_replaced_closed",
+        "ck_fact_replaced_closed|kako_fact_guard",
     ),
     "currency not a code": (
         lambda c, h: _insert(
