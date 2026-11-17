@@ -33,6 +33,7 @@ Every table and formula is in [data-model.md](data-model.md). How each ContextCo
 | Dreaming | A background job after each session proposes; a person approves. In-session, the orchestrator can propose what the household just said, so a life event replans at once |
 | What-ifs | Computed by the engine in memory. Keeping one as an AMP branch is a Should, made ahead of time |
 | Meko environments | Local Meko for development, tests and CI; Meko Cloud for the demo datapack only |
+| Demo (Pim, Nov 17) | **Video recorded from the laptop** against the Meko Cloud demo datapack. No hosted app: the rules don't say judges run it, and a hosted backend would need a fixed outgoing IP for AMP and could add cost. Judges get the video, the README and the metrics |
 | Licence | All rights reserved: viewing and evaluation only, including by the ContextCon 2026 judges |
 
 ## Phases
@@ -162,7 +163,7 @@ Only after the Must and Should items work end to end.
 | --- | --- | --- |
 | Qorren overlaps until Dec 21 | Less time for Kako's agents | Engine and facts first, which need no model; agents from Dec 22 |
 | Meko Free-tier lifetime allowances | Rehearsals use up searches on Meko Cloud | Local Meko for everything but the demo; the call counter's ceiling; one seeding run |
-| AMP unavailable, slow or needing a fixed IP | The structured data can't live in the datapack | Neon (free Postgres); AMP named as the next step in the docs |
+| AMP unavailable, slow, or the laptop's home IP changes | The structured data can't live in the datapack, or the allow-list breaks before recording | Neon (free Postgres); AMP named as the next step in the docs. Check the allow-list on the day of recording |
 | Meko Cloud MCP needs OAuth for a server | The backend can't reach the demo datapack | Ask on Discord; run the demo backend on the laptop with the user's sign-in |
 | Dreaming proposes wrong facts | Trust in the memory story | Code checks quotes and numbers; everything needs approval; the labelled set measures it |
 | Model spend | Cost | Per-turn budget, daily cap, prompt caching, recorded fakes in tests |
@@ -199,7 +200,6 @@ The checklist in [contextcon-2026.md](contextcon-2026.md#submission-checklist) i
 
 | Question | Who | By |
 | --- | --- | --- |
-| Is a hosted demo needed, or is the video recorded from the laptop against Meko Cloud enough? A hosted backend needs a fixed outgoing IP for AMP | Pim | End of Phase 1 |
 | Pro access for entrants | Meko Discord | Phase 1 |
 | AMP on Free: limits and connectivity | Phase 1 spike | Phase 1 |
 | Full terms: licence or open-source requirement | ContextCon page | Before submission |

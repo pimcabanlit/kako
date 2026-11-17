@@ -229,11 +229,11 @@ memories and documents are wrapped as data, never as instructions.
 | Meko | Local Meko (`MEKO_MCP_URL=http://127.0.0.1:7777/mcp`); in CI, the same release installed from GitHub | Meko Cloud, one datapack for the demo household |
 | Postgres | Local Postgres (Docker; on Windows inside WSL), a fresh database per test run | AMP in the demo datapack if the Phase 1 test passes; otherwise a free managed Postgres (Neon) |
 | Model | The Anthropic API with a small dev budget; unit tests use a recorded fake | The Anthropic API |
-| Backend and web | `uvicorn` and `next dev` on the laptop | Open question: recorded from the laptop against Meko Cloud, or also hosted (see [build-plan.md](build-plan.md#open-questions)) |
+| Backend and web | `uvicorn` and `next dev` on the laptop | The laptop too: the video is recorded locally against Meko Cloud. No hosted app (Pim, Nov 17) |
 
 **AMP constraints** (from Meko's AMP reference): a database is reached from outside Meko only through
 an `ingress_external` endpoint with an allow-list of `/32` source addresses chosen at create time, so the
-backend needs a known outgoing IP; creating a branch or compute can block for up to 5 minutes; only the
+laptop's public IP goes on the allow-list (and is checked again before recording); creating a branch or compute can block for up to 5 minutes; only the
 datapack owner can create them; compute counts against a per-account vCPU cap. So what-ifs run in the
 engine in memory, always, and keeping one as an AMP branch is an optional step done ahead of time, never
 on the click path.
@@ -258,7 +258,7 @@ on the click path.
 | Meko | Free tier; local Meko for development | None. The lifetime allowances below are the real limit |
 | Postgres | Local; AMP (Free) or Neon (free) for the demo | None expected |
 | Anthropic API | Pay as you go, with a per-turn budget and a daily cap; prompt caching; tests use a recorded fake | Usage only. The cap is set before Phase 3 and reported on the metrics page |
-| Hosting | None needed for the video; a hosted demo is an open question | None unless chosen |
+| Hosting | None: the demo runs on the laptop for the video | None |
 | CI | GitHub Actions on a public repository | None |
 
 **Meko Free-tier lifetime allowances** (account-wide, from Meko's tool reference, Nov 2026): 1,000
