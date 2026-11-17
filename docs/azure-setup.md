@@ -15,7 +15,8 @@ Status: **being set up** (Phase 1, task 5). Rows are filled in as each step is d
 | --- | --- | --- |
 | Resource group | `kako-rg` | Kako only. Deleting it removes everything below |
 | Budget | `kako-monthly` | US$10 monthly, on the resource group; emails at 50%, 80% and 100%. A budget alerts, it does not stop spending |
-| Foundry resource and project | `kako-ai`, project `kako` | Region chosen where both models are offered |
+| Foundry resource and project | `kako-ai`, project `kako` | East US 2, all networks, system-assigned identity |
+| Application Insights | `appi-kako-ai-2195` | Added by the Foundry create form by default. Billed only for logs past the monthly free allowance (about 5 GB); for tracing later |
 | Deployment, stronger | set in `KAKO_MODEL_STRONG` | Orchestrator and dreaming. Global Standard (pay per token) |
 | Deployment, faster | set in `KAKO_MODEL_FAST` | The four specialists. Global Standard (pay per token) |
 | App registration | `kako-dev` | How the backend signs in (Entra ID); the secret expires after Jan 24, 2027 |
@@ -45,12 +46,12 @@ portal and note the difference under Lessons.
 ### 3. Foundry resource and project
 
 1. Search "Foundry" in the portal → Create a Foundry resource. Resource group `kako-rg`, name
-   `kako-ai`, and a region that offers both models as Global Standard (the model catalog shows it).
-2. Create a project in it named `kako`.
-3. From the resource's overview, copy the endpoint. Either form works for `KAKO_FOUNDRY_ENDPOINT`:
+   `kako-ai`, region East US 2, default project `kako`, Network: All networks. The form also
+   creates an Application Insights resource; keep it.
+2. From the resource's overview, copy the endpoint. Either form works for `KAKO_FOUNDRY_ENDPOINT`:
    `https://kako-ai.openai.azure.com` or the project endpoint
    `https://kako-ai.services.ai.azure.com/api/projects/kako`. Kako keeps only the scheme and host.
-4. Keys stay unused. Kako never reads them.
+3. Keys stay unused. Kako never reads them.
 
 ### 4. Two pay-per-token deployments
 
