@@ -151,3 +151,17 @@ def test_the_columns_are_checked(folder: Path) -> None:
     _edit(folder / "people.csv", "key,display_name,role,birth_year", "key,name,role,birth_year")
     with pytest.raises(DemoDataError, match=r"people\.csv: the columns must be"):
         read_demo(folder)
+
+
+def test_only_the_command_line_loads_the_demo() -> None:
+    """The loader writes approved proposals with no person behind them, safe only because it
+    creates its own household. So nothing but the `kako` command may import it: not the API, the
+    agents or a job (V-08)."""
+    src = Path(__file__).resolve().parents[1] / "src" / "kako"
+    allowed = {src / "cli.py", *(src / "demo").rglob("*.py")}
+    importers = [
+        str(path.relative_to(src))
+        for path in src.rglob("*.py")
+        if path not in allowed and "kako.demo" in path.read_text(encoding="utf-8")
+    ]
+    assert importers == []
