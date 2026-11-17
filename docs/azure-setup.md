@@ -9,7 +9,7 @@ project in the subscription.
 
 ## What is in place
 
-Status: **in place** (Nov 17, 2026). `check-models` passes from a cloud session; the laptop check is next.
+Status: **in place** (Nov 17, 2026). `check-models` passes from a cloud session and from the laptop.
 
 | Piece | Name | Notes |
 | --- | --- | --- |
@@ -118,6 +118,7 @@ per deployment (at most 256 output tokens each, since GPT-5 models count their h
 | Date | Where | Result |
 | --- | --- | --- |
 | Nov 17, 2026 | Cloud session ("First TEst" environment), as `kako-dev` | All four lines `[PASS]`: `gpt-5.4` answered in 1.5 s (13 tokens in, 4 out), `gpt-5-mini` in 1.1 s (13 in, 10 out) |
+| Nov 17, 2026 | Pim's Windows laptop (`kako/.env`, `kako-laptop` secret), as `kako-dev` | All four lines `[PASS]`: `gpt-5.4` in 2.8 s (13 in, 4 out), `gpt-5-mini` in 1.6 s (13 in, 10 out) |
 
 ## Lessons
 
