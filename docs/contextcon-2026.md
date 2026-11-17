@@ -111,7 +111,8 @@ and account screen, November 2026):
 ## Open questions
 
 - **Pro access for entrants.** The Meko team reportedly said entrants can have
-  Pro; the official page does not mention it. Confirm on the Meko Discord.
+  Pro; the official page does not mention it. Not pursued (Pim, Nov 17): Kako is
+  designed for Free, and per-person privacy stays a stretch goal.
 - **Full terms and conditions.** Not published yet. Check them for licence or
   open-source requirements before submitting (Kako is "all rights reserved"
   for now).

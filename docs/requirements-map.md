@@ -34,7 +34,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | --- | --- | --- | --- |
 | Aged 18 or older; solo or a team of up to 4 | Implemented | Solo entry by Pim | — |
 | Uses Meko as its context layer | In progress | Every session is a Meko conversation; memories, shared knowledge, knowledge base, artifacts and traces carry the household's context. The toolkit is set up (PRs #3 and #4); the adapter is Phase 2 | 1–4 |
-| Any model, any MCP client | Implemented | Claude through the Anthropic API; Meko through its MCP server | — |
+| Any model, any MCP client | Implemented | Azure AI Foundry (OpenAI model deployments) through one model manager; Meko through its MCP server | — |
 | Entrants keep ownership | Implemented | All rights reserved; viewing and evaluation only, including by the judges ([LICENSE](../LICENSE)) | — |
 
 ## Challenge 05 objectives
@@ -72,7 +72,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | --- | --- | --- | --- | --- |
 | Use of Meko | 30% | Not started | Every part of the context has a visible job (rows below) | 2–5 |
 | Impact and usefulness | 25% | Not started | A household's real question, "what should we do now, and why is that different from before?", answered with figures it can check; plain language for families anywhere | 4–5 |
-| Technical execution | 20% | Not started | A working demo; a pure, tested engine; facts that are never overwritten; CI against local Meko; docs as the source of truth | 1–5 |
+| Technical execution | 20% | Not started | A working demo judges can run themselves (demo mode, no Azure account); a pure, tested engine; facts that are never overwritten; CI against local Meko; docs as the source of truth | 1–5 |
 | Innovation | 15% | Not started | Memory with history (valid time and record time, replace versus retract); dreaming that proposes and a person who approves; specialists that build on a preference another session taught them | 4 |
 | Presentation | 10% | Not started | A video under 5 minutes, a README with setup and measured metrics, these docs | 6 |
 
@@ -82,18 +82,18 @@ Phases refer to [build-plan.md](build-plan.md).
 | --- | --- | --- | --- |
 | Conversations | Not started | Sessions as conversations | 3 |
 | Memory | Not started | Facts, decisions and preferences as memories that stay current | 4 |
-| Learning | Not started | Dreaming proposes promotions; the household approves; shared knowledge grows | 4 |
+| Learning | Not started | Meko's own self-learning: weak searches become questions, and `selflearning_verify` shows the search improved (a Must if the tools are available). Dreaming reads Meko's extracted memories and Learnings, proposes promotions; the household approves; a preference goes to collective memory, a decision record to shared knowledge | 1, 4 |
 | Knowledge | Not started | Statements, rules, reference documents; promoted memories | 2, 4 |
 | Artifacts | Not started | Plan reports | 4 |
 | Decision tracing | Not started | Turns with `plan` and `reasoning`; spans for every Meko call; linked from each recommendation | 3 |
 | Blending data infrastructure: Postgres inside the context | Not started | The household's facts in AMP, Postgres in the datapack, if the Phase 1 test passes; a scenario as an AMP branch (Should) | 1, 5 |
-| Sharing context and collaborating to improve it | Not started | Six agents on one datapack; the debt specialist acting on a preference dreaming learned; Context Gaps turned into questions for the household (Should) | 4–5 |
+| Sharing context and collaborating to improve it | Not started | Six agents on one datapack; both adults taking part across sessions (one reports the job, the other approves the promotion); the debt specialist acting on a preference the household approved; Context Gaps answered by the household | 4–5 |
 
 ## Prizes
 
 | Prize | Status | Kako's case |
 | --- | --- | --- |
-| Grand prize: collective memory in action, agents that learn, share and improve over time | Not started | Dreaming and promotion make the specialists better each session; the life-event replan shows it |
+| Grand prize: collective memory in action, agents that learn, share and improve over time | Not started | Dreaming and promotion make the specialists better each session, **measured**: the session-4 answer scored with and without the promoted preference, and Context Gaps before and after scores, on the metrics page |
 | Best use of shared memory: agents that build on each other's learning, with a clear decision-trace story | Not started | The flexibility preference: learned by dreaming from three decisions, approved, promoted, then used by the debt specialist, all traceable |
 | Runner-up places | — | Same entry |
 | People's choice | Not started | The video and a short post |
@@ -117,11 +117,16 @@ Phases refer to [build-plan.md](build-plan.md).
 | The number check | Not started | No figure reaches the household unless the engine produced it |
 | Reconciliation rules in code | Not started | Specialist conflicts are found by arithmetic, not by hoping a model notices |
 | A call counter for Meko's Free-tier allowances | Not started | The demo can't run out of searches |
+| The agents' steps on screen and the what-if loop | Not started | Judges see the agents work: each tool call, each split tried through the engine, and what was rejected |
+| Published evidence: agent test set, dreaming's labelled set, single-agent baseline | Not started | Scores with run dates in the README show it isn't one hand-held demo path |
 
 ## Gaps to close
 
 | Gap | Plan |
 | --- | --- |
 | AMP availability and connectivity on our account | Phase 1 spike; Neon as the fallback |
-| Context Gaps (self-learning tools) may not be available on Free | Phase 1 spike; a Should either way |
+| Context Gaps (self-learning tools) may not be available on Free | Phase 1 spike; a Must if available, otherwise documented as the production path |
+| Meko Cloud extracts memories before the household approves them | Phase 1 spike (can it be turned off?); dreaming treats extracted memories as candidates either way (V-14) |
+| Judges may not have an Azure account | Demo mode with recorded responses (Phase 3) |
+| "Why four specialists, not one agent?" | Single-agent baseline on the agent test set (Phase 3), both scores published |
 | Full terms not published | Check before submission |

@@ -42,14 +42,24 @@ Every peso figure comes from deterministic code; agents never do the maths.
 - Four areas: budget, debt, savings, goals. Tax is knowledge-base reference only,
   never calculated.
 - One orchestrator calls four specialists as tools and reconciles them. Dreaming runs
-  as a background job after each session. Claude via the Anthropic API from FastAPI;
-  Next.js frontend.
+  as a background job after each session. Models come from **Azure AI Foundry** (OpenAI
+  model deployments), signed in with Entra ID, through one model-manager module in the
+  FastAPI backend; Next.js frontend. Kako has its own Azure resource group and budget.
+- The honest line: Kako's agents investigate, try what-ifs and propose; the engine
+  checks every figure; the household decides. Never say the agents "negotiate" or
+  "learn" on their own.
+- Meko Cloud extracts memories from what the user says. Kako treats those as candidates:
+  dreaming reconciles them and the household approves, like any other proposal.
+- The laptop runs only the backend and web app, natively on Windows, for the video.
+  Development and tests run in cloud sessions and CI against local Meko; no Docker or
+  WSL on the laptop.
 - Meko Cloud holds the demo only; development and tests run against local Meko.
   Household data goes in AMP (Postgres in the datapack) if the Phase 1 test passes,
   otherwise plain Postgres.
 - The demo household is a synthetic Philippine family, explained in plain terms:
   pesos, with 13th-month pay, SSS and Pag-IBIG as knowledge-base documents. No real data.
-- One shared household datapack first. Per-person privacy is a stretch goal.
+- One shared household datapack first. Per-person privacy is a stretch goal (needs Meko
+  Pro; entrant Pro access is not being pursued).
 - Out of scope: tax calculations, bank connections, real data, investment product picks.
 - The repo is public and all rights reserved (no open source license). Switch to
   Apache-2.0 only if the full ContextCon terms require open source.

@@ -1,4 +1,4 @@
-# Kako data model v0.1
+# Kako data model v0.2
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -10,7 +10,11 @@ in the same change once agreed.
   [architecture.md](architecture.md#where-data-lives).
 - **Scope:** the hackathon MVP: one synthetic household, four planning areas (budget, debt, savings,
   goals), sessions, dreaming, decisions and plans. Tax is never calculated.
-- **Version:** v0.1, the first draft for review.
+- **Version:** v0.2 (Nov 17, 2026). v0.1 was the first draft. v0.2 closes eight gaps found in the
+  Stage 5 review: `account.purpose` and `preference.debt_strategy` facts, `decision_option.tags`, an
+  amount on each recommendation, `session_participant` and the speaker on evidence, `agent_step`,
+  `context_gap`, and the deployment and cost on `llm_call`. It also handles Meko's own extracted
+  memories and sends decision records to shared knowledge.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -49,11 +53,12 @@ How the tables are used at run time is in [architecture.md](architecture.md); th
 | --- | --- | --- |
 | Household | `household`, `person`, `entity` | Seed import; approved proposals |
 | Facts | `fact`, `life_event` | Seed import; approved proposals |
-| Sessions | `session` | The API when a planning session starts and ends |
+| Sessions | `session`, `session_participant` | The API when a planning session starts and ends |
 | Engine | `calc_run`, `calc_input`, `figure` | The engine only |
-| Planning | `plan`, `recommendation`, `recommendation_source`, `reconciliation`, `scenario`, `scenario_override` | The orchestrator, through the backend |
+| Planning | `plan`, `recommendation`, `recommendation_source`, `reconciliation`, `scenario`, `scenario_override`, `agent_step` | The orchestrator, through the backend; `agent_step` by the model manager's tool loop |
 | Decisions | `decision`, `decision_option`, `decision_assumption` | Approved proposals |
 | Dreaming | `dream_run`, `proposal`, `proposal_evidence` | The dreaming job; the household's approvals |
+| Self-learning | `context_gap` | The Meko adapter (from Meko's self-learning tools); the household's answers |
 | Meko links | `meko_link` | The Meko adapter |
 | System | `llm_call`, `meko_call`, `number_check` | The model manager and the Meko adapter |
 
@@ -159,6 +164,7 @@ same change.
 | `debt.minimum_payment` | debt | money | The required monthly payment (a fixed amount in the MVP) |
 | `account.balance` | account | money | Balance on `valid_from` |
 | `account.liquid` | account | text | `yes` if it can be used in an emergency |
+| `account.purpose` | account | text | `emergency` (the emergency fund) or `general`. At most one active `emergency` account per household. Formulas find the emergency fund by this fact, never by name |
 | `goal.target_amount` | goal | money | |
 | `goal.target_date` | goal | date | |
 | `goal.saved_amount` | goal | money | Already set aside, on `valid_from` |
@@ -166,6 +172,7 @@ same change.
 | `plan.allocation` | debt, account, goal | money | How much of the monthly surplus the household agreed to put here (extra debt payment or a contribution) |
 | `household.emergency_months_target` | (household) | int | The household's own target, such as 3 months |
 | `preference.debt_vs_flexibility` | (household) | text | `speed`, `balanced` or `flexibility` |
+| `preference.debt_strategy` | (household) | text | `avalanche` (highest rate first) or `snowball` (smallest balance first). Required once the household has two open debts; the engine reports a missing strategy instead of assuming one |
 | `preference.note` | (household) | text | Any other stated preference, in the household's words |
 | `constraint.note` | (household) | text | A limit the plan must respect, such as "₱5,000 a month goes to Jun's parents" |
 
@@ -211,6 +218,12 @@ A planning session is one Meko conversation.
 | `title` | TEXT | |
 | `household_date` | DATE | The demo clock when the session ran |
 | `started_at`, `ended_at` | TIMESTAMPTZ | Ending a session queues dreaming |
+
+### `session_participant`
+
+Who took part in a session: (`session_id`, `person_id`), unique together. Each household turn sent to
+Meko carries the speaker's `person_id` in its metadata, so a quote can be attributed ("Mara: I got the
+job"). The demo has both adults taking part across the four sessions.
 
 ## Engine
 
@@ -279,6 +292,8 @@ A plan is a version: the household's recommended moves as of one date.
 | `area` | TEXT | `budget`, `debt`, `savings`, `goals` |
 | `specialist` | TEXT | The specialist that proposed it |
 | `text` | TEXT | Passed the number check |
+| `entity_id` | UUID FK, null | The debt, account or goal the move is about |
+| `allocation` | BIGINT, null | Centavos per month the recommendation puts on that entity. Accepting the plan writes these as `plan.allocation` facts |
 | `meko_turn_seed` | TEXT | The session turn whose trace holds the reasoning |
 
 ### `recommendation_source`
@@ -305,6 +320,7 @@ A conflict between specialists, found in code, and how the orchestrator resolved
 | `figure_ids` | UUID[] | The figures that show the conflict |
 | `resolution` | TEXT | The orchestrator's choice and reason, checked like any other text |
 | `rejected` | TEXT | The option it did not take |
+| `attempts` | INT | Splits the orchestrator tried through the engine (0 to 3); each is an `agent_step` with its what-if run |
 
 ### `scenario` and `scenario_override`
 
@@ -319,6 +335,25 @@ A what-if: the snapshot plus hypothetical facts that are never written to `fact`
 | `scenario.amp_branch_id` | TEXT, null | Set when the scenario is kept as an AMP branch (a Should, see the build plan) |
 | `scenario_override.scenario_id` | UUID FK | |
 | `scenario_override.entity_id`, `.attribute`, `.value_*`, `.valid_from` | | Same shape as a fact |
+
+### `agent_step`
+
+One tool call by one agent: what the "agents' steps" view shows. Meko's trace holds the same calls as
+spans; this table is Kako's own copy, shaped for the screen and for the metrics.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `session_id` | UUID FK | |
+| `meko_turn_seed` | TEXT | The turn it belongs to |
+| `agent` | TEXT | `orchestrator`, `budget`, `debt`, `savings`, `goals`, `dreaming` |
+| `seq` | INT | Order within the turn |
+| `tool` | TEXT | Such as `get_figures`, `run_what_if`, `search_memory` |
+| `input_summary` | TEXT | Short, for display (never a full prompt) |
+| `result_summary` | TEXT | Short, for display; a what-if's result names its figures |
+| `calc_run_id` | UUID FK, null | The what-if run, when the tool ran the engine |
+| `outcome` | TEXT | `ok`, `rejected` (a split the rules refused), `error` |
+| `created_at` | TIMESTAMPTZ | |
 
 ## Decisions
 
@@ -348,6 +383,7 @@ A what-if: the snapshot plus hypothetical facts that are never written to `fact`
 | `label` | TEXT | "A: all extra on the card" |
 | `calc_run_id` | UUID FK, null | The figures that described the option |
 | `rejected_reason` | TEXT, null | Null for the chosen option |
+| `tags` | TEXT[] | From a fixed list in `kako/decisions/tags.py`: `favours_flexibility`, `favours_speed` (the two sides of `preference.debt_vs_flexibility`). The orchestrator tags an option when it proposes it; code rejects a tag that is not on the list. Dreaming counts chosen options by tag. A new tag is added to both lists in the same change |
 
 ### `decision_assumption`
 
@@ -388,12 +424,35 @@ Everything dreaming or an agent wants to add to household knowledge waits here f
 | Column | Type | Notes |
 | --- | --- | --- |
 | `proposal_id` | UUID FK | |
-| `kind` | TEXT | `turn`, `memory`, `fact`, `decision` |
+| `kind` | TEXT | `turn`, `memory`, `extracted_memory` (one Meko extracted on its own), `learning` (one of Meko's Learnings), `fact`, `decision` |
 | `ref` | TEXT | Turn seed, memory id, or Kako id |
+| `person_id` | UUID FK, null | Who said it, for a turn |
 | `quote` | TEXT | The words the proposal rests on |
 
 A number in a proposal must appear in its quoted evidence (see [Validation rules](#validation-rules)):
 dreaming copies what the household said; it never works a number out.
+
+## Self-learning
+
+### `context_gap`
+
+A weak search, from Meko's self-learning tools, and what happened to it.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `household_id` | UUID FK | |
+| `meko_log_id` | TEXT | The search in Meko's query log; unique |
+| `query` | TEXT | What was searched |
+| `band_before` | TEXT | `mid` or `low` |
+| `score_before` | NUMERIC(4,3) | Best score, 0 to 1 |
+| `reason` | TEXT | Meko's reason, such as `weak_match` |
+| `question` | TEXT, null | The plain question Kako asked the household |
+| `asked_in_session_id` | UUID FK, null | |
+| `proposal_id` | UUID FK, null | The approved answer |
+| `verify_outcome` | TEXT, null | From `selflearning_verify`: `improved`, `no_change`, `worse`, `no_baseline` |
+| `score_after` | NUMERIC(4,3), null | |
+| `status` | TEXT | `open`, `asked`, `answered`, `verified`, `dismissed` |
 
 ## Meko links
 
@@ -403,7 +462,7 @@ Ties a Kako row to what Meko holds about it.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `kako_table` | TEXT | `fact`, `decision`, `plan`, `life_event`, `proposal` |
+| `kako_table` | TEXT | `fact`, `decision`, `plan`, `life_event`, `proposal`, `context_gap` |
 | `kako_id` | UUID | |
 | `meko_kind` | TEXT | `memory`, `promoted_memory`, `document`, `artifact`, `conversation` |
 | `meko_id` | TEXT | Memory id, document id, artifact content hash, or conversation id |
@@ -417,7 +476,7 @@ memory's own metadata while it is a memory but drops it on promotion (a promoted
 
 | Table | What it records |
 | --- | --- |
-| `llm_call` | Every model call: agent, model name, input, output and cached tokens, latency, session, outcome. For the metrics page and the spend cap |
+| `llm_call` | Every model call: agent, Foundry deployment name, input, output and cached tokens, latency, cost (`cost_usd`, from the per-token prices in settings at the time of the call), session, outcome, and whether it was a recorded replay. For the metrics page (cost and seconds per turn, average and worst case) and the spend cap |
 | `meko_call` | Every Meko call: tool, latency, result count, session. The Free tier caps some tools for the account's lifetime, so this is counted |
 | `number_check` | Every checked text: the numbers found, which figure or fact each matched, and the result (`pass`, `fail`, `regenerated`) |
 
@@ -428,13 +487,16 @@ Meko is where agents find context. Postgres stays the record. The mapping:
 | Kako thing | In Meko | How it is written | Notes |
 | --- | --- | --- | --- |
 | A planning session | A **conversation** (one per session) | `conversation_create`, then `conversation_add_message` per turn with `plan` and `reasoning` | The conversation id is the trace id; every Meko call made with it becomes a span. Kako stores the turn seed on each recommendation |
-| An approved fact | A **memory**, one sentence, with metadata `{fact_id, attribute, valid_from}` | `memory_add` after approval | Written as a plain sentence ("Mara's take-home pay is ₱68,000 a month from Dec 1, 2026"). Memories are never the source of a number: agents read numbers from figures |
+| An approved fact | A **memory**, one sentence, with metadata `{fact_id, attribute, valid_from}` | `memory_add` after approval, or a link to the memory Meko already extracted for it | Written as a plain sentence with full names, because Meko's search boosts named entities ("Mara Villanueva's take-home pay is ₱68,000 a month from Dec 1, 2026"). Memories are never the source of a number: agents read numbers from figures |
+| What the household said, extracted by Meko | A **memory** Meko added on its own (`source` = `extract`; Meko Cloud runs this automatically) | Not written by Kako | A **candidate** for dreaming, never knowledge by itself. Each ends linked to an approved fact (`meko_link`) or deleted when the household rejects it (V-14) |
 | A replaced fact | The same memory, **rewritten in the past tense** | `memory_update` | Meko keeps a memory's metadata on update but cannot change it, so the text carries the end date: "Until Nov 30, 2026, Mara's take-home pay was ₱52,000 a month" |
 | A retracted fact | The memory is **deleted** | `memory_delete_by_id` | The fact row keeps the history; a wrong memory must not be found again |
-| A household preference or decision the household approves for sharing | A **promoted memory** (shared knowledge) | `memory_promote`, after a second confirmation | One-way: a promoted memory can't be edited or deleted through MCP. So Kako promotes only durable preferences and decisions, and records a later change as a new promoted memory ("From Nov 2026 the household prefers…"), linked in `meko_link` |
+| A household preference the household approves for sharing | A **promoted memory** (collective memory) | `memory_promote`, after a second confirmation | One-way: a promoted memory can't be edited or deleted through MCP. So Kako promotes only durable preferences, and records a later change as a new promoted memory ("From Nov 2026 the household prefers…"), linked in `meko_link` |
+| A decision the household approves for sharing | A **decision record** in shared knowledge | A Markdown document uploaded to the knowledge base, after a second confirmation | The question, the option chosen, the options rejected with their reasons, and the assumptions. A revised decision gets a new record that names the one it replaces |
 | Statements, budgets, planning rules, local reference | **Knowledge-base** documents | `knowledgebase_upload_file` (seed) | Synthetic statements as CSV; rules and reference as Markdown. Reference documents explain 13th-month pay, SSS and Pag-IBIG in plain words and are never used to calculate |
 | A plan report | An **artifact** | `artifact_put` | Markdown; its content hash is stored on `plan` |
-| Weak searches | **Self-learning** shortfalls (Context Gaps) | Read with the `selflearning_*` tools, if the Phase 1 check finds them | Turned into questions for the household (a Should) |
+| Weak searches | **Self-learning** shortfalls (Context Gaps) | Read with the `selflearning_*` tools, if the Phase 1 check finds them | A **Must** if available: each becomes a `context_gap`, a question for the household, and a `selflearning_verify` replay once answered |
+| Meko's Learnings | Meko's own top 5 candidates for sharing | Read by dreaming | One more input to dreaming's promotion candidates |
 
 Agent ids: `kako:orchestrator`, `kako:budget`, `kako:debt`, `kako:savings`, `kako:goals`,
 `kako:dreaming`. They attribute writes and traces; Meko does not filter reads by agent id, so every agent
@@ -455,11 +517,11 @@ decimals and shown to one.
 | `F-CF-1` | `cashflow.monthly_surplus` | income − expenses − minimum payments. May be negative; a negative surplus is flagged, not hidden |
 | `F-CF-2` | `cashflow.debt_payment_share` | minimum payments ÷ income |
 | `F-CF-3` | `cashflow.savings_rate` | (sum of `plan.allocation` to accounts and goals) ÷ income |
-| `F-SAV-1` | `savings.emergency_runway_months` | liquid account balances ÷ essential expenses |
+| `F-SAV-1` | `savings.emergency_runway_months` | liquid account balances (`account.liquid` = `yes`) ÷ essential expenses |
 | `F-SAV-2` | `savings.emergency_target` | `household.emergency_months_target` × essential expenses |
-| `F-SAV-3` | `savings.months_to_target` | ceil((target − liquid balance) ÷ monthly allocation to the emergency fund); null if the allocation is zero |
+| `F-SAV-3` | `savings.months_to_target` | ceil((target − liquid balance) ÷ monthly allocation to the emergency fund, the account with `account.purpose` = `emergency`); null if the allocation is zero or no account has that purpose |
 | `F-DEBT-2` | `debt.payoff_months`, `debt.total_interest`, `debt.payoff_date` | Month-by-month: interest = round(balance × monthly rate); balance += interest; payment = min(minimum + extra allocation, balance); repeat until the balance is zero. A debt with an annual rate uses annual ÷ 12. If the payment does not exceed the first month's interest the debt never pays off, and the figure says so |
-| `F-DEBT-3` | `debt.strategy_order` | The order extra money goes to debts: `avalanche` (highest rate first) or `snowball` (smallest balance first); freed minimums roll to the next debt |
+| `F-DEBT-3` | `debt.strategy_order` | The order extra money goes to debts, from `preference.debt_strategy`: `avalanche` (highest rate first) or `snowball` (smallest balance first); freed minimums roll to the next debt. With two or more open debts and no strategy fact, the figure says the strategy is missing |
 | `F-GOAL-1` | `goal.months_to_target`, `goal.projected_date` | ceil((target − saved) ÷ monthly allocation); no interest in the MVP |
 | `F-GOAL-2` | `goal.required_monthly` | ceil((target − saved) ÷ months until `goal.target_date`) |
 | `F-GOAL-3` | `goal.on_track` | projected date ≤ target date |
@@ -485,6 +547,9 @@ Checked by code before a write, and as a suite over the whole database in CI.
 | V-11 | Every recommendation has at least one `figure` source and one non-figure source (a fact, memory, decision or document) |
 | V-12 | `plan.unallocated` is not negative |
 | V-13 | Each `meko_link` to a memory points to a memory that exists (checked against Meko in the nightly test, not on every write) |
+| V-14 | Every memory Meko extracted from a session that dreaming has run on is either linked to an approved fact in `meko_link` or deleted (nightly test) |
+| V-15 | Every `decision_option.tags` value is on the fixed tag list |
+| V-16 | At most one active `account.purpose` = `emergency` fact per household on any date |
 
 ## Worked example: a new job
 
@@ -492,7 +557,8 @@ The Villanueva household, synthetic: Mara (34), Jun (36) and Lia (5). Every figu
 by the engine's formulas; the build checks these numbers in a test.
 
 **Before: plan v2, Sep 15, 2026.** Take-home pay ₱100,000 a month (Mara ₱52,000, Jun ₱48,000).
-Expenses ₱76,000, of which ₱70,000 essential. Minimum payments ₱14,950 (credit card ₱2,550, car loan
+Expenses ₱76,000, of which ₱70,000 essential. The emergency fund is the account with `account.purpose` =
+`emergency`; the household's `preference.debt_strategy` is `avalanche`. Minimum payments ₱14,950 (credit card ₱2,550, car loan
 ₱12,400). Surplus **₱9,050**. Credit card ₱85,000 at 3% a month. Emergency fund ₱150,000, a runway of
 **2.1 months** against a 3-month target.
 
@@ -510,7 +576,7 @@ flexibility a third time (keeping cash for a family trip). After that session dr
 pattern as a preference (`preference.debt_vs_flexibility` = `flexibility`); they approved it, and it was
 promoted to shared knowledge.
 
-**The event: Nov 20, 2026.** Mara reports a new job from Dec 1 at ₱68,000 take-home. Dreaming proposes a
+**The event: Nov 20, 2026.** Mara (the speaker on the evidence) reports a new job from Dec 1 at ₱68,000 take-home. Dreaming proposes a
 `life_event` (`new_job`, Dec 1) and a `replace_fact`. On approval:
 
 | Fact | `valid_from` | `valid_to` | `status` | `replaced_by` |
@@ -547,6 +613,8 @@ import a real household would use:
 - `entities.csv`, `facts.csv` (the seed, with `valid_from` dates from March 2026),
 - `statements/*.csv` (synthetic monthly bank and card statements, also uploaded to the knowledge base),
 - `kb/*.md` (planning rules and plain-language reference: 13th-month pay, SSS, Pag-IBIG, emergency funds),
-- `sessions/*.yaml` (the household's lines for sessions 1 to 4, used to seed and to test dreaming).
+- `sessions/*.yaml` (the household's lines for sessions 1 to 4, each with its speaker; both adults
+  take part. Used to seed, to test dreaming, and as the scripted path demo mode replays),
+- `recorded/` (the recorded model responses for demo mode and tests).
 
 No real person, bank, employer or account. Names are fictional; amounts are plausible, not sampled.
