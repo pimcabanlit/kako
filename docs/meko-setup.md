@@ -21,10 +21,19 @@ each with what was run. Keep it current when Meko changes or a fallback is chose
 
 ## The spikes
 
-Status: **in progress**. Local Meko and Meko's docs answer part of each question; the rest runs on
-Meko Cloud in a separate spike datapack (`kako-spike`, Pim's choice, Nov 17), deleted afterwards.
-Budget for the whole spike: about 10 conversations, 10 searches and a few memories, out of the
-account's lifetime allowances (docs/contextcon-2026.md).
+Status: **answered** (Nov 17). Local Meko and Meko's docs answered part of each question; the rest
+ran on Meko Cloud in a separate spike datapack (`kako-spike`, Pim's choice), deleted afterwards with
+its AMP database and both conversations. It used 2 conversations, 1 saved turn, 1 `memory_add` and 2
+searches, out of the account's lifetime allowances (docs/contextcon-2026.md), and 1 of the account's
+10 lifetime datapacks.
+
+| Question | Answer | What Kako does |
+| --- | --- | --- |
+| Traces | Yes: each turn keeps `plan`, `reasoning` and `metadata`, and the portal has a link per conversation | Saves every turn with its plan and reasoning; "See the trace" links to the portal |
+| Meko Cloud from the backend | Yes, with a `mko_tkn_` key and a `User-Agent` | The demo backend uses `MEKO_API_KEY` and `https://mcp.mekodata.ai/mcp` |
+| Self-learning on Free | Yes; `selflearning_verify` reported `improved` | Context Gaps screen: a weak search, the household approves the missing fact, the replay proves it |
+| Extraction | Always on, about 17 s after a turn, no source tag | Memories without Kako's `kako_source` are candidates for dreaming, never facts |
+| AMP | Works from the laptop; 0.5 vCPU per account on Free; branches can't be queried | Household data in AMP for the demo, few queries per turn; what-ifs stay in the engine |
 
 ### 1. Traces: `plan` and `reasoning` per turn, and a link to the trace
 
@@ -44,8 +53,19 @@ So Kako can keep each turn's plan and reasoning in Meko and read them back to sh
 
 **Meko Cloud (verified Nov 17, Meko MCP 3.2.4):** the same: `conversation_get` with
 `include_messages: true` returned the turn's `input`, `output`, `reasoning`, `plan` and `metadata`
-exactly as saved. No response carries a portal URL for the conversation or its trace (link: to check
-in the portal).
+exactly as saved.
+
+**The link (checked in the portal by Pim):** each conversation is a session in the portal's Observe
+page, which embeds Langfuse traces:
+
+```
+https://cloud.mekodata.ai/observe-hub?project=<langfuse_project_id>&session=<conversation_id>
+```
+
+`langfuse_project_id` is one value per account (Meko returns it in `memory_get_all`); Kako keeps it
+in a setting, added with the Meko adapter (Phase 2). The page shows each tool call as a span with its latency, the session's tokens and cost,
+and its tags (`agent:<agent_id>`). It needs the account's sign-in, so the link is for Pim and the
+video, not for judges without the account.
 
 ### 2. Meko Cloud from the backend with an API key
 
@@ -136,3 +156,5 @@ the choice can't be changed later. The password is shown once. Each tier has a c
 | --- | --- | --- |
 | Nov 17, 2026 | Cloud session, local Meko 1.20261116.0 | One conversation with one turn: `plan`, `reasoning` and `metadata` read back with `conversation_get`; conversation deleted |
 | Nov 17, 2026 | Cloud session, Meko Cloud (MCP 3.2.4), datapack `kako-spike` | 2 conversations, 1 turn, 1 `memory_add`, 2 searches (1 `context_search`, 1 `selflearning_verify`); AMP database, branch, refused branch endpoint |
+| Nov 17, 2026 | Pim's laptop | `kako migrate` and `/api/v1/health` against the AMP endpoint; the portal's trace page for the spike conversation |
+| Nov 17, 2026 | Cloud session, Meko Cloud | Clean-up: AMP database deleted (vCPU back to 0 of 0.5), both conversations and the `kako-spike` datapack deleted |

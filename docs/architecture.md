@@ -264,7 +264,9 @@ an `ingress_external` endpoint with an allow-list of `/32` source addresses chos
 laptop's public IP goes on the allow-list (and is checked again before recording); creating a branch or compute can block for up to 5 minutes; only the
 datapack owner can create them; compute counts against a per-account vCPU cap. So what-ifs run in the
 engine in memory, always, and keeping one as an AMP branch is an optional step done ahead of time, never
-on the click path.
+on the click path. The Phase 1 test (docs/meko-setup.md) measured the Free cap at 0.5 vCPU for the whole
+account: the main database's writer uses all of it, so a branch can be created (in under 3 seconds) but
+not queried. A kept scenario branch is a record, not a second database.
 
 ## Controls
 

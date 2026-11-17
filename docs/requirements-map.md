@@ -33,7 +33,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Requirement | Status | How Kako meets it | Phase |
 | --- | --- | --- | --- |
 | Aged 18 or older; solo or a team of up to 4 | Implemented | Solo entry by Pim | — |
-| Uses Meko as its context layer | In progress | Every session is a Meko conversation; memories, shared knowledge, knowledge base, artifacts and traces carry the household's context. The toolkit is set up (PRs #3 and #4); the adapter is Phase 2 | 1–4 |
+| Uses Meko as its context layer | In progress | Every session is a Meko conversation; memories, shared knowledge, knowledge base, artifacts and traces carry the household's context. The toolkit is set up (PRs #3 and #4); the Phase 1 spikes confirmed Meko Cloud from the backend, traces with plan and reasoning, self-learning on Free and AMP from the laptop (docs/meko-setup.md); the adapter is Phase 2 | 1–4 |
 | Any model, any MCP client | Implemented | Azure AI Foundry (OpenAI model deployments, `gpt-5.4` and `gpt-5-mini`) through one model manager, checked by `kako check-models` (docs/azure-setup.md); Meko through its MCP server | — |
 | Entrants keep ownership | Implemented | All rights reserved; viewing and evaluation only, including by the judges ([LICENSE](../LICENSE)) | — |
 
