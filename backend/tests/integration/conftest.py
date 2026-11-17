@@ -38,3 +38,38 @@ def test_meko_url() -> str:
     if urlsplit(url).hostname not in LOCAL_HOSTS:
         pytest.fail(f"KAKO_TEST_MEKO_URL must be local Meko, not {urlsplit(url).hostname}")
     return url
+
+
+async def reset_database(url: str) -> None:
+    """Empty the test database: drop the `public` schema and everything in it, then recreate it.
+
+    Only ever pointed at KAKO_TEST_DATABASE_URL, a throwaway database (CI: a fresh service).
+    """
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from kako.settings import Settings
+
+    database_url = Settings(_env_file=None, database_url=url).database_url  # type: ignore[call-arg]
+    assert database_url is not None
+    engine = create_async_engine(database_url.get_secret_value())
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP SCHEMA public CASCADE"))
+            await conn.execute(text("CREATE SCHEMA public"))
+    finally:
+        await engine.dispose()
+
+
+def head_revision() -> str:
+    """The newest Alembic revision in the repository."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    from kako.cli import MIGRATIONS
+
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS))
+    head = ScriptDirectory.from_config(config).get_current_head()
+    assert head is not None
+    return head

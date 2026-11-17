@@ -10,11 +10,13 @@ in the same change once agreed.
   [architecture.md](architecture.md#where-data-lives).
 - **Scope:** the hackathon MVP: one synthetic household, four planning areas (budget, debt, savings,
   goals), sessions, dreaming, decisions and plans. Tax is never calculated.
-- **Version:** v0.2 (Nov 17, 2026). v0.1 was the first draft. v0.2 closes eight gaps found in the
+- **Version:** v0.3 (Nov 17, 2026). v0.1 was the first draft. v0.2 closed eight gaps found in the
   Stage 5 review: `account.purpose` and `preference.debt_strategy` facts, `decision_option.tags`, an
   amount on each recommendation, `session_participant` and the speaker on evidence, `agent_step`,
   `context_gap`, and the deployment and cost on `llm_call`. It also handles Meko's own extracted
-  memories and sends decision records to shared knowledge.
+  memories and sends decision records to shared knowledge. v0.3 is the schema as migrated (Phase 2,
+  task 1): every table has a column list, `figure.flag` says why a figure has no value, the system
+  tables have their columns, and each table names its keys and checks.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -45,7 +47,8 @@ How the tables are used at run time is in [architecture.md](architecture.md); th
 | Validity windows | Half-open: a fact is valid on day *d* when `valid_from <= d` and (`valid_to` is null or `d < valid_to`). A null `valid_to` means "still true" |
 | The demo clock | The household's "today" is `household.as_of_date`, so the demo can move through Aug to Nov 2026 on purpose. Code never reads the system clock for household dates |
 | Enumerations | Lowercase text with a check constraint, so a new value is a migration |
-| Schema changes | Alembic migrations only; append-only once merged |
+| Nulls | A column is `NOT NULL` unless its type says `null` |
+| Schema changes | Alembic migrations only; append-only once merged. A test compares every table and column below with the migrated database, so this document and the schema can't drift |
 
 ## Layers and tables
 
@@ -73,8 +76,10 @@ How the tables are used at run time is in [architecture.md](architecture.md); th
 | `currency` | TEXT | `PHP`. One currency per household |
 | `timezone` | TEXT | IANA name, `Asia/Manila` |
 | `as_of_date` | DATE | The household's "today" (the demo clock) |
-| `meko_datapack_id` | TEXT | The household's datapack |
+| `meko_datapack_id` | TEXT, null | The household's datapack; null until one is chosen (local Meko uses its default) |
 | `created_at` | TIMESTAMPTZ | |
+
+Checks: `currency` is three capital letters.
 
 ### `person`
 
@@ -84,7 +89,7 @@ How the tables are used at run time is in [architecture.md](architecture.md); th
 | `household_id` | UUID FK | |
 | `display_name` | TEXT | Fictional first name |
 | `role` | TEXT | `adult` or `child` |
-| `birth_year` | INT | Only for age-based goals (school) |
+| `birth_year` | INT, null | Only for age-based goals (school) |
 
 ### `entity`
 
@@ -101,6 +106,9 @@ about the entity, so every value has the same history rules.
 | `owner_person_id` | UUID FK, null | Null for household-wide entities |
 | `opened_on` | DATE, null | When it started in the household's life |
 | `closed_on` | DATE, null | A paid-off debt or a reached goal is closed, never deleted |
+
+Unique on (`household_id`, `kind`, `name`), so the import and the household can name an entity
+plainly. Checks: `closed_on` is not before `opened_on`.
 
 The household itself is also a subject of facts (preferences, constraints), with `entity_id` null.
 
@@ -133,6 +141,12 @@ One row per value per period. The heart of "nothing is silently overwritten".
 | `source_ref` | TEXT | A Meko conversation id and turn seed, a knowledge-base document id, or a form submission id |
 | `proposal_id` | UUID FK, null | The approved proposal that created it (null for the seed) |
 | `life_event_id` | UUID FK, null | The life event that caused it, if any |
+
+Checks in the database: exactly one `value_*` column is set; money is not negative and a rate is
+between 0 and 1 (V-07); `valid_to` is after `valid_from`; a fact doesn't replace itself; a `replaced`
+fact has `valid_to` and `replaced_by`; a `retracted` fact, and only a retracted one, has
+`retracted_at` and a reason. `replaced_by` is unique (one fact replaces another at most once). An index
+on (`household_id`, `entity_id`, `attribute`, `valid_from`) serves the snapshot.
 
 Exactly one `value_*` column is set, the one the attribute's type names. Only `valid_to`, `replaced_by`,
 `status`, `retracted_at` and `retraction_reason` ever change after insert, and only in the transitions
@@ -187,7 +201,7 @@ same change.
 | `occurs_on` | DATE | When it takes effect (can be in the future) |
 | `recorded_at` | TIMESTAMPTZ | |
 | `source_ref` | TEXT | The session turn that reported it |
-| `proposal_id` | UUID FK | |
+| `proposal_id` | UUID FK | The approved proposal (every life event has one, V-08) |
 
 Facts caused by the event point to it with `life_event_id`, so the replan can say "these four values
 changed because of the new job".
@@ -214,16 +228,22 @@ A planning session is one Meko conversation.
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `household_id` | UUID FK | |
-| `meko_conversation_id` | TEXT | Also the session's trace id in Meko |
+| `meko_conversation_id` | TEXT | Also the session's trace id in Meko. Unique |
 | `title` | TEXT | |
 | `household_date` | DATE | The demo clock when the session ran |
-| `started_at`, `ended_at` | TIMESTAMPTZ | Ending a session queues dreaming |
+| `started_at` | TIMESTAMPTZ | |
+| `ended_at` | TIMESTAMPTZ, null | Null while the session is open. Ending a session queues dreaming |
 
 ### `session_participant`
 
-Who took part in a session: (`session_id`, `person_id`), unique together. Each household turn sent to
-Meko carries the speaker's `person_id` in its metadata, so a quote can be attributed ("Mara: I got the
-job"). The demo has both adults taking part across the four sessions.
+Who took part in a session. Each household turn sent to Meko carries the speaker's `person_id` in its
+metadata, so a quote can be attributed ("Mara: I got the job"). The demo has both adults taking part
+across the four sessions.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `session_id` | UUID PK, FK | |
+| `person_id` | UUID PK, FK | |
 
 ## Engine
 
@@ -242,7 +262,12 @@ job"). The demo has both adults taking part across the four sessions.
 
 ### `calc_input`
 
-The facts a run read: (`calc_run_id`, `fact_id`), unique together.
+The facts a run read.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `calc_run_id` | UUID PK, FK | |
+| `fact_id` | UUID PK, FK | |
 
 ### `figure`
 
@@ -257,11 +282,13 @@ Every number the engine produces, addressable by a key.
 | `unit` | TEXT | `centavos`, `months`, `ratio`, `date`, `count` |
 | `value_numeric` | NUMERIC(20,6), null | |
 | `value_date` | DATE, null | |
+| `flag` | TEXT, null | Why the value is missing or needs attention: `never_pays_off`, `no_allocation`, `no_emergency_account`, `strategy_missing`, `past_due`, `negative` |
 | `formula` | TEXT | The formula id from [Calculations](#calculations) |
 | `input_fact_ids` | UUID[] | The facts this figure read |
 | `input_figure_ids` | UUID[] | The figures it was built from |
 
-Unique on (`calc_run_id`, `key`, `entity_id`).
+Unique on (`calc_run_id`, `key`, `entity_id`), with a null `entity_id` counted as one value. Checks: at
+most one of `value_numeric` and `value_date` is set, and a figure with neither has a `flag`.
 
 ## Planning
 
@@ -283,6 +310,8 @@ A plan is a version: the household's recommended moves as of one date.
 | `meko_artifact_hash` | TEXT, null | The plan report kept as a Meko artifact |
 | `created_at` | TIMESTAMPTZ | |
 
+Unique on (`household_id`, `version`).
+
 ### `recommendation`
 
 | Column | Type | Notes |
@@ -290,10 +319,10 @@ A plan is a version: the household's recommended moves as of one date.
 | `id` | UUID PK | |
 | `plan_id` | UUID FK | |
 | `area` | TEXT | `budget`, `debt`, `savings`, `goals` |
-| `specialist` | TEXT | The specialist that proposed it |
+| `specialist` | TEXT | The specialist that proposed it: `budget`, `debt`, `savings` or `goals` |
 | `text` | TEXT | Passed the number check |
 | `entity_id` | UUID FK, null | The debt, account or goal the move is about |
-| `allocation` | BIGINT, null | Centavos per month the recommendation puts on that entity. Accepting the plan writes these as `plan.allocation` facts |
+| `allocation` | BIGINT, null | Centavos per month the recommendation puts on that entity, not negative. Accepting the plan writes these as `plan.allocation` facts |
 | `meko_turn_seed` | TEXT | The session turn whose trace holds the reasoning |
 
 ### `recommendation_source`
@@ -302,9 +331,9 @@ What a recommendation stands on. One row per source.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `recommendation_id` | UUID FK | |
-| `source_kind` | TEXT | `figure`, `fact`, `decision`, `memory`, `knowledge`, `conversation` |
-| `source_id` | TEXT | A Kako id, or a Meko memory id, document id or conversation id |
+| `recommendation_id` | UUID PK, FK | |
+| `source_kind` | TEXT PK | `figure`, `fact`, `decision`, `memory`, `knowledge`, `conversation` |
+| `source_id` | TEXT PK | A Kako id, or a Meko memory id, document id or conversation id |
 | `quote` | TEXT, null | The excerpt used, for memories and documents |
 
 ### `reconciliation`
@@ -319,22 +348,37 @@ A conflict between specialists, found in code, and how the orchestrator resolved
 | `specialists` | TEXT[] | |
 | `figure_ids` | UUID[] | The figures that show the conflict |
 | `resolution` | TEXT | The orchestrator's choice and reason, checked like any other text |
-| `rejected` | TEXT | The option it did not take |
+| `rejected` | TEXT, null | The option it did not take; null when no split fitted and the household was shown the conflict |
 | `attempts` | INT | Splits the orchestrator tried through the engine (0 to 3); each is an `agent_step` with its what-if run |
 
-### `scenario` and `scenario_override`
+### `scenario`
 
-A what-if: the snapshot plus hypothetical facts that are never written to `fact`.
+A what-if: the snapshot plus hypothetical facts (`scenario_override`) that are never written to `fact`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `scenario.id` | UUID PK | |
-| `scenario.household_id` | UUID FK | |
-| `scenario.name` | TEXT | "If Jun takes the Cebu job" |
-| `scenario.base_as_of` | DATE | |
-| `scenario.amp_branch_id` | TEXT, null | Set when the scenario is kept as an AMP branch (a Should, see the build plan) |
-| `scenario_override.scenario_id` | UUID FK | |
-| `scenario_override.entity_id`, `.attribute`, `.value_*`, `.valid_from` | | Same shape as a fact |
+| `id` | UUID PK | |
+| `household_id` | UUID FK | |
+| `name` | TEXT | "If Jun takes the Cebu job" |
+| `base_as_of` | DATE | |
+| `amp_branch_id` | TEXT, null | Set when the scenario is kept as an AMP branch (a Should, see the build plan) |
+
+### `scenario_override`
+
+One hypothetical value, in the same shape as a fact, with the same checks on its value columns.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `scenario_id` | UUID FK | |
+| `entity_id` | UUID FK, null | |
+| `attribute` | TEXT | From the attribute catalog |
+| `value_money` | BIGINT, null | |
+| `value_rate` | NUMERIC(9,6), null | |
+| `value_int` | INT, null | |
+| `value_date` | DATE, null | |
+| `value_text` | TEXT, null | |
+| `valid_from` | DATE | |
 
 ### `agent_step`
 
@@ -355,6 +399,8 @@ spans; this table is Kako's own copy, shaped for the screen and for the metrics.
 | `outcome` | TEXT | `ok`, `rejected` (a split the rules refused), `error` |
 | `created_at` | TIMESTAMPTZ | |
 
+Unique on (`session_id`, `meko_turn_seed`, `seq`).
+
 ## Decisions
 
 ### `decision`
@@ -365,14 +411,14 @@ spans; this table is Kako's own copy, shaped for the screen and for the metrics.
 | `household_id` | UUID FK | |
 | `session_id` | UUID FK | Where it was made |
 | `question` | TEXT | "How hard should we pay down the credit card?" |
-| `chosen_option_id` | UUID FK | |
+| `chosen_option_id` | UUID FK | Checked at commit, so a decision and its options are written in one transaction |
 | `reasoning` | TEXT | In the household's words where possible |
 | `valid_from` | DATE | |
 | `valid_to` | DATE, null | |
 | `status` | TEXT | `active`, `revised`, `reversed` |
 | `replaced_by` | UUID FK, null | The decision that revised or reversed it |
 | `outcome` | TEXT, null | Filled in later: what happened |
-| `proposal_id` | UUID FK | |
+| `proposal_id` | UUID FK | The approved proposal (V-08) |
 
 ### `decision_option`
 
@@ -383,12 +429,17 @@ spans; this table is Kako's own copy, shaped for the screen and for the metrics.
 | `label` | TEXT | "A: all extra on the card" |
 | `calc_run_id` | UUID FK, null | The figures that described the option |
 | `rejected_reason` | TEXT, null | Null for the chosen option |
-| `tags` | TEXT[] | From a fixed list in `kako/decisions/tags.py`: `favours_flexibility`, `favours_speed` (the two sides of `preference.debt_vs_flexibility`). The orchestrator tags an option when it proposes it; code rejects a tag that is not on the list. Dreaming counts chosen options by tag. A new tag is added to both lists in the same change |
+| `tags` | TEXT[] | Empty by default. From a fixed list in `kako/decisions/tags.py`: `favours_flexibility`, `favours_speed` (the two sides of `preference.debt_vs_flexibility`). The orchestrator tags an option when it proposes it; code rejects a tag that is not on the list, and a database check holds the same list (V-15). Dreaming counts chosen options by tag. A new tag is added to all three in the same change |
 
 ### `decision_assumption`
 
-The facts a decision rested on: (`decision_id`, `fact_id`). When one of these facts is replaced, the
-replan lists the decision as **to revisit**.
+The facts a decision rested on. When one of these facts is replaced, the replan lists the decision as
+**to revisit**.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `decision_id` | UUID PK, FK | |
+| `fact_id` | UUID PK, FK | |
 
 ## Dreaming
 
@@ -399,8 +450,9 @@ replan lists the decision as **to revisit**.
 | `id` | UUID PK | |
 | `session_id` | UUID FK | Unique: one run per session, so running it twice does nothing |
 | `status` | TEXT | `queued`, `running`, `done`, `failed` |
-| `started_at`, `finished_at` | TIMESTAMPTZ | |
-| `counts` | JSONB | Proposals made, by kind |
+| `started_at` | TIMESTAMPTZ, null | Null while queued |
+| `finished_at` | TIMESTAMPTZ, null | |
+| `counts` | JSONB | Proposals made, by kind; empty by default |
 
 ### `proposal`
 
@@ -418,11 +470,16 @@ Everything dreaming or an agent wants to add to household knowledge waits here f
 | `decided_by_person_id` | UUID FK, null | |
 | `decided_at` | TIMESTAMPTZ, null | |
 | `idempotency_key` | TEXT | Unique. The source turn seed plus the kind and target, so a rerun can't double-propose |
+| `created_at` | TIMESTAMPTZ | |
+
+Checks: a `pending` proposal has no decision yet; an `approved` one names the person who approved it and
+when; a `rejected` or `expired` one has `decided_at`.
 
 ### `proposal_evidence`
 
 | Column | Type | Notes |
 | --- | --- | --- |
+| `id` | UUID PK | |
 | `proposal_id` | UUID FK | |
 | `kind` | TEXT | `turn`, `memory`, `extracted_memory` (one Meko extracted on its own), `learning` (one of Meko's Learnings), `fact`, `decision` |
 | `ref` | TEXT | Turn seed, memory id, or Kako id |
@@ -454,6 +511,8 @@ A weak search, from Meko's self-learning tools, and what happened to it.
 | `score_after` | NUMERIC(4,3), null | |
 | `status` | TEXT | `open`, `asked`, `answered`, `verified`, `dismissed` |
 
+Checks: both scores are between 0 and 1.
+
 ## Meko links
 
 ### `meko_link`
@@ -462,23 +521,75 @@ Ties a Kako row to what Meko holds about it.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `kako_table` | TEXT | `fact`, `decision`, `plan`, `life_event`, `proposal`, `context_gap` |
-| `kako_id` | UUID | |
-| `meko_kind` | TEXT | `memory`, `promoted_memory`, `document`, `artifact`, `conversation` |
-| `meko_id` | TEXT | Memory id, document id, artifact content hash, or conversation id |
-| `created_at` | TIMESTAMPTZ | |
-
-Primary key (`kako_table`, `kako_id`, `meko_kind`, `meko_id`). This table exists because Meko keeps a
+| `kako_table` | TEXT PK | `fact`, `decision`, `plan`, `life_event`, `proposal`, `context_gap` |
+| `kako_id` | UUID PK | The row in `kako_table` (checked by the validation suite, as it can point at several tables) |
+| `meko_kind` | TEXT PK | `memory`, `promoted_memory`, `document`, `artifact`, `conversation` |
+| `meko_id` | TEXT PK | Memory id, document id, artifact content hash, or conversation id |
+| `created_at` | TIMESTAMPTZ | | This table exists because Meko keeps a
 memory's own metadata while it is a memory but drops it on promotion (a promoted hit carries only its
 `memory_id`, `agent_id` and `source`; tested on local Meko 1.20261116.0, Nov 17, 2026).
 
 ## System
 
-| Table | What it records |
-| --- | --- |
-| `llm_call` | Every model call: agent, Foundry deployment name, input, output and cached tokens, latency, cost (`cost_usd`, from the per-token prices in settings at the time of the call), session, outcome, and whether it was a recorded replay. For the metrics page (cost and seconds per turn, average and worst case) and the spend cap |
-| `meko_call` | Every Meko call: tool, latency, result count, session. The Free tier caps some tools for the account's lifetime, so this is counted |
-| `number_check` | Every checked text: the numbers found, which figure or fact each matched, and the result (`pass`, `fail`, `regenerated`) |
+Written by the model manager, the Meko adapter and the number check. Never edited.
+
+### `llm_call`
+
+Every model call. For the metrics page (cost and seconds per turn, average and worst case) and the
+spend cap.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `session_id` | UUID FK, null | Null outside a session (such as `check-models`) |
+| `meko_turn_seed` | TEXT, null | The turn it served |
+| `agent` | TEXT | `orchestrator`, `budget`, `debt`, `savings`, `goals`, `dreaming`, `system` |
+| `deployment` | TEXT | The Foundry deployment name, from settings |
+| `input_tokens` | INT | |
+| `output_tokens` | INT | |
+| `cached_tokens` | INT | |
+| `latency_ms` | INT | |
+| `cost_usd` | NUMERIC(12,6) | From the per-token prices in settings at the time of the call |
+| `outcome` | TEXT | `ok`, `error`, `budget_exceeded` |
+| `recorded_replay` | BOOLEAN | A recorded response replayed (tests, demo mode), not a real call |
+| `created_at` | TIMESTAMPTZ | |
+
+Checks: token counts, latency and cost are not negative.
+
+### `meko_call`
+
+Every Meko tool call, made or refused. The Free tier caps some tools for the account's lifetime, so the
+adapter counts them here and refuses calls past the ceiling in settings.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `session_id` | UUID FK, null | |
+| `target` | TEXT | `local` or `cloud`, from the Meko URL |
+| `tool` | TEXT | Such as `context_search` |
+| `agent_id` | TEXT | Such as `kako:orchestrator` |
+| `latency_ms` | INT, null | Null when the call was refused before it was sent |
+| `result_count` | INT, null | Results returned, for searches |
+| `outcome` | TEXT | `ok`, `error`, `refused` (the ceiling was reached) |
+| `created_at` | TIMESTAMPTZ | |
+
+An index on (`target`, `tool`) serves the counter.
+
+### `number_check`
+
+Every text checked against the figures and facts (V-10).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `session_id` | UUID FK, null | |
+| `calc_run_id` | UUID FK | The run whose figures and snapshot the text was checked against |
+| `subject` | TEXT | `reply`, `recommendation`, `summary`, `reconciliation` |
+| `subject_id` | UUID, null | The recommendation, plan or reconciliation, once stored |
+| `checked_text` | TEXT | |
+| `numbers` | JSONB | Each number found, and the figure or fact it matched (or none) |
+| `result` | TEXT | `pass`, `fail`, `regenerated` |
+| `created_at` | TIMESTAMPTZ | |
 
 ## What Kako keeps in Meko
 
