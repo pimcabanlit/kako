@@ -11,9 +11,11 @@ from pydantic import SecretStr
 
 from kako.meko.client import (
     MekoAuthError,
+    MekoCallLimitError,
     MekoError,
     MekoMcpSession,
     MekoProtocolError,
+    MekoToolError,
 )
 
 URL = "http://meko.test/mcp"
@@ -156,3 +158,96 @@ async def test_failed_session_end_does_not_hide_the_result() -> None:
 
     async with client(flaky) as http, MekoMcpSession(http, URL) as session:
         assert session.server_info is not None
+
+
+def tool_server(answers: dict[str, dict[str, object]]) -> Handler:
+    """A fake Meko whose tools/call answers come from `answers`, keyed by tool name."""
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if "id" not in body:
+            return httpx.Response(202)
+        if body["method"] == "initialize":
+            result: dict[str, object] = INIT_RESULT
+        else:
+            result = answers[body["params"]["name"]]
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": result})
+
+    return handle
+
+
+def text_result(text: str, *, is_error: bool = False) -> dict[str, object]:
+    return {"content": [{"type": "text", "text": text}], "isError": is_error}
+
+
+async def test_call_tool_parses_json_text() -> None:
+    answers = {"memory_search": text_result(json.dumps({"results": [{"id": "m1"}]}))}
+    async with (
+        client(tool_server(answers)) as http,
+        MekoMcpSession(http, URL, max_tool_calls=2) as session,
+    ):
+        answer = await session.call_tool("memory_search", {"query": "x"})
+        assert answer == {"results": [{"id": "m1"}]}
+        assert session.tool_calls == {"memory_search": 1}
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        text_result(json.dumps({"error": "conversation_id_required", "detail": "Pass it."})),
+        text_result("something broke", is_error=True),
+    ],
+    ids=["error-key", "is-error"],
+)
+async def test_call_tool_errors(result: dict[str, object]) -> None:
+    async with (
+        client(tool_server({"datapack_list": result})) as http,
+        MekoMcpSession(http, URL, max_tool_calls=1) as session,
+    ):
+        with pytest.raises(MekoToolError, match="datapack_list failed"):
+            await session.call_tool("datapack_list", {})
+
+
+async def test_call_tool_without_text_content() -> None:
+    async with (
+        client(tool_server({"memory_add": {"content": []}})) as http,
+        MekoMcpSession(http, URL, max_tool_calls=1) as session,
+    ):
+        with pytest.raises(MekoProtocolError, match="without text"):
+            await session.call_tool("memory_add", {})
+
+
+async def test_ceiling_stops_calls_before_they_are_sent() -> None:
+    fake_calls: list[str] = []
+    answers = {"memory_search": text_result("{}")}
+    handler = tool_server(answers)
+
+    def counting(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if body.get("method") == "tools/call":
+            fake_calls.append(body["params"]["name"])
+        return handler(request)
+
+    async with client(counting) as http, MekoMcpSession(http, URL, max_tool_calls=2) as session:
+        await session.call_tool("memory_search", {})
+        await session.call_tool("memory_search", {})
+        with pytest.raises(MekoCallLimitError, match="ceiling of 2"):
+            await session.call_tool("memory_search", {})
+    assert fake_calls == ["memory_search", "memory_search"]
+
+
+async def test_default_session_makes_no_tool_calls() -> None:
+    async with client(tool_server({})) as http, MekoMcpSession(http, URL) as session:
+        with pytest.raises(MekoCallLimitError):
+            await session.call_tool("memory_search", {})
+
+
+async def test_call_tool_needs_an_open_session() -> None:
+    async with client(tool_server({})) as http:
+        with pytest.raises(MekoError, match="before the session"):
+            await MekoMcpSession(http, URL, max_tool_calls=1).call_tool("memory_search", {})
+
+
+def test_negative_ceiling_is_refused() -> None:
+    with pytest.raises(ValueError, match="negative"):
+        MekoMcpSession(httpx.AsyncClient(), URL, max_tool_calls=-1)
