@@ -184,11 +184,15 @@ def check_models(
         except ModelError as exc:
             lines.append(CheckLine(False, label, str(exc)))
             continue
+        # The call worked either way; an empty answer means the cap went to hidden reasoning.
+        answer = (
+            f"answered {reply.text[:20]!r}" if reply.text else "answered with no text (cap reached)"
+        )
         lines.append(
             CheckLine(
                 True,
                 label,
-                f"answered {reply.text[:20]!r} in {reply.latency_ms} ms, "
+                f"{answer} in {reply.latency_ms} ms, "
                 f"{reply.input_tokens} tokens in, {reply.output_tokens} out",
             )
         )

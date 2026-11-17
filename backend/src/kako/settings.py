@@ -57,7 +57,9 @@ class Settings(BaseSettings):
     azure_tenant_id: str | None = None
     azure_client_id: str | None = None
     azure_client_secret: SecretStr | None = None
-    check_models_max_tokens: int = Field(default=64, ge=16, le=256)
+    # Room for a reasoning model's hidden reasoning plus a one-word answer: GPT-5 models count
+    # reasoning tokens against this cap, and 64 can leave nothing for the answer.
+    check_models_max_tokens: int = Field(default=256, ge=16, le=1024)
 
     @field_validator("model_strong", "model_fast", mode="before")
     @classmethod

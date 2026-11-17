@@ -109,7 +109,7 @@ uv run kako check-models
 ```
 
 Every line must be `[PASS]`: settings, sign-in (as `kako-dev`, or the Azure CLI), then one tiny call
-per deployment (at most 64 output tokens each, one retry). It prints no secret and exits 1 on any
+per deployment (at most 256 output tokens each, since GPT-5 models count their hidden reasoning against the cap; one retry). It prints no secret and exits 1 on any
 `[FAIL]`. It must pass from a cloud session and from the laptop.
 
 ## Verification log

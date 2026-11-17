@@ -38,15 +38,16 @@ class FakeCredential:
 
 
 class FakeBackend:
-    def __init__(self, failing: set[str] | None = None) -> None:
+    def __init__(self, failing: set[str] | None = None, text: str = "OK") -> None:
         self.calls: list[tuple[str, int]] = []
         self.failing = failing or set()
+        self.text = text
 
     def complete(self, deployment: str, prompt: str, max_output_tokens: int) -> ModelReply:
         self.calls.append((deployment, max_output_tokens))
         if deployment in self.failing:
             raise ModelError("NotFoundError: The API deployment for this resource does not exist")
-        return ModelReply(deployment, "OK", 14, 2, 120)
+        return ModelReply(deployment, self.text, 14, 2, 120)
 
 
 @pytest.fixture
@@ -85,15 +86,21 @@ def test_one_call_per_deployment(foundry: Settings) -> None:
         "Model kako-strong (strong)",
         "Model kako-fast (fast)",
     ]
-    assert backend.calls == [("kako-strong", 64), ("kako-fast", 64)]
+    assert backend.calls == [("kako-strong", 256), ("kako-fast", 256)]
     assert credential.scopes == [(COGNITIVE_SERVICES_SCOPE,)]
+
+
+def test_an_empty_answer_still_passes_and_says_why(foundry: Settings) -> None:
+    lines = run(foundry, FakeBackend(text=""))
+    assert all(line.ok for line in lines), lines
+    assert "answered with no text (cap reached)" in lines[-1].detail
 
 
 def test_shared_deployment_is_called_once(make_settings: MakeSettings) -> None:
     settings = make_settings(foundry_endpoint=ENDPOINT, model_strong="mini", model_fast="mini")
     backend = FakeBackend()
     lines = run(settings, backend)
-    assert backend.calls == [("mini", 64)]
+    assert backend.calls == [("mini", 256)]
     assert lines[-1].label == "Model mini (strong, fast)"
 
 
