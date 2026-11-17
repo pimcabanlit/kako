@@ -13,6 +13,16 @@ disagree, raise it, and update the doc in the same change once agreed.
 - `docs/concept.md`: the problem, what Kako does, principles, how it uses Meko, scope.
 - `docs/contextcon-2026.md`: dates, Challenge 05 brief, judging, prizes, submission
   checklist, Meko Free-tier limits, open questions.
+- `docs/build-plan.md`: decisions already made, phases with a "Done when" test for each
+  task, stretch goals, risks, video storyboard, open questions.
+- `docs/architecture.md`: components, how a planning turn, a life event and dreaming flow,
+  how Kako uses each part of Meko, agents, where data lives, controls, cost plan.
+- `docs/data-model.md`: the data contract. Every Postgres table, the fact history rules
+  (valid from, valid to, replaced by; replace versus retract), what Kako keeps in Meko,
+  the calculations, validation rules and a worked example. A schema change updates it
+  in the same PR.
+- `docs/requirements-map.md`: every ContextCon rule, Challenge 05 objective, judging
+  criterion and prize against what is built. Update a row when its status changes.
 
 ## The one rule
 
