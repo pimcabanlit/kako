@@ -59,10 +59,23 @@ class Settings(BaseSettings):
     azure_client_secret: SecretStr | None = None
     check_models_max_tokens: int = Field(default=64, ge=16, le=256)
 
-    @field_validator("foundry_endpoint", "model_strong", "model_fast", mode="before")
+    @field_validator("model_strong", "model_fast", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("foundry_endpoint", mode="before")
+    @classmethod
+    def _resource_endpoint(cls, value: object) -> object:
+        """Keep the scheme and host only, so the resource endpoint and the project endpoint
+        (`.../api/projects/<name>`) shown in the Foundry portal both work. HTTPS only: the
+        bearer token must never travel in clear text."""
+        if not isinstance(value, str) or not value.strip():
+            return None
+        parts = urlsplit(value.strip())
+        if parts.scheme != "https" or not parts.hostname:
+            raise ValueError("must be an https:// URL, such as https://<resource>.openai.azure.com")
+        return f"https://{parts.netloc}"
 
     @property
     def deployments(self) -> dict[str, str]:
