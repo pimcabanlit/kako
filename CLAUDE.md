@@ -219,7 +219,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `record_seed_fact`); `facts/` the pure fact rules (`attributes.py` the attribute catalog, `values.py`
   a value against its attribute, `proposals.py` proposal payloads and the check that a write is the
   one approved, `snapshot.py` snapshots `on` a date and `known_at` a time, `rules.py` V-01 to V-08 and
-  V-16; no database, clock or randomness, which `tests/test_purity.py` checks); `meko/` the only package that talks to Meko
+  V-16); `engine/` the deterministic engine, pure like `facts/` (`engine.py` `compute`: a snapshot,
+  the entities and a what-if's overrides in, every figure of docs/data-model.md "Calculations" out,
+  each citing what it read; `debts.py` the payoff with the rollover; `arith.py` centavos, half-up
+  rounding and ratios; `dates.py` calendar months and the 100-year horizon; `inputs.py` what it
+  reads; `figures.py` the figure and the run). `facts/` and `engine/` use no database, clock or
+  randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
   any past their `max_tool_calls` ceiling, 0 by default; `health.py`, the handshake probe).
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
@@ -228,6 +233,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   holds the models to it and `tests/integration/test_schema.py` the migrated database (a fresh
   database per test, migrated twice), with the checks the database must refuse.
   `test_facts_*.py` test the fact rules on rows in memory (`tests/support/facts.py` builds them);
+  `test_engine_worked_example.py` checks every worked-example figure to the centavo
+  (`tests/support/villanueva.py` is that household's history), `test_engine_rules.py` the flags,
+  rollover, goals, what-ifs and what each figure cites, and `test_engine_properties.py` seeded
+  property tests (payments equal balance plus interest, order independence, identities);
   `tests/integration/test_fact_store.py` each status transition, the rules on each write and the
   database guard behind them.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and

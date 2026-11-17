@@ -64,7 +64,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | A planning agent system connected to Meko | Not started | Orchestrator, four specialists and dreaming, through one Meko adapter | 3–4 |
 | 3 or more sessions showing memory carrying over and the plan adapting to a life event | Not started | Sessions in August, September and October, then the new job in session 4 | 4–5 |
 | Trace-backed explanations for the key recommendations | Not started | The "why" view and the Meko trace for every recommendation | 3, 5 |
-| Encouraged: a what-if scenario planner | Not started | What-ifs in the engine (Must for the engine, screen is a Should); a kept scenario as an AMP branch (Should) | 3, 5 |
+| Encouraged: a what-if scenario planner | In progress | What-ifs in the engine (Must for the engine, screen is a Should); a kept scenario as an AMP branch (Should). The engine takes hypothetical values (`Override`) in place of facts and cites them (Phase 2, task 3) | 3, 5 |
 
 ## Judging criteria
 

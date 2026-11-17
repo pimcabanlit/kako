@@ -1,4 +1,4 @@
-"""The fact rules (and, from task 3, the engine) stay pure: no database, network, model, clock
+"""The fact rules and the engine stay pure: no database, network, model, clock
 or randomness. docs/architecture.md: "the engine and fact rules never import the database, Meko or
 the model SDK"; REVIEW.md rule 6: no system clock for household dates, no unseeded randomness.
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "kako"
-PURE_PACKAGES = ("facts",)
+PURE_PACKAGES = ("facts", "engine")
 
 BANNED_MODULES = (
     "sqlalchemy",
