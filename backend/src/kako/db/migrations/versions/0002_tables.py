@@ -283,7 +283,8 @@ def upgrade() -> None:
         sa.Column("input_figure_ids", postgresql.ARRAY(sa.Uuid()), nullable=False),
         sa.CheckConstraint(
             "flag IN ('never_pays_off', 'no_allocation', 'no_emergency_account', "
-            "'strategy_missing', 'past_due', 'negative')",
+            "'strategy_missing', 'past_due', 'negative', 'no_income', "
+            "'no_essential_expenses', 'missing_input')",
             name=op.f("ck_figure_flag"),
         ),
         sa.CheckConstraint(

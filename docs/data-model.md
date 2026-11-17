@@ -282,7 +282,7 @@ Every number the engine produces, addressable by a key.
 | `unit` | TEXT | `centavos`, `months`, `ratio`, `date`, `count` |
 | `value_numeric` | NUMERIC(20,6), null | |
 | `value_date` | DATE, null | |
-| `flag` | TEXT, null | Why the value is missing or needs attention: `never_pays_off`, `no_allocation`, `no_emergency_account`, `strategy_missing`, `past_due`, `negative` |
+| `flag` | TEXT, null | Why the value is missing or needs attention: `never_pays_off`, `no_allocation`, `no_emergency_account`, `strategy_missing`, `past_due`, `negative` (shown, not hidden), `no_income` or `no_essential_expenses` (nothing to divide by), `missing_input` (a fact the formula needs isn't there; the engine never assumes one) |
 | `formula` | TEXT | The formula id from [Calculations](#calculations) |
 | `input_fact_ids` | UUID[] | The facts this figure read |
 | `input_figure_ids` | UUID[] | The figures it was built from |
