@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -59,6 +59,7 @@ class Run:
 
     household_id: uuid.UUID
     as_of: date
+    known_at: datetime | None  # the snapshot's record time; None: everything known when computed
     snapshot_hash: str
     engine_version: str
     figures: tuple[Figure, ...]

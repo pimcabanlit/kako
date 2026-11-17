@@ -223,7 +223,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   the entities and a what-if's overrides in, every figure of docs/data-model.md "Calculations" out,
   each citing what it read; `debts.py` the payoff with the rollover; `arith.py` centavos, half-up
   rounding and ratios; `dates.py` calendar months and the 100-year horizon; `inputs.py` what it
-  reads; `figures.py` the figure and the run). `facts/` and `engine/` use no database, clock or
+  reads; `figures.py` the figure and the run; `diff.py` F-DIFF-1, what changed between two runs and
+  why, and the decisions to revisit). `facts/` and `engine/` use no database, clock or
   randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
   any past their `max_tool_calls` ceiling, 0 by default; `health.py`, the handshake probe).
@@ -236,7 +237,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_engine_worked_example.py` checks every worked-example figure to the centavo
   (`tests/support/villanueva.py` is that household's history), `test_engine_rules.py` the flags,
   rollover, goals, what-ifs and what each figure cites, and `test_engine_properties.py` seeded
-  property tests (payments equal balance plus interest, order independence, identities);
+  property tests (payments equal balance plus interest, order independence, identities), and
+  `test_engine_diff.py` the worked example's diff from plan v2 to v3 and each label;
   `tests/integration/test_fact_store.py` each status transition, the rules on each write and the
   database guard behind them.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and

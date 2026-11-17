@@ -449,6 +449,7 @@ def compute(
     return Run(
         household_id=snapshot.household_id,
         as_of=snapshot.on,
+        known_at=snapshot.known_at,
         snapshot_hash=snapshot.hash,
         engine_version=ENGINE_VERSION,
         figures=tuple(figures),

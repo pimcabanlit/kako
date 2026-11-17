@@ -20,7 +20,8 @@ in the same change once agreed.
   the status transitions, proposal payloads (a proposal writes exactly the fact it names, once), and
   a seed fact has no proposal and replaces nothing. v0.5 is the engine (task 3): each formula's
   edge cases, the debt rollover, the calendar, and the worked example's car loan, so every figure in
-  it can be checked; plan v2's emergency-fund wait is 12 months, not 10.
+  it can be checked; plan v2's emergency-fund wait is 12 months, not 10. The plan diff (task 4) adds
+  the `ended` label and says which facts count as a change.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -694,7 +695,7 @@ The rules every formula follows:
 | `F-GOAL-2` | `goal.required_monthly` | ceil((target − saved) ÷ months until `goal.target_date`), to the centavo; 0 once reached. The months are the monthly steps from the as-of date that land on or before the target date; with none left, the figure is `past_due` |
 | `F-GOAL-3` | `goal.on_track` | 1 when the projected date ≤ the target date, else 0 (unit `count`). A goal with no allocation is 0, flagged `no_allocation` |
 | `F-ALLOC-1` | `plan.unallocated` | surplus − sum of allocations to open debts, accounts and goals. Must be ≥ 0 (a reconciliation rule); a negative result is flagged `negative` |
-| `F-DIFF-1` | (diff) | Two runs compared figure by figure: each changed figure, its old and new value, and the facts behind the change, labelled `replaced` (life changed), `retracted` (a mistake was fixed), `new` or `allocation` (the household chose differently) |
+| `F-DIFF-1` | (diff) | Two runs compared figure by figure: each changed figure (value or flag, or in one run only), its old and new value, and the facts behind the change: the facts it was built from, directly or through other figures, that differ between the runs. Each is labelled `replaced` (life changed: a newer fact in the chain took its place), `retracted` (a mistake was fixed; the fact it had replaced is back), `allocation` (the household chose differently: `plan.allocation`, replaced or new), `new` (it started, or Kako learned it, after the old run) or `ended` (its window closed with nothing in its place). A fact already true and known at the old run is not a change, even when only the new run reads it. A decision whose assumption (`decision_assumption`) has been replaced or retracted by the new run's date is listed **to revisit** |
 
 ## Validation rules
 
