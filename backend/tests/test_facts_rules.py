@@ -100,6 +100,19 @@ def test_v08_only_the_seed_skips_a_proposal() -> None:
     assert _rules([], rows=[event]) == ["V-08"]
 
 
+def test_v08_a_seed_has_no_proposal_and_a_proposal_writes_once() -> None:
+    proposal = uuid.uuid4()
+    seed = fact(SALARY.id, "income.monthly_net", 5_200_000, "2026-03-01")
+    assert _rules([replace(seed, proposal_id=proposal)], {proposal}) == ["V-08"]
+    # A seed fact that replaces one: V-08, and V-04 because nothing names it back.
+    assert _rules([replace(seed, replaces=uuid.uuid4())]) == ["V-04", "V-08"]
+    first = fact(None, "household.emergency_months_target", 3, "2026-03-01",
+                 source_kind="session", proposal_id=proposal)  # fmt: skip
+    second = fact(SALARY.id, "income.monthly_net", 5_200_000, "2026-03-01",
+                  source_kind="session", proposal_id=proposal)  # fmt: skip
+    assert _rules([first, second], {proposal}) == ["V-08"]
+
+
 def test_v16_one_emergency_fund_at_a_time() -> None:
     one = fact(FUND.id, "account.purpose", "emergency", "2026-03-01")
     two = fact(SAVINGS.id, "account.purpose", "emergency", "2026-06-01")

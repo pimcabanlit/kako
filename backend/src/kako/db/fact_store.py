@@ -6,7 +6,9 @@ the database guard (migration 0003) and the check constraints refuse the same th
 other code path can break them.
 
 docs/data-model.md, "Facts": a change is a new fact that replaces the old one; a mistake is
-retracted, never deleted; every non-seed fact comes from an approved proposal (V-08).
+retracted, never deleted; every non-seed fact comes from an approved proposal (V-08), and is
+exactly the write that proposal's payload names, once ("Proposal payloads"). Only the seed loader
+records a fact without a proposal (`record_seed_fact`), and a seed fact never replaces another.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Final, cast
+from typing import Any, cast
 
 from sqlalchemy import Table, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -24,6 +26,15 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from kako.db.models import Decision, Entity, Fact, Household, LifeEvent, Proposal
 from kako.facts.attributes import Attribute, attribute
 from kako.facts.model import EntityRow, FactRow, FactValue, SourceKind
+from kako.facts.proposals import (
+    RECORD_KINDS,
+    REPLACE_KINDS,
+    RETRACT_KINDS,
+    PayloadError,
+    check_payload,
+    fact_payload,
+    retract_payload,
+)
 from kako.facts.rules import ApprovedRow, Violation, validate, windows_overlap
 from kako.facts.snapshot import Snapshot, take_snapshot
 from kako.facts.values import FactValueError, value_columns
@@ -31,11 +42,6 @@ from kako.facts.values import FactValueError, value_columns
 FACT = cast(Table, Fact.__table__)
 ENTITY = cast(Table, Entity.__table__)
 PROPOSAL = cast(Table, Proposal.__table__)
-
-# Which approved proposals can create, replace or retract a fact.
-RECORD_KINDS: Final = frozenset({"new_fact", "preference_pattern"})
-REPLACE_KINDS: Final = frozenset({"replace_fact", "preference_pattern"})
-RETRACT_KINDS: Final = frozenset({"retract_fact"})
 
 
 class FactStoreError(Exception):
@@ -128,15 +134,18 @@ async def _check_proposal(
     household_id: uuid.UUID,
     proposal_id: uuid.UUID | None,
     kinds: frozenset[str],
+    expected: dict[str, Any],
 ) -> None:
+    """The proposal is this household's, approved, of a kind that may make this write, and its
+    payload is exactly this write (V-08)."""
     if proposal_id is None:
         raise FactStoreError("only the seed is recorded without an approved proposal (V-08)")
     row = (
         (
             await conn.execute(
-                select(PROPOSAL.c.household_id, PROPOSAL.c.status, PROPOSAL.c.kind).where(
-                    PROPOSAL.c.id == proposal_id
-                )
+                select(
+                    PROPOSAL.c.household_id, PROPOSAL.c.status, PROPOSAL.c.kind, PROPOSAL.c.payload
+                ).where(PROPOSAL.c.id == proposal_id)
             )
         )
         .mappings()
@@ -149,10 +158,33 @@ async def _check_proposal(
     if row["kind"] not in kinds:
         allowed = ", ".join(sorted(kinds))
         raise FactStoreError(f"a {row['kind']} proposal can't do this; it takes {allowed}")
+    try:
+        check_payload(row["payload"], expected)
+    except PayloadError as exc:
+        raise FactStoreError(f"proposal {proposal_id} doesn't approve this write: {exc}") from exc
+
+
+async def _check_unused(conn: AsyncConnection, proposal_id: uuid.UUID) -> None:
+    """A proposal writes one fact at most (and the database's unique key says so too)."""
+    used = await conn.execute(select(FACT.c.id).where(FACT.c.proposal_id == proposal_id))
+    if used.first() is not None:
+        raise FactStoreError(f"proposal {proposal_id} has already written its fact")
+
+
+def _payload_of(new: NewFact, replaces: uuid.UUID | None) -> dict[str, Any]:
+    return fact_payload(
+        entity_id=new.entity_id,
+        attribute_key=new.attribute,
+        value=new.value,
+        valid_from=new.valid_from,
+        valid_to=new.valid_to,
+        replaces=replaces,
+        life_event_id=new.life_event_id,
+    )
 
 
 async def _check_new(
-    conn: AsyncConnection, new: NewFact, proposal_id: uuid.UUID | None, kinds: frozenset[str]
+    conn: AsyncConnection, new: NewFact
 ) -> tuple[Attribute, dict[str, FactValue | None]]:
     """The checks every new fact passes: catalog, value, entity, window and source."""
     try:
@@ -185,11 +217,6 @@ async def _check_new(
             raise FactStoreError(f"{entity['name']} closed on {entity['closed_on']} (V-06)")
     if not new.source_ref.strip():
         raise FactStoreError("a fact needs a source reference")
-    if new.source_kind == "seed":
-        if proposal_id is not None:
-            raise FactStoreError("a seed fact has no proposal")
-    else:
-        await _check_proposal(conn, new.household_id, proposal_id, kinds)
     return attr, columns
 
 
@@ -239,17 +266,20 @@ def _row_values(
     }
 
 
-async def record_fact(
+async def _record(
     conn: AsyncConnection,
     new: NewFact,
-    *,
     proposal_id: uuid.UUID | None,
     recorded_at: datetime,
 ) -> FactRow:
-    """Record a value for an entity and attribute that has no value in that window yet."""
     async with _atomic(conn):
         await _lock_household(conn, new.household_id)
-        _, columns = await _check_new(conn, new, proposal_id, RECORD_KINDS)
+        _, columns = await _check_new(conn, new)
+        if proposal_id is not None:
+            await _check_proposal(
+                conn, new.household_id, proposal_id, RECORD_KINDS, _payload_of(new, None)
+            )
+            await _check_unused(conn, proposal_id)
         for fact in await load_facts(conn, new.household_id):
             if (
                 fact.entity_id == new.entity_id
@@ -269,20 +299,48 @@ async def record_fact(
         return await _get_fact(conn, values["id"])
 
 
+async def record_seed_fact(
+    conn: AsyncConnection, new: NewFact, *, recorded_at: datetime
+) -> FactRow:
+    """Load one fact of the household's seed: what was true before the first session. Only the
+    seed loader calls this; everything after the seed comes through `record_fact`."""
+    if new.source_kind != "seed":
+        raise FactStoreError("only a seed fact is loaded without a proposal")
+    return await _record(conn, new, None, recorded_at)
+
+
+async def record_fact(
+    conn: AsyncConnection,
+    new: NewFact,
+    *,
+    proposal_id: uuid.UUID,
+    recorded_at: datetime,
+) -> FactRow:
+    """Record the value an approved proposal names, for an entity and attribute that has no
+    value in that window yet."""
+    if new.source_kind == "seed":
+        raise FactStoreError("a seed fact is loaded with record_seed_fact, without a proposal")
+    if proposal_id is None:
+        raise FactStoreError("only the seed is recorded without an approved proposal (V-08)")
+    return await _record(conn, new, proposal_id, recorded_at)
+
+
 async def replace_fact(
     conn: AsyncConnection,
     old_id: uuid.UUID,
     new: NewFact,
     *,
-    proposal_id: uuid.UUID | None,
+    proposal_id: uuid.UUID,
     recorded_at: datetime,
 ) -> FactRow:
     """A change in the household's life: the new value starts, and the old one ends that day.
 
     The old fact must be open (`active`, no end). The new one is inserted first, then the old one
     is closed (`valid_to` = the new start, `replaced_by` = the new fact, `replaced`), in one
-    transaction.
+    transaction. The proposal's payload names the old fact and the new value.
     """
+    if new.source_kind == "seed":
+        raise FactStoreError("a seed fact never replaces another; changes come through proposals")
     async with _atomic(conn):
         await _lock_household(conn, new.household_id)
         old = await _get_fact(conn, old_id)
@@ -304,7 +362,11 @@ async def replace_fact(
             raise FactStoreError("a replacement starts open; it ends when it is replaced")
         if recorded_at < old.recorded_at:
             raise FactStoreError("a replacement can't be recorded before the fact it replaces")
-        _, columns = await _check_new(conn, new, proposal_id, REPLACE_KINDS)
+        _, columns = await _check_new(conn, new)
+        await _check_proposal(
+            conn, new.household_id, proposal_id, REPLACE_KINDS, _payload_of(new, old.id)
+        )
+        await _check_unused(conn, proposal_id)
         await _check_one_emergency_fund(conn, new)
         values = _row_values(
             new, columns, proposal_id=proposal_id, recorded_at=recorded_at, replaces=old.id
@@ -345,7 +407,9 @@ async def retract_fact(
             raise FactStoreError(f"fact {fact_id} is {fact.status}{hint}")
         if retracted_at < fact.recorded_at:
             raise FactStoreError("a fact can't be retracted before it was recorded")
-        await _check_proposal(conn, fact.household_id, proposal_id, RETRACT_KINDS)
+        await _check_proposal(
+            conn, fact.household_id, proposal_id, RETRACT_KINDS, retract_payload(fact.id, reason)
+        )
         await conn.execute(
             update(FACT)
             .where(FACT.c.id == fact.id)

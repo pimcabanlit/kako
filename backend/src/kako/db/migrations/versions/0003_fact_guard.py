@@ -1,6 +1,8 @@
 """The guard on facts: only the status transitions in docs/data-model.md, and no deletes.
 
-- A fact is inserted `active`, with no replacement and no retraction.
+- A fact is inserted `active`, with no replacement and no retraction. A seed fact has no proposal
+  and replaces nothing; any other fact names an approved proposal of its own household, of a kind
+  that may make that write, and no other fact names the same proposal (V-08).
 - An update may only move a fact through one of three transitions, and never changes its value,
   its start, its source or what it replaces:
   1. `active` to `replaced`: an open fact closes where its replacement starts, and the
@@ -9,11 +11,12 @@
      replaced can't be retracted; retract its replacement first (Pim, Nov 17).
   3. `replaced` to `active`: the fact is opened again, only once its replacement is retracted.
 - At commit, every live fact that replaces another must meet it: the old fact names it back and
-  ends where it starts (V-03, V-04). A replacement written without closing the old fact fails.
+  ends where it starts (V-03, V-04). A replacement written without closing the old fact fails, and
+  so does a retracted replacement whose old fact wasn't opened again.
 - Facts, decisions, life events and proposals are never deleted or truncated.
 
-The way back is `alembic downgrade 0002`, which drops the triggers and their functions. No data
-changes either way.
+The way back is `alembic downgrade 0002`, which drops the triggers, their functions, the check
+`ck_fact_seed` and the unique key `uq_fact_proposal_id`. No data changes either way.
 
 Revision ID: 0003
 Revises: 0002
@@ -38,6 +41,17 @@ BEGIN
        OR NEW.retracted_at IS NOT NULL OR NEW.retraction_reason IS NOT NULL THEN
         RAISE EXCEPTION 'kako_fact_guard: fact % must be inserted active, '
             'with no replacement or retraction', NEW.id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.source_kind <> 'seed' AND NOT EXISTS (
+        SELECT 1 FROM proposal p
+        WHERE p.id = NEW.proposal_id AND p.household_id = NEW.household_id
+          AND p.status = 'approved'
+          AND p.kind = ANY (CASE WHEN NEW.replaces IS NULL
+                                 THEN ARRAY['new_fact', 'preference_pattern']
+                                 ELSE ARRAY['replace_fact', 'preference_pattern'] END)) THEN
+        RAISE EXCEPTION 'kako_fact_guard: fact % needs an approved proposal of its household '
+            'that may make this write (V-08)', NEW.id
             USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
@@ -123,6 +137,12 @@ BEGIN
                 USING ERRCODE = 'check_violation';
         END IF;
     END IF;
+    IF f.replaces IS NOT NULL AND f.status = 'retracted' AND EXISTS (
+        SELECT 1 FROM fact o WHERE o.id = f.replaces AND o.replaced_by = f.id) THEN
+        RAISE EXCEPTION 'kako_fact_chain: fact % was retracted but %, which it replaced, '
+            'wasn''t opened again (V-04)', f.id, f.replaces
+            USING ERRCODE = 'check_violation';
+    END IF;
     RETURN NULL;
 END
 $$
@@ -140,6 +160,13 @@ $$
 
 
 def upgrade() -> None:
+    op.create_check_constraint(
+        op.f("ck_fact_seed"),
+        "fact",
+        "(source_kind = 'seed') = (proposal_id IS NULL) "
+        "AND (source_kind <> 'seed' OR replaces IS NULL)",
+    )
+    op.create_unique_constraint(op.f("uq_fact_proposal_id"), "fact", ["proposal_id"])
     op.execute(_INSERT)
     op.execute(_UPDATE)
     op.execute(_CHAIN)
@@ -181,3 +208,5 @@ def downgrade() -> None:
         "kako_fact_guard_insert",
     ):
         op.execute(f"DROP FUNCTION {function}()")
+    op.drop_constraint(op.f("uq_fact_proposal_id"), "fact", type_="unique")
+    op.drop_constraint(op.f("ck_fact_seed"), "fact", type_="check")

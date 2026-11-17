@@ -6,6 +6,7 @@ Phase 2, task 2, done when: tests cover each status transition and rules V-01 to
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import replace
 from datetime import UTC, date, datetime
@@ -22,11 +23,13 @@ from kako.db.fact_store import (
     NewFact,
     load_facts,
     record_fact,
+    record_seed_fact,
     replace_fact,
     retract_fact,
     snapshot,
     validate_household,
 )
+from kako.facts.proposals import fact_payload, retract_payload
 
 pytestmark = pytest.mark.integration
 
@@ -77,7 +80,9 @@ class House:
             self.conn, "entity", household_id=self.id, kind=kind, name=name, **extra
         )
 
-    async def proposal(self, kind: str, status: str = "approved") -> uuid.UUID:
+    async def proposal(
+        self, kind: str, status: str = "approved", payload: dict[str, Any] | None = None
+    ) -> uuid.UUID:
         decided = {} if status == "pending" else {"decided_at": at("2026-11-20")}
         if status == "approved":
             decided["decided_by_person_id"] = self.ana
@@ -86,13 +91,37 @@ class House:
             "proposal",
             household_id=self.id,
             kind=kind,
-            payload="{}",
+            payload=json.dumps(payload or {}),
             explanation="test",
             status=status,
             idempotency_key=uuid.uuid4().hex,
             created_at=at("2026-11-20"),
             **decided,
         )
+
+    async def approve(
+        self,
+        new: NewFact,
+        replaces: uuid.UUID | None = None,
+        *,
+        kind: str | None = None,
+        status: str = "approved",
+    ) -> uuid.UUID:
+        """A proposal whose payload is exactly this write."""
+        payload = fact_payload(
+            entity_id=new.entity_id,
+            attribute_key=new.attribute,
+            value=new.value,
+            valid_from=new.valid_from,
+            valid_to=new.valid_to,
+            replaces=replaces,
+            life_event_id=new.life_event_id,
+        )
+        default = "replace_fact" if replaces else "new_fact"
+        return await self.proposal(kind or default, status, payload)
+
+    async def approve_retract(self, fact_id: uuid.UUID, reason: str) -> uuid.UUID:
+        return await self.proposal("retract_fact", payload=retract_payload(fact_id, reason))
 
     def new(self, attribute: str, value: Any, valid_from: str, **extra: Any) -> NewFact:
         entity = {
@@ -123,24 +152,18 @@ async def house(migrated: AsyncEngine) -> House:  # type: ignore[misc]
 
 async def _salary_history(h: House) -> tuple[Any, Any]:
     """Seed ₱52,000 from Mar 1; on Nov 20 the new job makes it ₱68,000 from Dec 1."""
-    old = await record_fact(
-        h.conn,
-        h.new("income.monthly_net", 5_200_000, "2026-03-01"),
-        proposal_id=None,
-        recorded_at=at("2026-03-01"),
+    old = await record_seed_fact(
+        h.conn, h.new("income.monthly_net", 5_200_000, "2026-03-01"), recorded_at=at("2026-03-01")
+    )
+    job = h.new(
+        "income.monthly_net",
+        6_800_000,
+        "2026-12-01",
+        source_kind="session",
+        source_ref="session-4:turn-2",
     )
     new = await replace_fact(
-        h.conn,
-        old.id,
-        h.new(
-            "income.monthly_net",
-            6_800_000,
-            "2026-12-01",
-            source_kind="session",
-            source_ref="session-4:turn-2",
-        ),
-        proposal_id=await h.proposal("replace_fact"),
-        recorded_at=at("2026-11-20"),
+        h.conn, old.id, job, proposal_id=await h.approve(job, old.id), recorded_at=at("2026-11-20")
     )
     await h.conn.commit()
     return old, new
@@ -154,10 +177,9 @@ async def _get(h: House, fact_id: uuid.UUID) -> Any:
 
 
 async def test_new_to_active(house: House) -> None:
-    row = await record_fact(
+    row = await record_seed_fact(
         house.conn,
         house.new("household.emergency_months_target", 3, "2026-03-01", entity_id=None),
-        proposal_id=None,
         recorded_at=at("2026-03-01"),
     )
     await house.conn.commit()
@@ -182,9 +204,10 @@ async def test_active_to_retracted_reopens_what_it_replaced(house: House) -> Non
     """A typo in the new salary: retract it, and the old value is open again (replaced to
     active), because it was true all along."""
     old, new = await _salary_history(house)
+    reason = "Typed ₱68,000 for ₱63,000"
     wrong = await retract_fact(
-        house.conn, new.id, reason="Typed ₱68,000 for ₱63,000",
-        proposal_id=await house.proposal("retract_fact"), retracted_at=at("2026-11-21"),
+        house.conn, new.id, reason=reason,
+        proposal_id=await house.approve_retract(new.id, reason), retracted_at=at("2026-11-21"),
     )  # fmt: skip
     await house.conn.commit()
     assert (wrong.status, wrong.retracted_at, wrong.retraction_reason) == (
@@ -194,11 +217,16 @@ async def test_active_to_retracted_reopens_what_it_replaced(house: House) -> Non
     assert (old.status, old.valid_to, old.replaced_by) == ("active", None, None)
     assert await validate_household(house.conn, house.id) == []
     # The corrected value then replaces the old one again.
+    corrected = house.new(
+        "income.monthly_net",
+        6_300_000,
+        "2026-12-01",
+        source_kind="session",
+        source_ref="session-4:turn-5",
+    )
     fixed = await replace_fact(
-        house.conn, old.id,
-        house.new("income.monthly_net", 6_300_000, "2026-12-01", source_kind="session",
-                  source_ref="session-4:turn-5"),
-        proposal_id=await house.proposal("replace_fact"), recorded_at=at("2026-11-21", 10),
+        house.conn, old.id, corrected,
+        proposal_id=await house.approve(corrected, old.id), recorded_at=at("2026-11-21", 10),
     )  # fmt: skip
     await house.conn.commit()
     assert (await _get(house, old.id)).replaced_by == fixed.id
@@ -209,14 +237,14 @@ async def test_a_replaced_fact_cannot_be_retracted(house: House) -> None:
     old, _ = await _salary_history(house)
     with pytest.raises(FactStoreError, match="retract its replacement first"):
         await retract_fact(
-            house.conn, old.id, reason="x", proposal_id=await house.proposal("retract_fact"),
+            house.conn, old.id, reason="x", proposal_id=await house.approve_retract(old.id, "x"),
             retracted_at=at("2026-11-22"),
         )  # fmt: skip
 
 
 async def test_retracted_is_final(house: House) -> None:
     _, new = await _salary_history(house)
-    proposal = await house.proposal("retract_fact")
+    proposal = await house.approve_retract(new.id, "x")
     await retract_fact(
         house.conn, new.id, reason="x", proposal_id=proposal, retracted_at=at("2026-11-21")
     )
@@ -261,6 +289,7 @@ REFUSED_RECORDS: list[Write] = [
     ("V-06 before the entity opened", {"attribute": "debt.balance", "value": 1, "entity_id": "card",
                                        "valid_from": D("2025-12-01")}, "opened on"),
     ("V-08 not seed, no proposal", {"source_kind": "session"}, "approved proposal"),
+    ("V-08 seed through record_fact", {"source_kind": "seed"}, "record_seed_fact"),
     ("empty source", {"source_ref": " "}, "source reference"),
 ]  # fmt: skip
 
@@ -272,10 +301,13 @@ async def test_record_refuses(
     base = house.new("income.monthly_net", 5_200_000, "2026-03-01")
     if change.get("entity_id") == "card":
         change = {**change, "entity_id": house.card}
-    with pytest.raises(FactStoreError, match=message):
-        await record_fact(
-            house.conn, replace(base, **change), proposal_id=None, recorded_at=at("2026-03-01")
-        )
+    new = replace(base, **change)
+    if case.startswith("V-08"):
+        with pytest.raises(FactStoreError, match=message):
+            await record_fact(house.conn, new, proposal_id=None, recorded_at=at("2026-03-01"))  # type: ignore[arg-type]
+    else:
+        with pytest.raises(FactStoreError, match=message):
+            await record_seed_fact(house.conn, new, recorded_at=at("2026-03-01"))
 
 
 async def test_v08_the_proposal_must_be_approved_and_the_right_kind(house: House) -> None:
@@ -285,33 +317,93 @@ async def test_v08_the_proposal_must_be_approved_and_the_right_kind(house: House
         ("rejected", "new_fact", "is rejected"),
         ("approved", "retract_fact", "can't do this"),
     ):
-        proposal = await house.proposal(kind, status)
+        proposal = await house.approve(base, kind=kind, status=status)
         with pytest.raises(FactStoreError, match=message):
             await record_fact(house.conn, base, proposal_id=proposal, recorded_at=at("2026-03-01"))
-    with pytest.raises(FactStoreError, match="has no proposal"):
-        await record_fact(
-            house.conn, replace(base, source_kind="seed"),
-            proposal_id=await house.proposal("new_fact"), recorded_at=at("2026-03-01"),
-        )  # fmt: skip
+    with pytest.raises(FactStoreError, match="only a seed fact"):
+        await record_seed_fact(house.conn, base, recorded_at=at("2026-03-01"))
     row = await record_fact(
-        house.conn, base, proposal_id=await house.proposal("new_fact"), recorded_at=at("2026-03-01")
+        house.conn, base, proposal_id=await house.approve(base), recorded_at=at("2026-03-01")
     )
     assert row.proposal_id is not None
+
+
+async def test_v08_the_store_writes_only_what_was_approved(house: House) -> None:
+    """REVIEW.md rule 4: an approval never covers a different value, fact or second write."""
+    base = house.new("income.monthly_net", 5_200_000, "2026-03-01", source_kind="session")
+    approved = await house.approve(base)
+    for change, message in (
+        ({"value": 9_900_000}, "different value"),
+        ({"valid_from": D("2026-04-01")}, "different valid_from"),
+        ({"entity_id": house.card, "attribute": "debt.balance"}, "different attribute, entity_id"),
+        ({"life_event_id": uuid.uuid4()}, "different life_event_id"),
+    ):
+        with pytest.raises(FactStoreError, match=message):
+            await record_fact(
+                house.conn, replace(base, **change), proposal_id=approved,
+                recorded_at=at("2026-03-01"),
+            )  # fmt: skip
+    for payload, message in (
+        ({}, "different kind of write"),
+        ({**fact_payload(entity_id=house.salary, attribute_key="income.monthly_net",
+                         value=5_200_000, valid_from=D("2026-03-01")), "value": "52000"},
+         "value doesn't fit"),
+    ):  # fmt: skip
+        with pytest.raises(FactStoreError, match=message):
+            await record_fact(
+                house.conn, base, proposal_id=await house.proposal("new_fact", payload=payload),
+                recorded_at=at("2026-03-01"),
+            )  # fmt: skip
+    row = await record_fact(house.conn, base, proposal_id=approved, recorded_at=at("2026-03-01"))
+    assert row.proposal_id == approved
+    # The same approval can't write its fact a second time.
+    with pytest.raises(FactStoreError, match="already written its fact"):
+        await record_fact(house.conn, base, proposal_id=approved, recorded_at=at("2026-03-02"))
+
+
+async def test_v08_a_replacement_and_a_retraction_name_their_fact(house: House) -> None:
+    old, new = await _salary_history(house)
+    other = await record_seed_fact(
+        house.conn, house.new("debt.balance", 8_000_000, "2026-03-01"), recorded_at=at("2026-03-01")
+    )
+    later = house.new("income.monthly_net", 7_000_000, "2027-06-01", source_kind="session")
+    with pytest.raises(FactStoreError, match="different replaces"):
+        await replace_fact(
+            house.conn, new.id, later, proposal_id=await house.approve(later, other.id),
+            recorded_at=at("2026-11-22"),
+        )  # fmt: skip
+    with pytest.raises(FactStoreError, match="never replaces"):
+        await replace_fact(
+            house.conn, new.id, replace(later, source_kind="seed"),
+            proposal_id=await house.approve(later, new.id), recorded_at=at("2026-11-22"),
+        )  # fmt: skip
+    with pytest.raises(FactStoreError, match="different fact_id"):
+        await retract_fact(
+            house.conn, new.id, reason="x", proposal_id=await house.approve_retract(other.id, "x"),
+            retracted_at=at("2026-11-22"),
+        )  # fmt: skip
+    with pytest.raises(FactStoreError, match="different reason"):
+        await retract_fact(
+            house.conn, new.id, reason="y", proposal_id=await house.approve_retract(new.id, "x"),
+            retracted_at=at("2026-11-22"),
+        )  # fmt: skip
+    assert (await _get(house, new.id)).status == "active"
+    assert (await _get(house, old.id)).status == "replaced"
 
 
 async def test_v02_a_second_value_must_replace(house: House) -> None:
     await _salary_history(house)
     with pytest.raises(FactStoreError, match="replace it instead"):
-        await record_fact(
+        await record_seed_fact(
             house.conn, house.new("income.monthly_net", 1, "2027-01-01"),
-            proposal_id=None, recorded_at=at("2026-11-22"),
+            recorded_at=at("2026-11-22"),
         )  # fmt: skip
 
 
 async def test_replace_needs_an_open_active_fact_and_a_later_start(house: House) -> None:
     old, new = await _salary_history(house)
-    proposal = await house.proposal("replace_fact")
     later = house.new("income.monthly_net", 7_000_000, "2027-06-01", source_kind="session")
+    proposal = await house.approve(later, new.id)
     with pytest.raises(FactStoreError, match="only an open, active fact"):
         await replace_fact(
             house.conn, old.id, later, proposal_id=proposal, recorded_at=at("2026-11-22")
@@ -339,17 +431,15 @@ async def test_replace_needs_an_open_active_fact_and_a_later_start(house: House)
 
 
 async def test_v16_one_emergency_fund(house: House) -> None:
-    await record_fact(
+    await record_seed_fact(
         house.conn,
         house.new("account.purpose", "emergency", "2026-03-01"),
-        proposal_id=None,
         recorded_at=at("2026-03-01"),
     )
     with pytest.raises(FactStoreError, match="V-16"):
-        await record_fact(
+        await record_seed_fact(
             house.conn,
             house.new("account.purpose", "emergency", "2026-06-01", entity_id=house.savings),
-            proposal_id=None,
             recorded_at=at("2026-06-01"),
         )
 
@@ -372,9 +462,9 @@ GUARDED: dict[str, str] = {
 
 @pytest.mark.parametrize("case", sorted(GUARDED))
 async def test_the_guard_refuses(house: House, case: str) -> None:
-    row = await record_fact(
+    row = await record_seed_fact(
         house.conn, house.new("income.monthly_net", 5_200_000, "2026-03-01"),
-        proposal_id=None, recorded_at=at("2026-03-01"),
+        recorded_at=at("2026-03-01"),
     )  # fmt: skip
     await house.conn.commit()
     with pytest.raises(DBAPIError, match=r"kako_fact_guard|kako_never_deleted|violates"):
@@ -395,11 +485,8 @@ async def _one_of_each(h: House) -> None:
     """A fact, a proposal, a life event and a decision (with its option), so a row-level
     delete has something to delete."""
     c = h.conn
-    await record_fact(
-        c,
-        h.new("income.monthly_net", 5_200_000, "2026-03-01"),
-        proposal_id=None,
-        recorded_at=at("2026-03-01"),
+    await record_seed_fact(
+        c, h.new("income.monthly_net", 5_200_000, "2026-03-01"), recorded_at=at("2026-03-01")
     )
     proposal = await h.proposal("life_event")
     await _insert(
@@ -471,10 +558,9 @@ async def test_a_fact_is_inserted_active(house: House) -> None:
 
 
 async def test_a_replacement_that_leaves_the_old_fact_open_fails_at_commit(house: House) -> None:
-    old = await record_fact(
+    old = await record_seed_fact(
         house.conn,
         house.new("income.monthly_net", 5_200_000, "2026-03-01"),
-        proposal_id=None,
         recorded_at=at("2026-03-01"),
     )
     await house.conn.commit()
@@ -489,8 +575,88 @@ async def test_a_replacement_that_leaves_the_old_fact_open_fails_at_commit(house
         replaces=old.id,
         status="active",
         recorded_at=at("2026-11-20"),
-        source_kind="seed",
+        source_kind="session",
         source_ref="x",
+        proposal_id=await house.proposal("replace_fact"),
     )
     with pytest.raises(IntegrityError, match="kako_fact_chain"):
         await house.conn.commit()
+
+
+def _raw_fact(h: House, **values: Any) -> dict[str, Any]:
+    """A fact row written straight to the table, skipping the store."""
+    row: dict[str, Any] = {
+        "household_id": h.id,
+        "entity_id": h.salary,
+        "attribute": "income.monthly_net",
+        "value_money": 5_200_000,
+        "valid_from": D("2026-03-01"),
+        "status": "active",
+        "recorded_at": at("2026-03-01"),
+        "source_kind": "session",
+        "source_ref": "x",
+    }
+    row.update(values)
+    return row
+
+
+async def test_the_guard_refuses_a_fact_without_its_approval(house: House) -> None:
+    """V-08 in the database, for code that skips the store."""
+    pending = await house.proposal("new_fact", "pending")
+    retracting = await house.proposal("retract_fact")
+    other_household = await _insert(
+        house.conn, "household", name="Other", currency="PHP", timezone="Asia/Manila",
+        as_of_date=D("2026-09-15"), created_at=at("2026-03-01"),
+    )  # fmt: skip
+    cases: list[tuple[dict[str, Any], str]] = [
+        ({}, "ck_fact_seed|kako_fact_guard"),  # not seed, no proposal
+        ({"source_kind": "seed", "proposal_id": await house.proposal("new_fact")}, "ck_fact_seed"),
+        ({"proposal_id": pending}, "kako_fact_guard"),
+        ({"proposal_id": retracting}, "kako_fact_guard"),
+        ({"household_id": other_household, "entity_id": None,
+          "attribute": "household.emergency_months_target", "value_money": None, "value_int": 3,
+          "proposal_id": await house.proposal("new_fact")}, "kako_fact_guard"),
+    ]  # fmt: skip
+    await house.conn.commit()
+    for values, message in cases:
+        with pytest.raises(DBAPIError, match=message):
+            await _insert(house.conn, "fact", **_raw_fact(house, **values))
+        await house.conn.rollback()
+
+
+async def test_a_seed_fact_replaces_nothing_and_a_proposal_writes_once(house: House) -> None:
+    old = await record_seed_fact(
+        house.conn, house.new("income.monthly_net", 5_200_000, "2026-03-01"),
+        recorded_at=at("2026-03-01"),
+    )  # fmt: skip
+    await house.conn.commit()
+    with pytest.raises(IntegrityError, match="ck_fact_seed"):
+        await _insert(
+            house.conn, "fact",
+            **_raw_fact(house, source_kind="seed", replaces=old.id, valid_from=D("2026-12-01")),
+        )  # fmt: skip
+    await house.conn.rollback()
+    once = await house.proposal("new_fact")
+    await _insert(
+        house.conn,
+        "fact",
+        **_raw_fact(house, entity_id=house.card, attribute="debt.balance", proposal_id=once),
+    )
+    with pytest.raises(IntegrityError, match="uq_fact_proposal_id"):
+        await _insert(
+            house.conn,
+            "fact",
+            **_raw_fact(house, entity_id=house.fund, attribute="account.balance", proposal_id=once),
+        )
+
+
+async def test_a_retracted_replacement_must_reopen_its_old_fact(house: House) -> None:
+    old, new = await _salary_history(house)
+    await house.conn.execute(
+        text("UPDATE fact SET status = 'retracted', retracted_at = now(), "
+             "retraction_reason = 'x' WHERE id = :id"),
+        {"id": new.id},
+    )  # fmt: skip
+    with pytest.raises(IntegrityError, match="kako_fact_chain"):
+        await house.conn.commit()
+    assert old.id != new.id

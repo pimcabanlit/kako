@@ -98,6 +98,7 @@ def validate(
                 if windows_overlap(a.valid_from, a.valid_to, b.valid_from, b.valid_to):
                     add("V-02", b, f"{b.attribute} overlaps fact {a.id}")
 
+    proposal_used: dict[uuid.UUID, uuid.UUID] = {}  # a proposal, and the first fact it wrote
     for fact in rows:
         # V-03 and V-04: the replacement chain, both directions, without gaps.
         if fact.replaced_by is not None:
@@ -137,9 +138,17 @@ def validate(
             if entity.closed_on is not None and fact.valid_from >= entity.closed_on:
                 add("V-06", fact, f"starts {fact.valid_from}, after {entity.name} closed")
 
-        # V-08: anything not from the seed came from an approved proposal.
-        if fact.source_kind != "seed" and fact.proposal_id not in approved_proposal_ids:
+        # V-08: anything not from the seed came from an approved proposal, its own; the seed
+        # has no proposal and replaces nothing.
+        if fact.source_kind == "seed":
+            if fact.proposal_id is not None or fact.replaces is not None:
+                add("V-08", fact, "is from the seed but has a proposal or replaces a fact")
+        elif fact.proposal_id not in approved_proposal_ids:
             add("V-08", fact, "is not from the seed and has no approved proposal")
+        elif fact.proposal_id in proposal_used:
+            add("V-08", fact, f"shares its proposal with {proposal_used[fact.proposal_id]}")
+        if fact.proposal_id is not None:
+            proposal_used.setdefault(fact.proposal_id, fact.id)
 
     for row in approved_rows:
         if row.proposal_id not in approved_proposal_ids:
