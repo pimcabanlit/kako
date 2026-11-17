@@ -14,7 +14,7 @@ Status: **being set up** (Phase 1, task 5). Rows are filled in as each step is d
 | Piece | Name | Notes |
 | --- | --- | --- |
 | Resource group | `kako-rg` | Kako only. Deleting it removes everything below |
-| Budget | `kako-monthly` | Monthly, on the resource group; emails at 50%, 80% and 100%. A budget alerts, it does not stop spending |
+| Budget | `kako-monthly` | US$10 monthly, on the resource group; emails at 50%, 80% and 100%. A budget alerts, it does not stop spending |
 | Foundry resource and project | `kako-ai`, project `kako` | Region chosen where both models are offered |
 | Deployment, stronger | set in `KAKO_MODEL_STRONG` | Orchestrator and dreaming. Global Standard (pay per token) |
 | Deployment, faster | set in `KAKO_MODEL_FAST` | The four specialists. Global Standard (pay per token) |
@@ -32,14 +32,14 @@ portal and note the difference under Lessons.
 ### 1. Resource group
 
 1. In the Azure portal, check the top-right account menu shows your personal directory.
-2. Resource groups → Create. Subscription: your own. Name: `kako-rg`. Region: the one chosen in
-   step 3 (a resource group's region only holds its metadata, so any nearby region is fine).
+2. Resource groups → Create. Subscription: your own. Name: `kako-rg`. Region: East US 2 (a
+   resource group's region only holds its metadata; it doesn't limit where the models run).
 3. Review + create → Create.
 
 ### 2. Budget
 
 1. Open `kako-rg` → Cost Management → Budgets → Add.
-2. Name `kako-monthly`, reset period Monthly, amount as Pim chose.
+2. Name `kako-monthly`, reset period Monthly, amount US$10 (Pim, Nov 17).
 3. Alert conditions: Actual at 50%, 80% and 100%, emailed to your own address.
 
 ### 3. Foundry resource and project
