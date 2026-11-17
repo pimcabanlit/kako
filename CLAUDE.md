@@ -173,6 +173,17 @@ uv run kako migrate                       # Alembic upgrade to the latest schema
 uv run kako api                           # /api/v1 on 127.0.0.1:8000; /api/v1/health, docs at /api/v1/docs
 ```
 
+The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be running):
+
+```
+npm ci              # install exact versions from package-lock.json
+npm run dev         # http://localhost:3000; /api/v1/* is passed to the backend (KAKO_API_URL, default http://127.0.0.1:8000)
+npm run lint        # ESLint (Next.js rules)
+npm run typecheck   # route types, then tsc (strict)
+npm run build       # production build
+npm run check       # all three, as CI runs them
+```
+
 In a cloud session, start the local services first: `meko start` and `service postgresql start`.
 
 CI (`.github/workflows/ci.yml`) runs the same lint, type check and tests on every pull request,
@@ -193,5 +204,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and
   cleans up (at most 6 tool calls).
+- `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons. `next.config.ts`
+  passes `/api/v1/*` to the backend; `src/app/` the pages (the layout carries the "synthetic data,
+  not financial advice" line); `src/components/health-panel.tsx` the system check with its loading
+  and error states; `src/lib/health.ts` the health report's types (kept in step with the backend's
+  `health.py`). `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
+  so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
+  its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.
 - Ruff bans model SDK imports (`openai`, `azure.identity`, `azure.ai`) everywhere except
   `src/kako/agents/model_manager.py` (REVIEW.md rule 10).
