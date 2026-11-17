@@ -1,0 +1,96 @@
+# Lint, type check and tests for the backend on every pull request and on pushes to main.
+#
+# The integration tests run against a Postgres service and against local Meko, installed from
+# Meko's GitHub release at the pinned version below. This workflow never touches Meko Cloud and
+# uses no secrets: Meko Cloud's Free-tier allowances are lifetime and account-wide, so CI must not
+# spend them (REVIEW.md rule 9). Upgrade Meko here and in CLAUDE.md together, on purpose.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MEKO_VERSION: 1.20261116.0
+
+jobs:
+  backend:
+    name: Backend (lint, type check, tests on local Meko and Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: kako_test
+          # A throwaway database on the runner, reachable only from this job: no password needed.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      KAKO_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/kako_test
+      KAKO_TEST_MEKO_URL: http://127.0.0.1:7777/mcp
+      KAKO_REQUIRE_INTEGRATION: "1"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install local Meko ${{ env.MEKO_VERSION }} from GitHub
+        run: |
+          curl -fsSL "https://github.com/yugabyte/meko/releases/download/meko-v${MEKO_VERSION}/install.sh" \
+            | sh -s -- --version "${MEKO_VERSION}" --no-service --non-interactive
+          ~/.local/bin/meko --version
+
+      - name: Start local Meko
+        run: |
+          ~/.local/bin/meko start
+          # Wait for the MCP endpoint to answer an initialize handshake (no tool call).
+          for i in $(seq 1 30); do
+            if curl -fsS -X POST "$KAKO_TEST_MEKO_URL" \
+                 -H 'Content-Type: application/json' \
+                 -H 'Accept: application/json, text/event-stream' \
+                 -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+                 | grep -q '"serverInfo"'; then
+              echo "Meko is answering."; exit 0
+            fi
+            sleep 2
+          done
+          echo "Meko did not answer within a minute." && exit 1
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies (locked)
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+
+      - name: Type check
+        run: uv run mypy
+
+      - name: Tests (unit and integration)
+        run: uv run pytest -ra
+
+      - name: Meko logs
+        if: failure()
+        run: |
+          ~/.local/bin/meko status || true
+          tail -n 200 ~/.meko/logs/* 2>/dev/null || echo "No Meko logs found."

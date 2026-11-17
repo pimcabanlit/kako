@@ -175,6 +175,11 @@ uv run kako api                           # /api/v1 on 127.0.0.1:8000; /api/v1/h
 
 In a cloud session, start the local services first: `meko start` and `service postgresql start`.
 
+CI (`.github/workflows/ci.yml`) runs the same lint, type check and tests on every pull request,
+against a Postgres service and local Meko installed from its GitHub release at the version pinned
+there (keep it in step with the setup block above). It sets `KAKO_REQUIRE_INTEGRATION=1`, so a
+missing test variable fails instead of skipping. It never touches Meko Cloud and uses no secrets.
+
 ## Code layout
 
 - `backend/`: the FastAPI backend (uv project `kako`, Python 3.12). `src/kako/settings.py` holds every
@@ -182,8 +187,11 @@ In a cloud session, start the local services first: `meko start` and `service po
   `health.py` the health report and `safe_error` (no secret reaches a response or a log);
   `api/app.py` the app and `/api/v1/health`; `db/` the engine, the declarative base and Alembic
   (`db/migrations/`, append-only once merged); `meko/` the only package that talks to Meko
-  (`client.py`, a small MCP client over Streamable HTTP; `health.py`, the handshake probe).
+  (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
+  any past their `max_tool_calls` ceiling, 0 by default; `health.py`, the handshake probe).
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
+  `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and
+  cleans up (at most 6 tool calls).
 - Ruff bans model SDK imports (`openai`, `azure.identity`, `azure.ai`) everywhere except
   `src/kako/agents/model_manager.py` (REVIEW.md rule 10).

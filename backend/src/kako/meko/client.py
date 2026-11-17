@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections import Counter
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Self
@@ -34,6 +35,14 @@ class MekoProtocolError(MekoError):
     """Meko's answer was not the JSON-RPC message expected."""
 
 
+class MekoToolError(MekoError):
+    """A Meko tool ran and reported an error (for example a missing conversation_id)."""
+
+
+class MekoCallLimitError(MekoError):
+    """The session reached its ceiling of tool calls; nothing more is sent to Meko."""
+
+
 @dataclass(frozen=True)
 class ServerInfo:
     name: str
@@ -45,9 +54,14 @@ class MekoMcpSession:
     """One MCP session: `initialize` on enter, the session closed on exit.
 
     ```
-    async with MekoMcpSession(http, url, api_key) as session:
+    async with MekoMcpSession(http, url, api_key, max_tool_calls=10) as session:
         session.server_info.version
+        await session.call_tool("memory_search", {...})
     ```
+
+    Every tool call is counted, and a session refuses calls past `max_tool_calls`, so no loop can
+    call Meko without a bound. The persistent call counter and quota guard across sessions arrive
+    with the adapter in Phase 2 (REVIEW.md rule 9).
     """
 
     def __init__(
@@ -56,8 +70,11 @@ class MekoMcpSession:
         url: str,
         api_key: SecretStr | None = None,
         *,
+        max_tool_calls: int = 0,
         client_name: str = "kako",
     ) -> None:
+        if max_tool_calls < 0:
+            raise ValueError("max_tool_calls can't be negative")
         self._http = http
         self._url = url
         self._api_key = api_key
@@ -65,7 +82,9 @@ class MekoMcpSession:
         self._session_id: str | None = None
         self._protocol_version: str | None = None
         self._next_id = 1
+        self._max_tool_calls = max_tool_calls
         self.server_info: ServerInfo | None = None
+        self.tool_calls: Counter[str] = Counter()
 
     async def __aenter__(self) -> Self:
         result = await self._request(
@@ -101,6 +120,34 @@ class MekoMcpSession:
         # failure here must not hide the result or the error of the work inside the block.
         with contextlib.suppress(httpx.HTTPError):
             await self._http.delete(self._url, headers=self._headers())
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        """Call one Meko tool and return its answer, parsed from JSON.
+
+        Meko answers with one text item holding JSON. A tool that fails answers either with
+        `isError` or with an object carrying an `error` key; both raise `MekoToolError`.
+        """
+        if self.server_info is None:
+            raise MekoError("call_tool before the session was opened")
+        if sum(self.tool_calls.values()) >= self._max_tool_calls:
+            raise MekoCallLimitError(
+                f"this session's ceiling of {self._max_tool_calls} Meko tool calls is reached"
+            )
+        self.tool_calls[name] += 1
+        result = await self._request("tools/call", {"name": name, "arguments": arguments})
+        texts = [
+            item.get("text", "")
+            for item in result.get("content", [])
+            if isinstance(item, dict) and item.get("type") == "text"
+        ]
+        if not texts:
+            raise MekoProtocolError(f"{name} answered without text content")
+        answer = _parse_json(texts[0]) if texts[0].strip()[:1] in ("{", "[") else texts[0]
+        if result.get("isError"):
+            raise MekoToolError(f"{name} failed: {_short(answer)}")
+        if isinstance(answer, dict) and "error" in answer:
+            raise MekoToolError(f"{name} failed: {_short(answer.get('error'))}")
+        return answer
 
     def _headers(self) -> dict[str, str]:
         headers = {
@@ -171,6 +218,10 @@ def _parse_json(text: str) -> Any:
         return json.loads(text)
     except json.JSONDecodeError as exc:
         raise MekoProtocolError("Meko's answer was not valid JSON") from exc
+
+
+def _short(value: Any) -> str:
+    return str(value)[:200]
 
 
 def _sse_data(body: str) -> list[str]:
