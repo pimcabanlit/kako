@@ -88,7 +88,8 @@ KAKO_AZURE_CLIENT_ID=<application (client) id>
 KAKO_AZURE_CLIENT_SECRET=<client secret value>
 ```
 
-- **Cloud sessions:** all six in the cloud environment's settings. A running session doesn't pick up
+- **Cloud sessions:** all six in the cloud environment's settings, and the Foundry host
+  (`kako-ai.services.ai.azure.com`) under Network access → Allowed domains (added Nov 17). A running session doesn't pick up
   changes, so start a new one after editing.
 - **Laptop:** the same six in `kako/.env`, which is gitignored. Or the first three only, signed in
   with `az login` instead of the app registration.
