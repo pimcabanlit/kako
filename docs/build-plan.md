@@ -11,7 +11,10 @@ submission checklist.
   until then: docs, CI, the engine. Full time from Dec 22.
 - **Where it stands (Nov 17):** the base files, concept, ContextCon summary, Meko toolkit, these docs
   and `REVIEW.md` are merged (PRs #1 to #6). The plan was questioned against the brief, the judging and
-  Meko's own docs (playbook Stage 5), and the answers are written in below. Phase 1 is next.
+  Meko's own docs (playbook Stage 5), and the answers are written in below. Phase 1: CI against local
+  Meko, the backend and web skeletons are merged (#8 to #11); Azure AI Foundry is set up and
+  `check-models` passes from a cloud session and the laptop (docs/azure-setup.md); the Meko spikes
+  are next.
 
 What Kako does is in [concept.md](concept.md). How it is built is in [architecture.md](architecture.md).
 Every table and formula is in [data-model.md](data-model.md). How each ContextCon criterion is met is in

@@ -23,6 +23,8 @@ disagree, raise it, and update the doc in the same change once agreed.
   in the same PR.
 - `docs/requirements-map.md`: every ContextCon rule, Challenge 05 objective, judging
   criterion and prize against what is built. Update a row when its status changes.
+- `docs/azure-setup.md`: Kako's Azure side (resource group, budget, Foundry deployments, app
+  registration, role, settings), how to check it with `check-models`, and lessons learned. No secrets.
 - `REVIEW.md`: what the AI reviewer reports as Important, and the risk tier of each
   kind of change. Every PR states its tier and the file that set it.
 
@@ -171,6 +173,7 @@ KAKO_TEST_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/kako_test \
 KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against local Postgres and local Meko (never Meko Cloud)
 uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
 uv run kako api                           # /api/v1 on 127.0.0.1:8000; /api/v1/health, docs at /api/v1/docs
+uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
 ```
 
 The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be running):

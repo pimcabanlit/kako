@@ -49,3 +49,27 @@ def test_meko_url_reads_the_toolkit_variable(
 )
 def test_meko_target(make_settings: MakeSettings, url: str, target: str) -> None:
     assert make_settings(meko_mcp_url=url).meko_target == target
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("https://kako-ai.openai.azure.com/", "https://kako-ai.openai.azure.com"),
+        (
+            "https://kako-ai.services.ai.azure.com/api/projects/kako",
+            "https://kako-ai.services.ai.azure.com",
+        ),
+        ("  ", None),
+    ],
+    ids=["resource", "project", "blank"],
+)
+def test_foundry_endpoint_keeps_the_host(
+    make_settings: MakeSettings, given: str, expected: str | None
+) -> None:
+    assert make_settings(foundry_endpoint=given).foundry_endpoint == expected
+
+
+@pytest.mark.parametrize("given", ["http://kako-ai.openai.azure.com", "kako-ai.openai.azure.com"])
+def test_foundry_endpoint_must_be_https(make_settings: MakeSettings, given: str) -> None:
+    with pytest.raises(ValueError, match="https://"):
+        make_settings(foundry_endpoint=given)

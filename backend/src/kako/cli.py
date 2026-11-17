@@ -21,12 +21,18 @@ def main(argv: list[str] | None = None) -> int:
     api.add_argument("--reload", action="store_true", help="restart on code changes")
 
     commands.add_parser("migrate", help="bring the database to the latest schema (Alembic)")
+    commands.add_parser(
+        "check-models",
+        help="settings, Entra ID sign-in, and one tiny call per Foundry deployment",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "api":
         return _api(args.host, args.port, reload=args.reload)
     if args.command == "migrate":
         return _migrate()
+    if args.command == "check-models":
+        return _check_models()
     parser.error(f"unknown command {args.command}")
     return 2
 
@@ -50,6 +56,15 @@ def _migrate() -> int:
     command.upgrade(config, "head")
     print("Database is at the latest schema.")
     return 0
+
+
+def _check_models() -> int:
+    from kako.agents.model_manager import check_models
+
+    lines = check_models(get_settings())
+    for line in lines:
+        print(line)
+    return 0 if all(line.ok for line in lines) else 1
 
 
 if __name__ == "__main__":

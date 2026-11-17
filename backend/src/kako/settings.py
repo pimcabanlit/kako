@@ -42,6 +42,49 @@ class Settings(BaseSettings):
     )
     health_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 
+    # Azure AI Foundry. Deployment names live here and nowhere else (REVIEW.md rule 10).
+    foundry_endpoint: str | None = Field(
+        default=None,
+        description="The Foundry resource's endpoint, https://<resource>.openai.azure.com",
+    )
+    model_strong: str | None = Field(
+        default=None, description="Deployment for the orchestrator and dreaming"
+    )
+    model_fast: str | None = Field(default=None, description="Deployment for the specialists")
+    # Kako's own app registration. KAKO_-prefixed, so it can't be confused with another
+    # project's AZURE_* variables in a shared environment. Without them, sign-in falls back to
+    # the Azure CLI's `az login`, so no secret is needed where the CLI is signed in.
+    azure_tenant_id: str | None = None
+    azure_client_id: str | None = None
+    azure_client_secret: SecretStr | None = None
+    # Room for a reasoning model's hidden reasoning plus a one-word answer: GPT-5 models count
+    # reasoning tokens against this cap, and 64 can leave nothing for the answer.
+    check_models_max_tokens: int = Field(default=256, ge=16, le=1024)
+
+    @field_validator("model_strong", "model_fast", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("foundry_endpoint", mode="before")
+    @classmethod
+    def _resource_endpoint(cls, value: object) -> object:
+        """Keep the scheme and host only, so the resource endpoint and the project endpoint
+        (`.../api/projects/<name>`) shown in the Foundry portal both work. HTTPS only: the
+        bearer token must never travel in clear text."""
+        if not isinstance(value, str) or not value.strip():
+            return None
+        parts = urlsplit(value.strip())
+        if parts.scheme != "https" or not parts.hostname:
+            raise ValueError("must be an https:// URL, such as https://<resource>.openai.azure.com")
+        return f"https://{parts.netloc}"
+
+    @property
+    def deployments(self) -> dict[str, str]:
+        """Each tier's deployment name, for the tiers that are set."""
+        tiers = {"strong": self.model_strong, "fast": self.model_fast}
+        return {tier: name for tier, name in tiers.items() if name}
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _asyncpg_driver(cls, value: object) -> object:
