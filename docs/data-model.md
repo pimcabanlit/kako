@@ -1,4 +1,4 @@
-# Kako data model v0.5
+# Kako data model v0.6
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -10,7 +10,7 @@ in the same change once agreed.
   [architecture.md](architecture.md#where-data-lives).
 - **Scope:** the hackathon MVP: one synthetic household, four planning areas (budget, debt, savings,
   goals), sessions, dreaming, decisions and plans. Tax is never calculated.
-- **Version:** v0.5 (Nov 17, 2026). v0.1 was the first draft. v0.2 closed eight gaps found in the
+- **Version:** v0.6 (Nov 17, 2026). v0.1 was the first draft. v0.2 closed eight gaps found in the
   Stage 5 review: `account.purpose` and `preference.debt_strategy` facts, `decision_option.tags`, an
   amount on each recommendation, `session_participant` and the speaker on evidence, `agent_step`,
   `context_gap`, and the deployment and cost on `llm_call`. It also handles Meko's own extracted
@@ -21,7 +21,8 @@ in the same change once agreed.
   a seed fact has no proposal and replaces nothing. v0.5 is the engine (task 3): each formula's
   edge cases, the debt rollover, the calendar, and the worked example's car loan, so every figure in
   it can be checked; plan v2's emergency-fund wait is 12 months, not 10. The plan diff (task 4) adds
-  the `ended` label and says which facts count as a change.
+  the `ended` label and says which facts count as a change. v0.6 is the demo household (task 5): its
+  files and how they load, the car loan's Oct and Nov statements, and how a run is stored.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -280,9 +281,9 @@ across the four sessions.
 | `id` | UUID PK | |
 | `household_id` | UUID FK | |
 | `as_of_date` | DATE | The snapshot date |
-| `known_at` | TIMESTAMPTZ | The record time of the snapshot |
+| `known_at` | TIMESTAMPTZ | The record time of the snapshot; a run computed without one used everything Kako knew at `created_at`, and is stored with that |
 | `snapshot_hash` | TEXT | |
-| `scenario_id` | UUID FK, null | Set for a what-if |
+| `scenario_id` | UUID FK, null | Set for a what-if. A run whose figures read a what-if's hypothetical values is stored only with its scenario |
 | `engine_version` | TEXT | Equals the backend package version |
 | `created_at` | TIMESTAMPTZ | |
 
@@ -754,8 +755,9 @@ promoted to shared knowledge.
 | Mara's salary, `income.monthly_net` = ₱52,000 | 2026-03-01 | 2026-12-01 | `replaced` | the new fact |
 | Mara's salary, `income.monthly_net` = ₱68,000 | 2026-12-01 | null | `active` | null |
 
-The Nov statements set the card at ₱76,880.00 and the emergency fund at ₱160,100 (new `debt.balance` and
-`account.balance` facts, each replacing the last).
+The Nov statements set the card at ₱76,880.00, the car loan at ₱401,430.63 and the emergency fund at
+₱160,100 (new `debt.balance` and `account.balance` facts, each replacing the last; the Oct statements
+did the same).
 
 **After: plan v3, as of Dec 1, 2026.** Income ₱116,000; surplus **₱25,050**. The debt specialist reads
 the promoted preference and does not put everything on the card; the orchestrator records the option it
@@ -768,7 +770,7 @@ rejected:
 
 Runway is **2.3 months** (₱160,100 ÷ ₱70,000), and the 3-month target (₱210,000) is reached in
 **5 months**, against 12 in plan v2 at ₱5,050 a month. With the card paid off in month 7, its ₱12,550
-rolls to the car loan, which is paid off in 23 months (₱42,240.98 of interest), against 32 months
+rolls to the car loan, which is paid off in 22 months (₱38,914.35 of interest), against 32 months
 (₱58,333.22) in plan v2.
 
 **The diff Kako explains (F-DIFF-1):** income +₱16,000 because one fact was *replaced* by the new job;
@@ -779,14 +781,31 @@ and the October session where it was learned.
 
 ## Demo dataset
 
-`data/demo-household/` (added in Phase 2) holds the synthetic household as files, loaded through the same
-import a real household would use:
+`data/demo-household/` holds the synthetic household as files. `kako demo load` loads them through the
+same fact store a real household uses (`backend/src/kako/demo/`), in one transaction, into a database
+that doesn't hold the household yet:
 
-- `entities.csv`, `facts.csv` (the seed, with `valid_from` dates from March 2026),
-- `statements/*.csv` (synthetic monthly bank and card statements, also uploaded to the knowledge base),
-- `kb/*.md` (planning rules and plain-language reference: 13th-month pay, SSS, Pag-IBIG, emergency funds),
-- `sessions/*.yaml` (the household's lines for sessions 1 to 4, each with its speaker; both adults
-  take part. Used to seed, to test dreaming, and as the scripted path demo mode replays),
-- `recorded/` (the recorded model responses for demo mode and tests).
+- `household.csv`, `people.csv`, `entities.csv`: who the household is and what it has. An entity is
+  named by a short key (`card`, `mara_salary`) that the other files use.
+- `facts.csv`: the seed, the household before session 1, with `valid_from` dates from March 2026. Seed
+  facts have `source_kind` `seed` and no proposal, and are recorded at midnight UTC on the household's
+  `as_of_date` (Aug 1, 2026).
+- `changes.csv`: what happened after, in order of `recorded_at` (with its time zone). Each row is one
+  proposal an adult approved (`decided_by`): a new or replaced fact, a preference pattern, or a life
+  event, with the explanation the household saw. Loading writes the approved proposal, then exactly
+  the fact it names (V-08); a fact may name the life event it belongs to. `--through` stops the replay
+  at a point in the story (without it, only the seed is loaded). The 18 changes are the worked example:
+  plan v2 (Sep 15), the Oct and Nov statements, the October preference pattern, the new job (Nov 20)
+  and plan v3 (Dec 1).
+- `statements/*.csv` (synthetic monthly bank, card and loan statements, cited by each statement fact's
+  `source_ref`, and uploaded to the knowledge base),
+- `kb/*.md` (planning rules and plain-language reference: 13th-month pay, SSS, Pag-IBIG, emergency funds).
+
+Money is written in pesos with two decimals and read as exact centavos; a rate is a decimal fraction.
+Every file is checked before anything is written, and an error names the file and line.
+
+Later phases add `sessions/` (the household's lines for sessions 1 to 4, each with its speaker; both
+adults take part; used to test dreaming and as the scripted path demo mode replays) and `recorded/` (the
+recorded model responses for demo mode and tests).
 
 No real person, bank, employer or account. Names are fictional; amounts are plausible, not sampled.

@@ -51,7 +51,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Meko feature | Status | Kako's use | Phase |
 | --- | --- | --- | --- |
 | Memory: goals, risk profile and past decisions, across sessions | Not started | One memory per approved fact, decision and preference, with Kako's ids in its metadata; replaced facts rewritten in the past tense | 4 |
-| Knowledge base: statements, budgets and planning rules (synthetic) | Not started | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) for the demo household | 2 |
+| Knowledge base: statements, budgets and planning rules (synthetic) | In progress | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) for the demo household. Written in `data/demo-household/`; the upload to Meko's knowledge base is Phase 2, task 6 | 2 |
 | Artifacts: generated plans and reports in the datapack | Not started | Each plan report kept with `artifact_put`; its hash stored on the plan | 4 |
 | Conversations: planning sessions over time | Not started | One conversation per session, turns with `plan` and `reasoning`; dreaming reads them | 3 |
 | Traces: why each recommendation was made | Not started | The session's conversation id is its trace id; every Meko call in a turn is a span; recommendations store their turn | 3 |
@@ -60,7 +60,7 @@ Phases refer to [build-plan.md](build-plan.md).
 
 | Outcome | Status | How | Phase |
 | --- | --- | --- | --- |
-| A synthetic household or small-business financial profile | Not started | The Villanueva household: two adults, one child, pesos, statements and reference documents ([data-model.md](data-model.md#demo-dataset)) | 2 |
+| A synthetic household or small-business financial profile | In progress | The Villanueva household: two adults, one child, pesos, statements and reference documents ([data-model.md](data-model.md#demo-dataset)). Its seed and 18 approved changes load through the fact store (`kako demo load`), pass every validation rule, and give the worked example's figures; the session scripts come with the sessions | 2 |
 | A planning agent system connected to Meko | Not started | Orchestrator, four specialists and dreaming, through one Meko adapter | 3–4 |
 | 3 or more sessions showing memory carrying over and the plan adapting to a life event | Not started | Sessions in August, September and October, then the new job in session 4 | 4–5 |
 | Trace-backed explanations for the key recommendations | Not started | The "why" view and the Meko trace for every recommendation | 3, 5 |

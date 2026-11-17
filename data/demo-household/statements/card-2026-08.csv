@@ -1,0 +1,5 @@
+date,description,amount
+2026-07-15,Opening balance,85000.00
+2026-07-25,Payment - thank you,-2550.00
+2026-08-01,Interest (3% a month),2550.00
+2026-08-01,Closing balance,85000.00

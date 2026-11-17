@@ -1,0 +1,12 @@
+key,kind,name,owner,opened_on,closed_on
+mara_salary,income,Mara's salary,mara,,
+jun_salary,income,Jun's salary,jun,,
+rent,expense,Rent and utilities,,,
+food,expense,Food,,,
+school,expense,School and transport,,,
+fun,expense,Eating out,,,
+card,debt,Credit card,mara,2024-05-01,
+car,debt,Car loan,jun,2025-06-01,
+fund,account,Emergency fund,,,
+savings,account,Long-term savings,,,
+house,goal,House fund,,2026-12-01,
