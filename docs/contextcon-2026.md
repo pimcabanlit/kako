@@ -100,6 +100,10 @@ and account screen, November 2026):
   development and tests run against local Meko and Meko Cloud holds the demo only.
 - No shared datapacks or roles (Pro only), so per-person privacy is a stretch goal.
 - Artifacts expire after 30 days unused.
+- **Lifetime tool allowances** (per account, from Meko's agent skills plugin v2.6.1,
+  "Known limitations"): 1,000 each of `memory_search`, `knowledgebase_search`,
+  `context_search` and `conversation_add_message`, and 10,000 `memory_add`. They do not
+  reset, so Kako counts its Meko calls and caps them per environment.
 - AMP (Postgres in the datapack) only accepts connections from listed IP
   addresses, so the demo backend needs a fixed outgoing IP. Its compute limit on
   Free is not yet known.
