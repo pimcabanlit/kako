@@ -158,4 +158,32 @@ Rules:
 - Ship in small PRs: base files, docs, toolkit, the doc set, `REVIEW.md`, then CI.
 - Every PR states its risk tier from `REVIEW.md` and the file that set it.
 
-Commands and code layout are added here as the code arrives.
+## Commands
+
+Run from `backend/`. Keep this list current as commands are added.
+
+```
+uv sync                                   # install exact versions from uv.lock (Python 3.12)
+uv run ruff check . && uv run ruff format --check .
+uv run mypy                               # strict, src/kako
+uv run pytest                             # unit tests; integration tests skip unless the two variables below are set
+KAKO_TEST_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/kako_test \
+KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against local Postgres and local Meko (never Meko Cloud)
+uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
+uv run kako api                           # /api/v1 on 127.0.0.1:8000; /api/v1/health, docs at /api/v1/docs
+```
+
+In a cloud session, start the local services first: `meko start` and `service postgresql start`.
+
+## Code layout
+
+- `backend/`: the FastAPI backend (uv project `kako`, Python 3.12). `src/kako/settings.py` holds every
+  setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`); `cli.py` is the `kako` command;
+  `health.py` the health report and `safe_error` (no secret reaches a response or a log);
+  `api/app.py` the app and `/api/v1/health`; `db/` the engine, the declarative base and Alembic
+  (`db/migrations/`, append-only once merged); `meko/` the only package that talks to Meko
+  (`client.py`, a small MCP client over Streamable HTTP; `health.py`, the handshake probe).
+- `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
+  `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
+- Ruff bans model SDK imports (`openai`, `azure.identity`, `azure.ai`) everywhere except
+  `src/kako/agents/model_manager.py` (REVIEW.md rule 10).
