@@ -41,7 +41,7 @@ Phases refer to [build-plan.md](build-plan.md).
 
 | Objective | Status | How Kako meets it | Phase |
 | --- | --- | --- | --- |
-| **Remember the person:** goals, preferences, constraints and life events as long-term memory | Not started | Goals, preferences, constraints and life events are facts with a validity window and a replacement chain in Postgres, and memories in Meko; durable preferences are promoted to shared knowledge ([data-model.md](data-model.md#facts)) | 2, 4 |
+| **Remember the person:** goals, preferences, constraints and life events as long-term memory | In progress | Goals, preferences, constraints and life events are facts with a validity window and a replacement chain in Postgres, and memories in Meko; durable preferences are promoted to shared knowledge ([data-model.md](data-model.md#facts)). Built so far: the fact store, with replace, retract, snapshots on a date and as known at a time, and a database guard that allows nothing else (Phase 2) | 2, 4 |
 | **Plan across areas:** specialist agents (budget, debt, savings, goals) share one financial context | Not started | One orchestrator calls four specialists as tools; all start from the same brief and the same engine run, and conflicts between them are found in code and resolved in the open ([architecture.md](architecture.md#agents)) | 3 |
 | **Adapt over time:** the plan updates when a life event happens | Not started | Life-event replan: the old fact closed and replaced, the decisions that rested on it marked to revisit, a new plan, and a diff that says what changed and why ([architecture.md](architecture.md#how-a-life-event-replans)) | 4 |
 | **Explain the advice:** every recommendation traces to the memories and data behind it | Not started | Each recommendation stores its figures, facts, decisions, memories and documents, and its Meko turn; the "why" view shows them and links the Meko trace. The number check blocks any figure the engine did not produce | 3, 5 |
@@ -112,7 +112,7 @@ Phases refer to [build-plan.md](build-plan.md).
 
 | Feature | Status | Why it matters |
 | --- | --- | --- |
-| Two kinds of time: when something was true and when Kako learned it | Not started | Explains an old plan exactly as it was made, and tells a change in life from a corrected mistake |
+| Two kinds of time: when something was true and when Kako learned it | In progress | Explains an old plan exactly as it was made, and tells a change in life from a corrected mistake |
 | Decisions keep their rejected options and their assumptions | Not started | When an assumption is replaced, the decision is flagged to revisit |
 | The number check | Not started | No figure reaches the household unless the engine produced it |
 | Reconciliation rules in code | Not started | Specialist conflicts are found by arithmetic, not by hoping a model notices |

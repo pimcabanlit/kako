@@ -156,9 +156,22 @@ below; a database trigger rejects any other update, and deletes.
 
 | From | To | When | What changes |
 | --- | --- | --- | --- |
-| (new) | `active` | A proposal is approved, or the seed is loaded | Insert |
-| `active` | `replaced` | An approved new fact for the same entity and attribute takes effect | `valid_to` = the new fact's `valid_from`; `replaced_by` = the new fact |
-| `active` or `replaced` | `retracted` | The household says it was wrong | `retracted_at`, `retraction_reason`. If it had replaced a fact, that fact's `replaced_by` is cleared and its `valid_to` restored, in the same transaction |
+| (new) | `active` | A proposal is approved, or the seed is loaded | Insert, always as `active` with no replacement or retraction |
+| `active` | `replaced` | An approved new fact for the same entity and attribute takes effect | `valid_to` = the new fact's `valid_from`; `replaced_by` = the new fact. Only an open fact (no `valid_to`) can be replaced, by one that starts later; the new fact is inserted first, in the same transaction |
+| `active` | `retracted` | The household says it was wrong | `retracted_at`, `retraction_reason` |
+| `replaced` | `active` | The fact that replaced it is retracted | `replaced_by` cleared and `valid_to` back to null, in the same transaction as the retraction: the old value was true all along |
+
+A fact that has already been replaced can't be retracted: its replacement is retracted first (Pim, Nov
+17). This keeps every chain repairable without changing a fact's `replaces`, which never changes. The
+proposals that may write: `new_fact` or `preference_pattern` records a fact; `replace_fact` or
+`preference_pattern` replaces one; `retract_fact` retracts one. Seed facts have no proposal.
+
+The store (`kako/db/fact_store.py`) checks each write first and says why it refuses, and locks the
+household's row so two writes can't interleave. Behind it, migration 0003's guard refuses the same
+things in the database: an insert that isn't `active`, any other update (a value, a start, a source or
+what a fact replaces never changes), and, at commit, a replacement whose old fact doesn't end where it
+starts and name it back (V-03, V-04). Facts, decisions, life events and proposals are never deleted or
+truncated.
 
 ### Attribute catalog
 
@@ -169,7 +182,7 @@ same change.
 | --- | --- | --- | --- |
 | `income.monthly_net` | income | money | Take-home pay per month, after the deductions on the payslip (withholding tax, SSS, PhilHealth, Pag-IBIG). Kako reads the net figure; it never computes the deductions |
 | `income.thirteenth_month` | income | money | The 13th-month pay amount, received in December |
-| `income.pay_day` | income | int | Day of the month |
+| `income.pay_day` | income | int | Day of the month, 1 to 31 |
 | `expense.monthly_amount` | expense | money | Budgeted amount per month |
 | `expense.essential` | expense | text | `yes` or `no`. Essential expenses count toward the emergency-fund runway |
 | `debt.balance` | debt | money | Balance on `valid_from`, from a statement or the household |
@@ -184,7 +197,7 @@ same change.
 | `goal.saved_amount` | goal | money | Already set aside, on `valid_from` |
 | `goal.priority` | goal | int | 1 is highest |
 | `plan.allocation` | debt, account, goal | money | How much of the monthly surplus the household agreed to put here (extra debt payment or a contribution) |
-| `household.emergency_months_target` | (household) | int | The household's own target, such as 3 months |
+| `household.emergency_months_target` | (household) | int | The household's own target, such as 3 months (1 to 24) |
 | `preference.debt_vs_flexibility` | (household) | text | `speed`, `balanced` or `flexibility` |
 | `preference.debt_strategy` | (household) | text | `avalanche` (highest rate first) or `snowball` (smallest balance first). Required once the household has two open debts; the engine reports a missing strategy instead of assuming one |
 | `preference.note` | (household) | text | Any other stated preference, in the household's words |
@@ -213,8 +226,11 @@ The engine never reads `fact` directly. It reads a **snapshot**: the household a
 - `snapshot(household, on=d)`: every fact with `status` in (`active`, `replaced`) whose validity window
   contains *d*. This is "what was true on *d*" and is what calculations use.
 - `snapshot(household, on=d, known_at=t)`: the same, but only facts recorded at or before *t* and not
-  retracted at or before *t*. This is "what Kako believed at *t*", which explains an old plan exactly as
-  it was made.
+  retracted at or before *t*, each with the window it had at *t*. This is "what Kako believed at *t*",
+  which explains an old plan exactly as it was made. A replacement recorded after *t* hadn't closed the
+  old fact yet: on Sep 15, Mara's ₱52,000 was still open, so a snapshot on Dec 1 known at Sep 15 holds
+  ₱52,000. The window at *t* comes from the chain (a fact ends where its replacement starts, if that
+  replacement was recorded and not retracted by *t*), so no extra history columns are needed.
 
 A snapshot has a stable hash (the sorted fact ids), stored on every calculation run.
 
