@@ -44,33 +44,85 @@ Every peso figure comes from deterministic code; agents never do the maths.
 
 ## Meko toolkit (use it, don't work from memory)
 
-Kako is built on Meko, the context and memory platform behind ContextCon. Use
-these sources for any Meko fact before writing code against it:
+Kako is built on Meko, the context and memory platform behind ContextCon. This repo
+loads Meko's own Claude Code toolkit, so every session starts with it:
+
+- **`.claude/settings.json`** adds Meko's marketplace (`yugabyte/meko-skills`) and turns on
+  the `meko-agent-skills` plugin: the `meko-mcp-tools` and `meko-select-datapack` skills,
+  plus hooks that capture each session as a Meko conversation (SessionStart, PreCompact,
+  SessionEnd).
+- **`.mcp.json`** adds the `meko` MCP server at `MEKO_MCP_URL` (default: local Meko,
+  `http://127.0.0.1:7777/mcp`) with `MEKO_API_KEY` as its bearer token. The plugin's hooks
+  read the same two variables, so build sessions are captured to local Meko, not Meko Cloud.
 
 | Need | Use |
 | --- | --- |
-| Memory, datapack and knowledge-base calls (`memory_search`, `datapack_search`, `knowledgebase_search`, AMP Postgres) | **Meko MCP server**: local Meko for dev and tests (`meko agent connect claude` registers it), Meko Cloud at `https://mcp.mekodata.ai/mcp` for the demo only |
-| How to use the MCP tools, picking a datapack | Meko's agent skills (`meko-mcp-tools`, `meko-select-datapack`) from [yugabyte/meko-skills](https://github.com/yugabyte/meko-skills), plugin `meko-agent-skills` |
+| Memory, conversations, knowledge base, datapacks, artifacts, traces, AMP Postgres | The `meko` MCP server (`context_search` first, then `memory_search` or `knowledgebase_search`) |
+| How to call the tools, ids, datapack routing | The `meko-mcp-tools` and `meko-select-datapack` skills (and their `references/`) |
 | The `meko` and `meko-cli` commands, local server, REST API | [yugabyte/meko](https://github.com/yugabyte/meko) README and `src/meko/docs/` |
 | Product docs, MCP reference, limits | [docs.mekodata.ai](https://docs.mekodata.ai/) (MCP server: `/reference/mcp-server/`), [pricing](https://mekodata.ai/pricing/) |
-| Meko in Claude itself | Meko's [Claude page](https://mekodata.ai/claude/). Claude Code: run `npx @yugabytedb/meko-mcp --client claude-code` (session hooks, the Meko skill, automatic capture to the pinned datapack). claude.ai, Desktop and mobile: add the Meko connector from [the connector directory](https://claude.ai/directory/connectors/meko). Use one path per client, never both, and sign in with the same identity as the Meko account |
+| Meko in Claude outside this repo | Meko's [Claude page](https://mekodata.ai/claude/): the claude.ai connector from [the directory](https://claude.ai/directory/connectors/meko), or `npx @yugabytedb/meko-mcp --client claude-code` for Claude Code elsewhere. One path per client, never both; sign in with the same identity as the Meko account |
 | Questions to the Meko team | [Meko Discord](https://mekodata.ai/discord/) |
+
+Setup on a new machine (Linux or Apple Silicon macOS):
+
+```
+curl -fsSL https://mekodata.ai/install.sh | sh   # local Meko, no sudo
+meko start
+export MEKO_MCP_URL=http://127.0.0.1:7777/mcp
+export MEKO_API_KEY="$(meko token)"
+claude                                          # trust the folder; accept the meko-skills marketplace and plugin
+```
+
+Check with `/mcp` (the `meko` server is connected) and `/plugin` (meko-agent-skills is on).
+
+Local Meko runs on Linux (x64, arm64) and Apple Silicon macOS only. On Windows use WSL or a
+cloud session. If `mekodata.ai` is blocked (as in cloud sessions), install the same release
+from GitHub: Meko's `install.sh` with `--version <X.Y.Z>`, from
+`github.com/yugabyte/meko/releases/download/meko-v<X.Y.Z>/install.sh`.
+
+Cloud sessions that hold several repos start in the folder above them, so they don't read
+`kako/.claude/settings.json` or `kako/.mcp.json`. The cloud environment does the same setup at
+user scope instead: its setup script runs this block, and the environment variable
+`MEKO_MCP_URL=http://127.0.0.1:7777/mcp` points the capture hooks at local Meko (cloud installs
+need no token from this machine). Keep the version in step with the one tested below.
+
+```
+# Kako: local Meko + Meko's Claude Code plugin, at user scope (sessions start above the repos).
+if [ -d kako ]; then
+  curl -fsSL https://github.com/yugabyte/meko/releases/download/meko-v1.20261116.0/install.sh \
+    | sh -s -- --version 1.20261116.0 --no-service --non-interactive || true
+  ~/.local/bin/meko start || true
+  claude plugin marketplace add yugabyte/meko-skills || true
+  claude plugin install meko-agent-skills@meko-agent-skills --scope user || true
+  claude mcp add --scope user --transport http meko http://127.0.0.1:7777/mcp || true
+fi
+```
+
+If `/mcp` shows `meko` failing in a resumed session, run `~/.local/bin/meko start`.
+
+Tested Nov 17, 2026 in a cloud session with Meko 1.20261116.0: the `meko` server listed 40
+tools, the plugin's skills loaded as `meko-agent-skills:meko-mcp-tools` and
+`meko-agent-skills:meko-select-datapack`, and the SessionStart hook captured the session into
+local Meko (agent id `claude_code:kako`), not Meko Cloud. The user-scope setup above was
+tested the same way from the folder above the repos: 40 tools, both skills, capture to local Meko.
 
 Rules:
 
-- If the Meko MCP server or skills are not loaded in a session, say so before writing
-  Meko code instead of guessing.
-- Free tier: 1,000 conversations account-wide. Every session, test run and evaluation
-  uses one, so never point tests or experiments at Meko Cloud.
-- Meko auth comes from `meko cloud-link` or a Meko Cloud API key in the environment.
-  Never ask for, print or commit tokens.
-- The plugin and MCP wiring (`.claude/settings.json`, `.mcp.json`) arrive in the toolkit
-  PR; update this section then with the exact install steps.
+- If the `meko` MCP server or the Meko skills are not loaded in a session, say so before
+  writing Meko code instead of guessing.
+- Free tier: 1,000 conversations account-wide, and every captured session, test run and
+  evaluation uses one. Dev, tests and build sessions use local Meko; point `MEKO_MCP_URL`
+  at Meko Cloud only for the demo datapack.
+- The plugin also declares a Meko Cloud MCP server (`https://mcp.mekodata.ai/mcp`, OAuth).
+  Leave it unauthenticated unless you are working on the demo datapack.
+- Never ask for, print or commit tokens. `MEKO_API_KEY` lives in the shell or a gitignored
+  `.env`; `.env.example` lists the names.
 
 ## Conventions
 
-- Two-space indentation, LF line endings.
+- Two-space indentation (four for Python), LF line endings. See `.editorconfig`.
 - Never commit secrets, API tokens, or `.env` files.
-- Ship in small PRs, base files first, then the toolkit, then CI.
+- Ship in small PRs: base files, docs, toolkit, then the doc set and CI.
 
 Commands and code layout are added here as the code arrives.
