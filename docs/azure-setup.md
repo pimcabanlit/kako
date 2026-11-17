@@ -17,8 +17,8 @@ Status: **being set up** (Phase 1, task 5). Rows are filled in as each step is d
 | Budget | `kako-monthly` | US$10 monthly, on the resource group; emails at 50%, 80% and 100%. A budget alerts, it does not stop spending |
 | Foundry resource and project | `kako-ai`, project `kako` | East US 2, all networks, system-assigned identity |
 | Application Insights | `appi-kako-ai-2195` | Added by the Foundry create form by default. Billed only for logs past the monthly free allowance (about 5 GB); for tracing later |
-| Deployment, stronger | set in `KAKO_MODEL_STRONG` | Orchestrator and dreaming. Global Standard (pay per token) |
-| Deployment, faster | set in `KAKO_MODEL_FAST` | The four specialists. Global Standard (pay per token) |
+| Deployment, stronger | `gpt-5.4` (`KAKO_MODEL_STRONG`) | Orchestrator and dreaming. Global Standard (pay per token). Generally available, not Preview |
+| Deployment, faster | `gpt-5-mini` (`KAKO_MODEL_FAST`) | The four specialists. Global Standard (pay per token). Generally available, not Preview |
 | App registration | `kako-dev` | How the backend signs in (Entra ID); the secret expires after Jan 24, 2027 |
 | Role | **Foundry User** on `kako-ai` → `kako-dev` | Lets the app call the models (data plane) |
 
@@ -57,7 +57,10 @@ portal and note the difference under Lessons.
 
 1. In the project: Models + endpoints → Deploy model. Deploy the stronger model, then the faster one.
 2. Deployment type **Global Standard** (or Standard). Never Provisioned.
-3. Note each **deployment name**: that is what goes in `KAKO_MODEL_STRONG` and `KAKO_MODEL_FAST`, and
+3. Prefer models marked Generally available: Preview models can change or be retired before the
+   video. Chosen Nov 17: `gpt-5.4` (stronger) and `gpt-5-mini` (faster), deployment names equal to
+   the model names; the Phase 3 agent test set confirms the pair.
+4. Note each **deployment name**: that is what goes in `KAKO_MODEL_STRONG` and `KAKO_MODEL_FAST`, and
    it is not always the model's name.
 
 ### 5. App registration
