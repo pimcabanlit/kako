@@ -22,7 +22,8 @@ in the same change once agreed.
   edge cases, the debt rollover, the calendar, and the worked example's car loan, so every figure in
   it can be checked; plan v2's emergency-fund wait is 12 months, not 10. The plan diff (task 4) adds
   the `ended` label and says which facts count as a change. v0.6 is the demo household (task 5): its
-  files and how they load, the car loan's Oct and Nov statements, and how a run is stored.
+  files and how they load, the car loan's Oct and Nov statements, and how a run is stored. The Meko
+  adapter (task 6) says how `meko_call` counts and refuses calls, and how documents are uploaded.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -601,7 +602,13 @@ Checks: token counts, latency and cost are not negative.
 ### `meko_call`
 
 Every Meko tool call, made or refused. The Free tier caps some tools for the account's lifetime, so the
-adapter counts them here and refuses calls past the ceiling in settings.
+adapter counts them here and refuses calls past the ceiling in settings (`KAKO_MEKO_CLOUD_CEILING`, 0 by
+default, never above the Free tier's own allowance). A call is written before it is sent, under a lock per
+allowance so two callers can't both take the last one, and then gets its outcome; a call that failed still
+counts, since it may have used the allowance. The ceiling applies on Meko Cloud only, to the capped tools:
+`context_search` (with `selflearning_verify`, a replayed search), `memory_search`, `knowledgebase_search`,
+`conversation_add_message`, `conversation_create` and `memory_add`. The count is this database's, not the
+account's.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -646,13 +653,13 @@ Meko is where agents find context. Postgres stays the record. The mapping:
 | A retracted fact | The memory is **deleted** | `memory_delete_by_id` | The fact row keeps the history; a wrong memory must not be found again |
 | A household preference the household approves for sharing | A **promoted memory** (collective memory) | `memory_promote`, after a second confirmation | One-way: a promoted memory can't be edited or deleted through MCP. So Kako promotes only durable preferences, and records a later change as a new promoted memory ("From Nov 2026 the household prefers…"), linked in `meko_link` |
 | A decision the household approves for sharing | A **decision record** in shared knowledge | A Markdown document uploaded to the knowledge base, after a second confirmation | The question, the option chosen, the options rejected with their reasons, and the assumptions. A revised decision gets a new record that names the one it replaces |
-| Statements, budgets, planning rules, local reference | **Knowledge-base** documents | `knowledgebase_upload_file` (seed) | Synthetic statements as CSV; rules and reference as Markdown. Reference documents explain 13th-month pay, SSS and Pag-IBIG in plain words and are never used to calculate |
+| Statements, budgets, planning rules, local reference | **Knowledge-base** documents | `knowledgebase_upload_document`, then a POST of the file to the one-time link it returns (`kako demo upload`); the same on local Meko and Meko Cloud, and a file Meko already holds isn't sent again | Synthetic statements as CSV; rules and reference as Markdown. Reference documents explain 13th-month pay, SSS and Pag-IBIG in plain words and are never used to calculate |
 | A plan report | An **artifact** | `artifact_put` | Markdown; its content hash is stored on `plan` |
 | Weak searches | **Self-learning** shortfalls (Context Gaps) | Read with the `selflearning_*` tools, if the Phase 1 check finds them | A **Must** if available: each becomes a `context_gap`, a question for the household, and a `selflearning_verify` replay once answered |
 | Meko's Learnings | Meko's own top 5 candidates for sharing | Read by dreaming | One more input to dreaming's promotion candidates |
 
 Agent ids: `kako:orchestrator`, `kako:budget`, `kako:debt`, `kako:savings`, `kako:goals`,
-`kako:dreaming`. They attribute writes and traces; Meko does not filter reads by agent id, so every agent
+`kako:dreaming`, and `kako:seed` for the demo's documents. They attribute writes and traces; Meko does not filter reads by agent id, so every agent
 sees the whole household context.
 
 ## Calculations

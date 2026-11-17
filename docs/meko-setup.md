@@ -10,8 +10,20 @@ each with what was run. Keep it current when Meko changes or a fallback is chose
 | Development, tests, CI | Local Meko 1.20261116.0 | `http://127.0.0.1:7777/mcp` | `meko token`, or none |
 | The demo and the video | Meko Cloud, the demo datapack only | `https://mcp.mekodata.ai/mcp` | A `mko_tkn_` API key in `MEKO_API_KEY` |
 
-- One package talks to Meko: `backend/src/kako/meko/` (REVIEW.md rule 9). Each session counts its tool
-  calls and refuses any past its `max_tool_calls` ceiling, 0 by default.
+- One package talks to Meko: `backend/src/kako/meko/` (REVIEW.md rule 9). Kako calls it through one
+  interface (`adapter.py`): `McpMeko` over MCP, or `FakeMeko` in memory for unit tests. Each adapter
+  session refuses calls past `KAKO_MEKO_SESSION_MAX_CALLS` (50 by default).
+- Every call is counted in `meko_call` before it is sent. On Meko Cloud, each Free-tier-capped tool stops
+  at `KAKO_MEKO_CLOUD_CEILING` calls (0 by default, so nothing reaches Meko Cloud until it is set for the
+  demo); local Meko has no ceiling.
+- `KAKO_MEKO_DATAPACK_ID` names the datapack every call uses (unset: the default one), and
+  `KAKO_MEKO_LANGFUSE_PROJECT_ID` gives the "See the trace" link on Meko Cloud.
+- Knowledge-base files go up with `knowledgebase_upload_document` and a POST to the one-time link it
+  returns, which works on local Meko and Meko Cloud alike (`knowledgebase_upload_file` reads a path on
+  Meko's own machine, so it can't reach Meko Cloud). The link carries its own authorisation: the API key
+  is never sent with it. Meko knows a file by its content, so uploading it again sends nothing. The
+  document status names no document id (search hits do), so tests that upload files use a throwaway
+  datapack and delete it.
 - Every request names the client in `User-Agent` (`kako/<version>`): Meko Cloud asks for it, and its
   firewall has refused clients without one (Meko release notes, installer transports).
 - Plain `http://` is accepted only for this machine (`127.0.0.1`, `localhost`, `::1`). Any other host
@@ -157,4 +169,5 @@ the choice can't be changed later. The password is shown once. Each tier has a c
 | Nov 17, 2026 | Cloud session, local Meko 1.20261116.0 | One conversation with one turn: `plan`, `reasoning` and `metadata` read back with `conversation_get`; conversation deleted |
 | Nov 17, 2026 | Cloud session, Meko Cloud (MCP 3.2.4), datapack `kako-spike` | 2 conversations, 1 turn, 1 `memory_add`, 2 searches (1 `context_search`, 1 `selflearning_verify`); AMP database, branch, refused branch endpoint |
 | Nov 17, 2026 | Pim's laptop | `kako migrate` and `/api/v1/health` against the AMP endpoint; the portal's trace page for the spike conversation |
+| Nov 17, 2026 | Cloud session, local Meko 1.20261116.0 | The adapter (Phase 2, task 6): every demo document uploaded and indexed in seconds; a second upload finds each one already there; a search for 13th-month pay finds its document |
 | Nov 17, 2026 | Cloud session, Meko Cloud | Clean-up: AMP database deleted (vCPU back to 0 of 0.5), both conversations and the `kako-spike` datapack deleted |

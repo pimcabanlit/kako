@@ -187,6 +187,7 @@ uv run kako check-models                  # Foundry settings, Entra ID sign-in, 
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
 uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine's figures then (--household, --save)
+uv run kako demo upload                   # the demo's statements and reference documents into Meko's knowledge base (counted in meko_call)
 ```
 
 The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be running):
@@ -233,7 +234,11 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   proposal and then its write). `facts/` and `engine/` use no database, clock or
   randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
-  any past their `max_tool_calls` ceiling, 0 by default; `health.py`, the handshake probe).
+  any past their `max_tool_calls` ceiling, 0 by default; `adapter.py`, the one interface for every
+  Meko call Kako makes; `mcp.py`, that interface over MCP (`open_meko`); `fake.py`, the same in memory
+  for unit tests; `quota.py`, the call counter and quota guard every call goes through;
+  `health.py`, the handshake probe). `db/meko_log.py` counts the calls in `meko_call`, and
+  `demo/kb.py` uploads the demo's documents to the knowledge base.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
   `tests/support/data_model.py` reads the tables out of `docs/data-model.md`: `test_schema_doc.py`
@@ -252,6 +257,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   database guard behind them.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and
   cleans up (at most 6 tool calls).
+  `test_meko_quota.py` and `test_meko_adapter.py` test the counter, the guard, `McpMeko` against a
+  scripted server, `FakeMeko` and the demo upload; `tests/integration/test_meko_adapter.py` runs the
+  adapter on local Meko with every call counted in Postgres (documents go to a throwaway datapack),
+  the ceiling, two callers racing for the last call, and `kako demo upload`.
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons. `next.config.ts`
   passes `/api/v1/*` to the backend; `src/app/` the pages (the layout carries the "synthetic data,
   not financial advice" line); `src/components/health-panel.tsx` the system check with its loading

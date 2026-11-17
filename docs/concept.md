@@ -11,8 +11,8 @@ debts, goals and life events every time, and the advice ignores what was decided
 before.
 
 Remembering facts is not enough. Facts change: income goes up, a family moves,
-a target is revised. A memory that holds "income ₱100,000" and "income
-₱120,000" side by side does not know which one is current, which plan was built
+a target is revised. A memory that holds "take-home pay ₱52,000" and "take-home
+pay ₱68,000" side by side does not know which one is current, which plan was built
 on the old figure, or why a recommendation was later reversed.
 
 Planning also spans several areas (budget, debt, savings, goals) that should

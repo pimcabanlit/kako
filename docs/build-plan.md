@@ -14,7 +14,9 @@ submission checklist.
   Meko's own docs (playbook Stage 5), and the answers are written in below. Phase 1: CI against local
   Meko, the backend and web skeletons are merged (#8 to #11); Azure AI Foundry is set up and
   `check-models` passes from a cloud session and the laptop (docs/azure-setup.md); the Meko spikes
-  are answered (docs/meko-setup.md). Phase 2 is next.
+  are answered (docs/meko-setup.md). Phase 2: the schema (#15), the fact store (#16), the engine and
+  the plan diff (#17), the demo household and the Meko adapter are built and tested, each in its own
+  PR. Phase 3 is next.
 
 What Kako does is in [concept.md](concept.md). How it is built is in [architecture.md](architecture.md).
 Every table and formula is in [data-model.md](data-model.md). How each ContextCon criterion is met is in
@@ -216,8 +218,9 @@ Only after the Must and Should items work end to end.
 Under 5 minutes. Not financial advice, synthetic data, said on the first screen.
 
 1. **The problem (0:00 to 0:30).** Planning is a long relationship; assistants forget, and memories that
-   only pile up don't know what's current. On screen: Meko on its own returns both ₱100,000 and ₱120,000
-   for Mara's salary; then Kako answers "₱120,000 since Dec 1, replaced ₱100,000". "Meko remembers what
+   only pile up don't know what's current. On screen: Meko on its own returns both ₱52,000 and ₱68,000
+   for Mara's take-home pay; then Kako answers "₱68,000 since Dec 1, replaced ₱52,000" (the worked
+   example in data-model.md). "Meko remembers what
    you said. Kako works out which of it is still true, and asks you."
 2. **The household (0:30 to 1:00).** The Villanuevas, three past sessions, the timeline.
 3. **Memory that carries over (1:00 to 1:50).** The September decision with the option they rejected;

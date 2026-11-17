@@ -1,5 +1,6 @@
-"""The Meko adapter: the only package that talks to Meko.
+"""The Meko adapter: the only package that talks to Meko (REVIEW.md rule 9).
 
-Phase 1 holds the MCP client and the health probe. The adapter interface, the in-memory fake, the
-call counter and the quota guard arrive in Phase 2 (build plan, Phase 2 task 6).
+`adapter.py` is the interface, `mcp.py` its MCP implementation, `fake.py` an in-memory one for unit
+tests, `quota.py` the call counter and quota guard every call goes through, and `client.py` the MCP
+client underneath. `health.py` is the handshake probe.
 """
