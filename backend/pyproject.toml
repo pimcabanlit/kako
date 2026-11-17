@@ -1,0 +1,69 @@
+[project]
+name = "kako"
+version = "0.1.0"
+description = "Kako backend: the household financial planner that learns why"
+authors = [{ name = "Pim Cabanlit" }]
+license = "LicenseRef-All-Rights-Reserved"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
+    "fastapi>=0.163.1",
+    "httpx>=0.28.1",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.3",
+    "sqlalchemy[asyncio]>=2.1.9",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+kako = "kako.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
+    "ruff>=0.17.5",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "ASYNC", "S", "TID", "RUF", "PT", "BLE"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+# The one module allowed to import a model SDK (REVIEW.md rule 10); it arrives with Phase 1 task 5.
+"src/kako/agents/model_manager.py" = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"openai".msg = "Model SDKs are imported only in kako/agents/model_manager.py (REVIEW.md rule 10)."
+"azure.identity".msg = "Azure sign-in for models lives only in kako/agents/model_manager.py (REVIEW.md rule 10)."
+"azure.ai".msg = "Model SDKs are imported only in kako/agents/model_manager.py (REVIEW.md rule 10)."
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src/kako"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra"
+filterwarnings = [
+  # Starlette's TestClient asks for httpx2; httpx works today. Revisit when Starlette drops it.
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+markers = [
+  "integration: needs local Postgres or local Meko (KAKO_TEST_DATABASE_URL, KAKO_TEST_MEKO_URL)",
+]

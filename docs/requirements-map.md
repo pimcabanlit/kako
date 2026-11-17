@@ -72,7 +72,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | --- | --- | --- | --- | --- |
 | Use of Meko | 30% | Not started | Every part of the context has a visible job (rows below) | 2–5 |
 | Impact and usefulness | 25% | Not started | A household's real question, "what should we do now, and why is that different from before?", answered with figures it can check; plain language for families anywhere | 4–5 |
-| Technical execution | 20% | Not started | A working demo judges can run themselves (demo mode, no Azure account); a pure, tested engine; facts that are never overwritten; CI against local Meko; docs as the source of truth | 1–5 |
+| Technical execution | 20% | In progress | A working demo judges can run themselves (demo mode, no Azure account); a pure, tested engine; facts that are never overwritten; CI against local Meko; docs as the source of truth | 1–5 |
 | Innovation | 15% | Not started | Memory with history (valid time and record time, replace versus retract); dreaming that proposes and a person who approves; specialists that build on a preference another session taught them | 4 |
 | Presentation | 10% | Not started | A video under 5 minutes, a README with setup and measured metrics, these docs | 6 |
 
