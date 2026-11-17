@@ -76,6 +76,20 @@ claude                                          # trust the folder; accept the m
 
 Check with `/mcp` (the `meko` server is connected) and `/plugin` (meko-agent-skills is on).
 
+Local Meko runs on Linux (x64, arm64) and Apple Silicon macOS only. On Windows use WSL or a
+cloud session. If `mekodata.ai` is blocked (as in cloud sessions), install the same release
+from GitHub: Meko's `install.sh` with `--version <X.Y.Z>`, from
+`github.com/yugabyte/meko/releases/download/meko-v<X.Y.Z>/install.sh`.
+
+Cloud sessions that hold several repos start in the folder above them, so they don't read
+`kako/.claude/settings.json` or `kako/.mcp.json`. There, the same setup has to run at user
+scope (an environment setup script); that is not set up yet.
+
+Tested Nov 17, 2026 in a cloud session with Meko 1.20261116.0: the `meko` server listed 40
+tools, the plugin's skills loaded as `meko-agent-skills:meko-mcp-tools` and
+`meko-agent-skills:meko-select-datapack`, and the SessionStart hook captured the session into
+local Meko (agent id `claude_code:kako`), not Meko Cloud.
+
 Rules:
 
 - If the `meko` MCP server or the Meko skills are not loaded in a session, say so before
