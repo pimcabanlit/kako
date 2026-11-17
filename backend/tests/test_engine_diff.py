@@ -151,3 +151,14 @@ def test_a_fact_that_ended(house: Villanueva) -> None:
     thirteenth = diff(a, b, facts).get("cashflow.thirteenth_month")
     assert thirteenth is not None
     assert _labels(thirteenth.facts) == {("ended", "income.thirteenth_month", 4_800_000, None)}
+
+
+def test_a_diff_reads_only_its_own_household(house: Villanueva) -> None:
+    """Another household's facts can't explain this one's figures, even by mistake."""
+    run = compute(take_snapshot(HOUSEHOLD, house.facts, DEC_1), house.entities)
+    stranger = replace(house.facts[0], id=uuid.uuid4(), household_id=uuid.uuid4())
+    with pytest.raises(ValueError, match="its own household"):
+        diff(run, run, [*house.facts, stranger])
+    other = replace(run, household_id=uuid.uuid4())
+    with pytest.raises(ValueError, match="same household"):
+        diff(run, other, house.facts)

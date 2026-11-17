@@ -178,6 +178,8 @@ def diff(
     if old.household_id != new.household_id:
         raise ValueError("a diff compares two runs of the same household")
     rows = list(facts)
+    if any(f.household_id != new.household_id for f in rows):
+        raise ValueError("a diff reads only its own household's facts")
     by_id = {f.id: f for f in rows}
     old_figures = {f.ref: f for f in old.figures}
     new_figures = {f.ref: f for f in new.figures}
