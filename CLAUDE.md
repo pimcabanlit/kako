@@ -82,13 +82,30 @@ from GitHub: Meko's `install.sh` with `--version <X.Y.Z>`, from
 `github.com/yugabyte/meko/releases/download/meko-v<X.Y.Z>/install.sh`.
 
 Cloud sessions that hold several repos start in the folder above them, so they don't read
-`kako/.claude/settings.json` or `kako/.mcp.json`. There, the same setup has to run at user
-scope (an environment setup script); that is not set up yet.
+`kako/.claude/settings.json` or `kako/.mcp.json`. The cloud environment does the same setup at
+user scope instead: its setup script runs this block, and the environment variable
+`MEKO_MCP_URL=http://127.0.0.1:7777/mcp` points the capture hooks at local Meko (cloud installs
+need no token from this machine). Keep the version in step with the one tested below.
+
+```
+# Kako: local Meko + Meko's Claude Code plugin, at user scope (sessions start above the repos).
+if [ -d kako ]; then
+  curl -fsSL https://github.com/yugabyte/meko/releases/download/meko-v1.20261116.0/install.sh \
+    | sh -s -- --version 1.20261116.0 --no-service --non-interactive || true
+  ~/.local/bin/meko start || true
+  claude plugin marketplace add yugabyte/meko-skills || true
+  claude plugin install meko-agent-skills@meko-agent-skills --scope user || true
+  claude mcp add --scope user --transport http meko http://127.0.0.1:7777/mcp || true
+fi
+```
+
+If `/mcp` shows `meko` failing in a resumed session, run `~/.local/bin/meko start`.
 
 Tested Nov 17, 2026 in a cloud session with Meko 1.20261116.0: the `meko` server listed 40
 tools, the plugin's skills loaded as `meko-agent-skills:meko-mcp-tools` and
 `meko-agent-skills:meko-select-datapack`, and the SessionStart hook captured the session into
-local Meko (agent id `claude_code:kako`), not Meko Cloud.
+local Meko (agent id `claude_code:kako`), not Meko Cloud. The user-scope setup above was
+tested the same way from the folder above the repos: 40 tools, both skills, capture to local Meko.
 
 Rules:
 
