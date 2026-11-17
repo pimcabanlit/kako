@@ -3,7 +3,16 @@
 Kako is a household financial planner built for ContextCon 2026, Challenge 05.
 Working dates (Manila time): feature freeze Jan 10, 2027, submit Jan 16, deadline
 Jan 18, 3:59 PM. Check the official ContextCon rules before any decision that
-touches eligibility or submission. See README.md for the concept.
+touches eligibility or submission.
+
+## Key documents (read before changing behaviour)
+
+The docs in `docs/` are the source of truth, and code follows them. If code and a doc
+disagree, raise it, and update the doc in the same change once agreed.
+
+- `docs/concept.md`: the problem, what Kako does, principles, how it uses Meko, scope.
+- `docs/contextcon-2026.md`: dates, Challenge 05 brief, judging, prizes, submission
+  checklist, Meko Free-tier limits, open questions.
 
 ## The one rule
 
@@ -44,6 +53,7 @@ these sources for any Meko fact before writing code against it:
 | How to use the MCP tools, picking a datapack | Meko's agent skills (`meko-mcp-tools`, `meko-select-datapack`) from [yugabyte/meko-skills](https://github.com/yugabyte/meko-skills), plugin `meko-agent-skills` |
 | The `meko` and `meko-cli` commands, local server, REST API | [yugabyte/meko](https://github.com/yugabyte/meko) README and `src/meko/docs/` |
 | Product docs, MCP reference, limits | [docs.mekodata.ai](https://docs.mekodata.ai/) (MCP server: `/reference/mcp-server/`), [pricing](https://mekodata.ai/pricing/) |
+| Meko in Claude itself | Meko's [Claude page](https://mekodata.ai/claude/). Claude Code: run `npx @yugabytedb/meko-mcp --client claude-code` (session hooks, the Meko skill, automatic capture to the pinned datapack). claude.ai, Desktop and mobile: add the Meko connector from [the connector directory](https://claude.ai/directory/connectors/meko). Use one path per client, never both, and sign in with the same identity as the Meko account |
 | Questions to the Meko team | [Meko Discord](https://mekodata.ai/discord/) |
 
 Rules:
