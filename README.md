@@ -19,6 +19,9 @@ Built for ContextCon 2026, Challenge 05.
 | [data-model.md](docs/data-model.md) | Tables, fact history (valid from, valid to, replaced by), calculations, worked example |
 | [requirements-map.md](docs/requirements-map.md) | ContextCon rules and judging criteria against what is built |
 
+Pull requests are reviewed against [REVIEW.md](REVIEW.md): what counts as Important, and the risk
+tier of each kind of change.
+
 ## License
 
 All rights reserved. See [LICENSE](LICENSE).

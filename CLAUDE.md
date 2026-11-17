@@ -23,6 +23,8 @@ disagree, raise it, and update the doc in the same change once agreed.
   in the same PR.
 - `docs/requirements-map.md`: every ContextCon rule, Challenge 05 objective, judging
   criterion and prize against what is built. Update a row when its status changes.
+- `REVIEW.md`: what the AI reviewer reports as Important, and the risk tier of each
+  kind of change. Every PR states its tier and the file that set it.
 
 ## The one rule
 
@@ -143,6 +145,7 @@ Rules:
 
 - Two-space indentation (four for Python), LF line endings. See `.editorconfig`.
 - Never commit secrets, API tokens, or `.env` files.
-- Ship in small PRs: base files, docs, toolkit, then the doc set and CI.
+- Ship in small PRs: base files, docs, toolkit, the doc set, `REVIEW.md`, then CI.
+- Every PR states its risk tier from `REVIEW.md` and the file that set it.
 
 Commands and code layout are added here as the code arrives.
