@@ -42,6 +42,34 @@ class Settings(BaseSettings):
     )
     health_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 
+    # Azure AI Foundry. Deployment names live here and nowhere else (REVIEW.md rule 10).
+    foundry_endpoint: str | None = Field(
+        default=None,
+        description="The Foundry resource's endpoint, https://<resource>.openai.azure.com",
+    )
+    model_strong: str | None = Field(
+        default=None, description="Deployment for the orchestrator and dreaming"
+    )
+    model_fast: str | None = Field(default=None, description="Deployment for the specialists")
+    # Kako's own app registration. KAKO_-prefixed, so it can't be confused with another
+    # project's AZURE_* variables in a shared environment. Without them, sign-in falls back to
+    # the Azure CLI's `az login`, so no secret is needed where the CLI is signed in.
+    azure_tenant_id: str | None = None
+    azure_client_id: str | None = None
+    azure_client_secret: SecretStr | None = None
+    check_models_max_tokens: int = Field(default=64, ge=16, le=256)
+
+    @field_validator("foundry_endpoint", "model_strong", "model_fast", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @property
+    def deployments(self) -> dict[str, str]:
+        """Each tier's deployment name, for the tiers that are set."""
+        tiers = {"strong": self.model_strong, "fast": self.model_fast}
+        return {tier: name for tier, name in tiers.items() if name}
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _asyncpg_driver(cls, value: object) -> object:
