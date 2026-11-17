@@ -1,4 +1,5 @@
-# Lint, type check and tests for the backend on every pull request and on pushes to main.
+# Lint, type check and tests for the backend, and lint, type check and build for the web app,
+# on every pull request and on pushes to main.
 #
 # The integration tests run against a Postgres service and against local Meko, installed from
 # Meko's GitHub release at the pinned version below. This workflow never touches Meko Cloud and
@@ -48,7 +49,7 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install local Meko ${{ env.MEKO_VERSION }} from GitHub
         run: |
@@ -72,7 +73,7 @@ jobs:
           done
           echo "Meko did not answer within a minute." && exit 1
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
@@ -94,3 +95,22 @@ jobs:
         run: |
           ~/.local/bin/meko status || true
           tail -n 200 ~/.meko/logs/* 2>/dev/null || echo "No Meko logs found."
+
+  web:
+    name: Web (lint, type check, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
