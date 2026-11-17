@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "meko": {
+      "type": "http",
+      "url": "${MEKO_MCP_URL:-http://127.0.0.1:7777/mcp}",
+      "headers": {
+        "Authorization": "Bearer ${MEKO_API_KEY:-}"
+      }
+    }
+  }
+}
