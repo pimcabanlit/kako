@@ -19,9 +19,10 @@ chain, and a **deterministic engine** computes every peso, month and date from a
 facts. An **orchestrator** agent answers each turn by calling four **specialists** (budget, debt,
 savings, goals) as tools; they read the engine's figures and a context brief built from Meko's memory,
 knowledge base and past conversations, and propose moves. Code checks the proposals against the surplus
-and against each other; the orchestrator resolves conflicts in the open, and a **number check** blocks
-any figure the engine did not produce. After each session a **dreaming** job reviews the conversation,
-reconciles what it heard with what is known, marks what has been replaced, spots patterns, and puts
+and against each other; the orchestrator tries other splits through the engine and resolves conflicts in
+the open, every agent step is logged for the screen, and a **number check** blocks any figure the engine
+did not produce. Models are **Azure AI Foundry** deployments, reached only through the model manager. After each session a **dreaming** job reviews the conversation and the
+memories Meko extracted from it, reconciles what it heard with what is known, marks what has been replaced, spots patterns, and puts
 proposals in front of the household. Approved facts become Meko memories; approved preferences and
 decisions can be promoted to the datapack's **shared knowledge**, where every specialist finds them.
 
@@ -48,12 +49,12 @@ flowchart LR
   end
 
   PG[(Postgres<br/>local, then AMP or Neon)]
-  CL[Claude<br/>Anthropic API]
+  AF[Azure AI Foundry<br/>OpenAI deployments]
 
   subgraph Meko["Meko datapack (local for dev, Meko Cloud for the demo)"]
     CONV[Conversations<br/>and traces]
     MEM[Memories]
-    SK[Shared knowledge<br/>promoted memories]
+    SK[Collective memory and<br/>shared knowledge]
     KB[Knowledge base<br/>statements, rules, reference]
     ART[Artifacts<br/>plan reports]
     SL[Self-learning<br/>weak searches]
@@ -78,7 +79,7 @@ flowchart LR
   ORC --> MM
   SP --> MM
   DR --> MM
-  MM --> CL
+  MM --> AF
   MA --> CONV
   MA --> MEM
   MA --> SK
@@ -104,11 +105,15 @@ flowchart LR
 5. **Each specialist** is a short, bounded loop (at most 4 tool calls) over read-only tools:
    `get_figures`, `get_facts`, `get_decisions`, `search_memory` (one extra Meko search at most) and
    `run_what_if` (the engine with hypothetical allocations). It returns a structured proposal: the
-   allocation it wants, its recommendation text, and the sources it cites.
+   allocation it wants (an entity and an amount), its recommendation text, and the sources it cites.
+   Every tool call by every agent is logged as an `agent_step` (the agent, the tool, a short input and
+   result, the what-if run if any), which the "agents' steps" view shows.
 6. **Reconciliation in code.** The engine runs once more with all proposed allocations together. Rules
    find over-allocation (the asks add up to more than the surplus), opposite moves, and goals that miss
-   their date. Each conflict goes back to the orchestrator with the figures, and its resolution and the
-   option it rejected are recorded and shown.
+   their date. Each conflict goes back to the orchestrator with the figures. **The what-if loop:** the
+   orchestrator may try up to 3 other splits through `run_what_if`; only the reconciliation rules can
+   say a split fits. Its resolution, each split it tried and the option it rejected are recorded and
+   shown. If no split fits after 3 tries, the household sees the conflict and the options, not a guess.
 7. **The number check.** Every number in the reply, the recommendations and the resolutions must match a
    figure of the run or a fact in the snapshot (rule V-10). A failure is regenerated once with the
    mismatch named; if it fails again, the reply is shown with the unmatched numbers flagged, never
@@ -142,23 +147,35 @@ This is the centre of the live demo.
 
 A background job queued when a session ends (`dream_run`, one per session, so a rerun does nothing).
 
-1. **Read** the session's turns from Meko (`conversation_get`), the snapshot, the active decisions and
-   the pending proposals.
+1. **Read** the session's turns from Meko (`conversation_get`), the memories Meko extracted from those
+   turns on its own (Meko Cloud runs extraction automatically; their `source` is `extract`), Meko's own
+   Learnings (its top 5 candidates for sharing), the snapshot, the active decisions and the pending
+   proposals.
 2. **Extract** candidate claims with the model, as structured output: the entity, the attribute, the
-   value **as quoted**, when it takes effect, and the quote. The model copies; it does not calculate.
+   value **as quoted**, when it takes effect, the quote, and who said it. The model copies; it does not
+   calculate. Meko's extracted memories are matched to these claims, so one fact yields one proposal.
 3. **Check in code.** Every number in a candidate must appear in its quote (V-09). The candidate is
    matched to an entity and attribute in the catalog, and compared with the snapshot: **same** (dropped),
    **new**, **replace** (a later value for the same thing), **retract** (the household said an earlier
    value was wrong) or **conflict** (two values for the same day; asked as a question).
-4. **Patterns.** Code counts the household's decisions by the tag of the option they chose (such as
-   `favours_flexibility`). Three choices the same way across at least two sessions, with none the other
+4. **Patterns.** Code counts the household's decisions by the tags of the option they chose (such as
+   `favours_flexibility`, from a fixed list in `decision_option.tags`; the orchestrator tags options when
+   it proposes them, and code rejects a tag that is not on the list). Three choices the same way across at least two sessions, with none the other
    way, produce a `preference_pattern` proposal, citing each decision and session.
 5. **Promotion candidates.** An approved preference or decision that has held for two sessions is
-   proposed for promotion to shared knowledge, with the plain warning that promotion can't be undone.
+   proposed for promotion, with the plain warning that promotion can't be undone. A preference goes to
+   **collective memory** (a short fact every agent retrieves). A decision goes to **shared knowledge** as
+   a decision-record document: the question, the option chosen, the options rejected with their reasons,
+   and the assumptions.
 6. **Propose.** Everything lands in the approvals inbox with an explanation and its evidence. Nothing
    becomes household knowledge until a person says yes.
 7. **On approval**, the fact store writes the rows and the Meko adapter brings Meko in line: add the new
-   memory, rewrite a replaced one, delete a retracted one, promote what was approved for sharing.
+   memory (or link Meko's extracted one), rewrite a replaced one, delete a retracted one, promote what was
+   approved for sharing. **On rejection**, an extracted memory the household says is wrong is deleted, so
+   no agent finds it again. Every extracted memory ends either linked to a fact or deleted.
+
+Dreaming is a fixed workflow with one model step (extraction); the orchestrator and specialists are the
+agentic part. The docs and the video say so.
 
 Dreaming is tested against a labelled set: scripted sessions with the facts, replacements and patterns
 a person would expect, scored for what it found, missed and wrongly proposed.
@@ -169,12 +186,12 @@ a person would expect, scored for what it found, missed and wrongly proposed.
 | --- | --- | --- |
 | Conversations | One per planning session, turns stored with `plan` and `reasoning` | Session history; dreaming's input |
 | Decision traces | The conversation id is the trace id; every Meko call in the session is a span under it | "Open trace" on each recommendation (Meko Cloud's Observe for the demo) |
-| Memory | One sentence per approved fact, decision and preference, with Kako's ids in its metadata; replaced facts rewritten in the past tense | Specialists' context; the timeline |
-| Learning (promotion) | Dreaming proposes, the household approves, Kako promotes to shared knowledge | "Learned on Oct 18 from the October session" in the why panel |
+| Memory | One sentence per approved fact, decision and preference, with Kako's ids in its metadata; replaced facts rewritten in the past tense. Sentences name people and things in full ("Mara Villanueva's take-home pay…"), because Meko's search boosts named entities. Meko's own extracted memories are candidates for dreaming | Specialists' context; the timeline |
+| Learning (promotion) | Dreaming reads Meko's Learnings and extracted memories, proposes, the household approves; a preference is promoted to collective memory, a decision record to shared knowledge | "Learned on Oct 18 from the October session" in the why panel |
 | Knowledge base | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) | Cited excerpts in the why panel |
 | Artifacts | Each plan report | Download on the plan screen |
 | Postgres in the datapack (AMP) | The household's structured data, if the Phase 1 test passes; a scenario kept as an AMP branch (Should) | Architecture slide; what-if screen |
-| Context Gaps (self-learning) | Weak searches turned into questions for the household (Should), if the tools are available to us | "Kako would like to know" card |
+| Self-learning (Context Gaps) | A **Must** if the Phase 1 test finds the tools on our account. `selflearning_shortfalls` lists `context_search` queries that came back Mid or Low (best score under 0.75); Kako asks the household; the answer goes through a proposal; `selflearning_verify` replays the search and reports `improved`. Kako's brief uses `context_search`, which is the only search the log counts. Each replay counts as one search, so it goes through the call counter | "Kako would like to know" card; before and after scores on the metrics page |
 | Metrics | `datapack_metrics` (context size, efficiency, relevance) next to Kako's own token and number-check counts | The metrics page |
 
 What Meko does not do, and Kako adds (see [concept.md](concept.md#what-meko-already-does-and-what-kako-adds)):
@@ -191,11 +208,11 @@ current, what it replaced and which plans and decisions depended on it.
 | Fact store | `backend/src/kako/facts/` | The attribute catalog, snapshots (`on`, `known_at`), replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules, diff, what-ifs |
 | Decisions | `backend/src/kako/decisions/` | Decision records, options, assumptions, "to revisit" |
-| Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports the Anthropic SDK), orchestrator, the four specialists, brief builder, tools, number check, prompts |
+| Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), orchestrator, the four specialists, brief builder, tools, number check, the step log, prompts |
 | Dreaming | `backend/src/kako/dreaming/` | The job, extraction, classification, patterns, proposals |
 | Meko adapter | `backend/src/kako/meko/` | One interface for every Meko call, an MCP client implementation, an in-memory fake for unit tests, the call counter and quota guard |
 | Database | `backend/src/kako/db/` | SQLAlchemy 2 async models, repositories, Alembic migrations |
-| Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, model names, budgets |
+| Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, the Foundry endpoint, deployment names and their prices, budgets, demo mode |
 | Demo data | `data/demo-household/` | The synthetic household, statements, documents and session scripts |
 
 The backend is organised by domain, with `core → domain → infrastructure`: the engine and fact rules
@@ -213,9 +230,14 @@ never import the database, Meko or the model SDK.
 | Dreaming | Extracts claims from a finished session | None (structured output only) | Pending proposals, through code |
 
 Bounds: at most 4 specialist calls per turn, at most 4 tool calls per specialist, one extra Meko search
-per specialist, a token budget per turn, and a daily spend cap in settings. Model names live in
-settings only; the orchestrator and dreaming use the stronger model and the specialists a faster one,
-confirmed in Phase 3 by the agent test set.
+per specialist, at most 3 what-if splits per conflict, a token budget per turn, and a daily spend cap in
+settings. Deployment names live in settings only; the orchestrator and dreaming use the stronger
+deployment and the specialists a faster one, confirmed in Phase 3 by the agent test set.
+
+**Why four specialists and not one agent.** Each specialist gets its own slice of the brief, its own
+rules from the knowledge base and its own what-ifs. Phase 3 runs the agent test set once against a
+single all-in-one agent as a baseline; both scores go on the metrics page. If the specialists don't
+score better, the docs say so and the design is revisited.
 
 **Prompts and context.** Each prompt is short and sectioned: the role, the one rule (the engine
 calculates, agents explain and propose, the household decides), a glossary of figure keys, the tool
@@ -227,9 +249,15 @@ memories and documents are wrapped as data, never as instructions.
 | | Development and tests | Demo |
 | --- | --- | --- |
 | Meko | Local Meko (`MEKO_MCP_URL=http://127.0.0.1:7777/mcp`); in CI, the same release installed from GitHub | Meko Cloud, one datapack for the demo household |
-| Postgres | Local Postgres (Docker; on Windows inside WSL), a fresh database per test run | AMP in the demo datapack if the Phase 1 test passes; otherwise a free managed Postgres (Neon) |
-| Model | The Anthropic API with a small dev budget; unit tests use a recorded fake | The Anthropic API |
-| Backend and web | `uvicorn` and `next dev` on the laptop | The laptop too: the video is recorded locally against Meko Cloud. No hosted app (Pim, Nov 17) |
+| Postgres | Local Postgres in cloud sessions and a CI service, a fresh database per test run | AMP in the demo datapack if the Phase 1 test passes; otherwise a free managed Postgres (Neon) |
+| Model | Azure AI Foundry deployments with a small dev budget; unit tests use a recorded fake | Azure AI Foundry |
+| Backend and web | Cloud sessions and CI | The laptop, natively on Windows (`uvicorn` and `next dev`, no Docker or WSL): the video is recorded locally against Meko Cloud, cloud Postgres and Foundry. No hosted app (Pim, Nov 17) |
+
+**Demo mode** (for judges, Pim, Nov 17). One command starts Kako against local Meko and a local
+database with the demo household, and the model manager replays **recorded model responses** instead of
+calling Foundry, so no Azure account is needed. It replays the scripted sessions only; asking new
+questions needs live mode with a Foundry deployment. The README says both plainly and gives setup steps
+for each.
 
 **AMP constraints** (from Meko's AMP reference): a database is reached from outside Meko only through
 an `ingress_external` endpoint with an allow-list of `/32` source addresses chosen at create time, so the
@@ -247,7 +275,8 @@ on the click path.
 | A person decides | Every fact, event, decision, preference and promotion starts as a proposal; promotion asks twice because it can't be undone |
 | Traceable advice | Every recommendation has a figure source and a non-figure source (V-11), and its Meko turn |
 | Prompt injection | Session text, memories and documents are passed as data; agents have read tools and `propose_*` tools only; nothing an agent says can write without approval |
-| Spend and quota | Token budget per turn and a daily cap; a Meko call counter with a ceiling per environment, so rehearsals can't use up the Free tier's lifetime allowances |
+| Spend and quota | Token budget per turn and a daily cap; an Azure budget with email alerts on Kako's own resource group; a Meko call counter with a ceiling per environment, so rehearsals can't use up the Free tier's lifetime allowances |
+| Meko's own extraction | Meko Cloud extracts memories from the household's words before anyone approves them. Dreaming treats them as candidates; each ends linked to an approved fact or deleted. A Phase 1 test checks whether extraction can be turned off on a Cloud datapack (local Meko allows it) |
 | Not financial advice | Synthetic household only; the app and README say so; no product picks, no tax calculations |
 | Secrets | Environment variables only; `.env` is gitignored and `.env.example` lists the names |
 
@@ -257,7 +286,7 @@ on the click path.
 | --- | --- | --- |
 | Meko | Free tier; local Meko for development | None. The lifetime allowances below are the real limit |
 | Postgres | Local; AMP (Free) or Neon (free) for the demo | None expected |
-| Anthropic API | Pay as you go, with a per-turn budget and a daily cap; prompt caching; tests use a recorded fake | Usage only. The cap is set before Phase 3 and reported on the metrics page |
+| Azure AI Foundry | Pay-per-token deployments (Standard or Global Standard, never Provisioned), in Kako's own resource group with a monthly budget and alerts; signed in with Entra ID, no keys; per-turn budget and daily cap; tests and demo mode use recorded responses | Usage only. The budget is set before Phase 3; cost per turn is on the metrics page |
 | Hosting | None: the demo runs on the laptop for the video | None |
 | CI | GitHub Actions on a public repository | None |
 
