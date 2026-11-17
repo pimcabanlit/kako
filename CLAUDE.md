@@ -116,16 +116,22 @@ first connect time to wait for Meko).
 
 The setup script can still be running when Claude Code reads its config, so the block registers
 `meko` first, as a command that waits for the `meko` binary, starts Meko, then bridges to its
-HTTP endpoint with `mcp-remote`. That also restarts Meko in a resumed container. Keep the
+HTTP endpoint with `mcp-remote`. That also restarts Meko in a resumed container, which doesn't
+run the setup script again. The command is built in three lines because the environment's setup
+script allows at most 200 characters a line; it registers exactly the same command. Keep the
 version in step with the one tested below.
 
 ```
 # Kako: local Meko + Meko's Claude Code plugin, at user scope (sessions start above the repos).
 # Registers the meko server FIRST, so it is in Claude Code's config before Claude Code reads it.
-# The server command waits for the meko binary, starts Meko, then bridges stdio to HTTP.
+# The server command waits for the meko binary, starts Meko, then bridges stdio to HTTP,
+# so every session start and resume starts Meko.
 if [ -d kako ]; then
   claude mcp remove --scope user meko || true
-  claude mcp add --scope user meko -- sh -c 'for i in $(seq 40); do [ -x "$HOME/.local/bin/meko" ] && break; sleep 1; done; "$HOME/.local/bin/meko" start >/dev/null 2>&1; exec npx -y mcp-remote@0.16.6 http://127.0.0.1:7777/mcp --allow-http' || true
+  MEKO_CMD='for i in $(seq 40); do [ -x "$HOME/.local/bin/meko" ] && break; sleep 1; done; '
+  MEKO_CMD="$MEKO_CMD"'"$HOME/.local/bin/meko" start >/dev/null 2>&1; '
+  MEKO_CMD="$MEKO_CMD"'exec npx -y mcp-remote@0.16.6 http://127.0.0.1:7777/mcp --allow-http'
+  claude mcp add --scope user meko -- sh -c "$MEKO_CMD" || true
   curl -fsSL https://github.com/yugabyte/meko/releases/download/meko-v1.20261116.0/install.sh \
     | sh -s -- --version 1.20261116.0 --no-service --non-interactive || true
   ~/.local/bin/meko start || true
@@ -141,7 +147,9 @@ local Meko (agent id `claude_code:kako`), not Meko Cloud. In a fresh "First TEst
 the block above: `meko` connected from the first turn with all 40 tools, both skills loaded,
 and the session was captured to local Meko 2 seconds after Meko started. The plugin's own
 Meko Cloud server fails to connect there (the network blocks `mcp.mekodata.ai`); that is
-expected and keeps build sessions off Meko Cloud.
+expected and keeps build sessions off Meko Cloud. The environment's script was updated to this
+block on Nov 17, 2026; with Meko stopped by hand, opening the `meko` server started it again in
+about 3 seconds.
 
 Rules:
 
