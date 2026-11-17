@@ -19,7 +19,7 @@ Status: **being set up** (Phase 1, task 5). Rows are filled in as each step is d
 | Application Insights | `appi-kako-ai-2195` | Added by the Foundry create form by default. Billed only for logs past the monthly free allowance (about 5 GB); for tracing later |
 | Deployment, stronger | `gpt-5.4` (`KAKO_MODEL_STRONG`) | Orchestrator and dreaming. Global Standard (pay per token). Generally available, not Preview |
 | Deployment, faster | `gpt-5-mini` (`KAKO_MODEL_FAST`) | The four specialists. Global Standard (pay per token). Generally available, not Preview |
-| App registration | `kako-dev` | How the backend signs in (Entra ID); the secret expires after Jan 24, 2027 |
+| App registration | `kako-dev` | How the backend signs in (Entra ID). Its client secret expires Feb 1, 2027: renew it before then if the video is not yet recorded |
 | Role | **Foundry User** on `kako-ai` → `kako-dev` | Lets the app call the models (data plane) |
 
 Not used: API keys (Entra ID only), Key Vault (no secrets to store), Provisioned deployments (they
@@ -70,7 +70,8 @@ portal and note the difference under Lessons.
 2. From its Overview, note the **Directory (tenant) ID** and the **Application (client) ID**.
 3. Certificates & secrets → New client secret. Expiry after **Jan 24, 2027** (a week past the
    ContextCon deadline). Copy the **Value** (shown once), not the Secret ID, straight into the
-   environment settings in step 7. Put a calendar reminder a week before it expires.
+   environment settings in step 7. Put a calendar reminder a week before it expires. Set Nov 17:
+   expires Feb 1, 2027.
 
 ### 6. Role
 
