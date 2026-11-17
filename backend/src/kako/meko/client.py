@@ -153,6 +153,8 @@ class MekoMcpSession:
         headers = {
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
+            # Meko Cloud asks every client to name itself; its firewall has refused bare ones.
+            "User-Agent": f"{self._client_name}/{__version__}",
         }
         if self._api_key is not None and self._api_key.get_secret_value():
             headers["Authorization"] = f"Bearer {self._api_key.get_secret_value()}"

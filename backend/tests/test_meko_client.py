@@ -88,6 +88,13 @@ async def test_api_key_is_sent_as_bearer_token() -> None:
     assert all(r.headers["authorization"] == "Bearer mk_test" for r in fake.requests)
 
 
+async def test_every_request_names_the_client() -> None:
+    fake = FakeMeko()
+    async with client(fake) as http, MekoMcpSession(http, URL):
+        pass
+    assert all(r.headers["user-agent"].startswith("kako/") for r in fake.requests)
+
+
 async def test_no_api_key_sends_no_authorization() -> None:
     fake = FakeMeko(session_id=None)
     async with client(fake) as http, MekoMcpSession(http, URL, SecretStr("")):

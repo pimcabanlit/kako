@@ -44,11 +44,27 @@ def test_meko_url_reads_the_toolkit_variable(
         ("http://localhost:7777/mcp", "local"),
         ("http://[::1]:7777/mcp", "local"),
         ("https://mcp.example.test/mcp", "cloud"),
-        ("http://127.0.0.1.example.test/mcp", "cloud"),
+        ("https://127.0.0.1.example.test/mcp", "cloud"),
     ],
 )
 def test_meko_target(make_settings: MakeSettings, url: str, target: str) -> None:
     assert make_settings(meko_mcp_url=url).meko_target == target
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://mcp.mekodata.ai/mcp",
+        "http://127.0.0.1.example.test/mcp",
+        "ftp://127.0.0.1/mcp",
+        "mcp",
+    ],
+)
+def test_meko_url_refuses_clear_text_off_this_machine(
+    make_settings: MakeSettings, url: str
+) -> None:
+    with pytest.raises(ValueError, match=r"URL|https://"):
+        make_settings(meko_mcp_url=url)
 
 
 @pytest.mark.parametrize(
