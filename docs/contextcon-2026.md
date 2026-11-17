@@ -106,7 +106,8 @@ and account screen, November 2026):
   reset, so Kako counts its Meko calls and caps them per environment.
 - AMP (Postgres in the datapack) only accepts connections from listed IP
   addresses, so the demo backend needs a fixed outgoing IP. Its compute limit on
-  Free is not yet known.
+  Free is 0.5 vCPU for the whole account: one database's writer (Phase 1 test,
+  docs/meko-setup.md).
 
 ## Open questions
 
@@ -116,5 +117,6 @@ and account screen, November 2026):
 - **Full terms and conditions.** Not published yet. Check them for licence or
   open-source requirements before submitting (Kako is "all rights reserved"
   for now).
-- **AMP limits on Free**, and whether a fixed-IP host works (Phase 1 test).
+- ~~**AMP limits on Free**, and whether a fixed-IP host works~~ Answered Nov 17: 0.5 vCPU,
+  and the laptop connects (docs/meko-setup.md).
 - **Final Demo Day date**, likely on US hours.

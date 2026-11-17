@@ -61,6 +61,17 @@ class Settings(BaseSettings):
     # reasoning tokens against this cap, and 64 can leave nothing for the answer.
     check_models_max_tokens: int = Field(default=256, ge=16, le=1024)
 
+    @field_validator("meko_mcp_url")
+    @classmethod
+    def _meko_url_safe(cls, value: str) -> str:
+        """Plain http only to this machine: anywhere else the API key would travel in clear text."""
+        parts = urlsplit(value)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ValueError("must be an http:// or https:// URL")
+        if parts.scheme == "http" and parts.hostname not in LOCAL_HOSTS:
+            raise ValueError("must use https:// unless it points at this machine (local Meko)")
+        return value
+
     @field_validator("model_strong", "model_fast", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:

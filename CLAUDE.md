@@ -23,6 +23,8 @@ disagree, raise it, and update the doc in the same change once agreed.
   in the same PR.
 - `docs/requirements-map.md`: every ContextCon rule, Challenge 05 objective, judging
   criterion and prize against what is built. Update a row when its status changes.
+- `docs/meko-setup.md`: how Kako reaches local Meko and Meko Cloud, and the Phase 1 spike answers
+  (traces, API keys, self-learning, extraction, AMP), each with what was run.
 - `docs/azure-setup.md`: Kako's Azure side (resource group, budget, Foundry deployments, app
   registration, role, settings), how to check it with `check-models`, and lessons learned. No secrets.
 - `REVIEW.md`: what the AI reviewer reports as Important, and the risk tier of each
