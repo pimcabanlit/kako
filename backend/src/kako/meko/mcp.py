@@ -45,12 +45,13 @@ class McpMeko:
         self,
         session: MekoMcpSession,
         quota: Quota,
-        http: httpx.AsyncClient,
+        uploads: httpx.AsyncClient,
         datapack_id: str | None = None,
     ) -> None:
+        """`uploads` posts files to Meko's one-time links: keep it apart from the MCP session's."""
         self._session = session
         self._quota = quota
-        self._http = http
+        self._uploads = uploads
         self._datapack_id = datapack_id
 
     async def _call(
@@ -197,7 +198,7 @@ class McpMeko:
         if parts.scheme == "http" and parts.hostname not in LOCAL_HOSTS:
             raise MekoError("Meko's upload link must use https:// unless it is on this machine")
         try:
-            response = await self._http.post(
+            response = await self._uploads.post(
                 url, data=fields, files={"file": (filename, content)}, follow_redirects=False
             )
         except httpx.HTTPError as exc:
@@ -241,8 +242,11 @@ async def open_meko(
     """One adapter session on the configured Meko, counted in `log`. It sends at most `max_calls`
     tool calls (default: KAKO_MEKO_SESSION_MAX_CALLS)."""
     quota = Quota(log, settings.meko_target, settings.meko_cloud_ceiling)
+    # Uploads get a client of their own, so nothing the MCP server set (a cookie, say) can travel
+    # with a file to the upload link's host.
     async with (
         httpx.AsyncClient(timeout=60) as http,
+        httpx.AsyncClient(timeout=60) as uploads,
         MekoMcpSession(
             http,
             settings.meko_mcp_url,
@@ -250,7 +254,7 @@ async def open_meko(
             max_tool_calls=max_calls or settings.meko_session_max_calls,
         ) as session,
     ):
-        yield McpMeko(session, quota, http, settings.meko_datapack_id)
+        yield McpMeko(session, quota, uploads, settings.meko_datapack_id)
 
 
 def _limit(limit: int) -> int:
