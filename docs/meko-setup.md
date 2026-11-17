@@ -122,7 +122,13 @@ the choice can't be changed later. The password is shown once. Each tier has a c
 - **Branch:** `amp_branch_create` (zero-copy) took under 3 seconds, handshake included. But a branch
   needs its own endpoint to be queried, and `amp_compute_create` on it was refused with
   `FREE_TIER_CORE_LIMIT`. So on Free, branches can't serve what-ifs next to the main database.
-- **Laptop:** to check: connect, migrate, time it.
+- **Laptop (Pim's Windows laptop, Nov 17): works.** With `KAKO_DATABASE_URL` pointing at the endpoint
+  (`?ssl=require`), `kako migrate` ran and `/api/v1/health` reported "PostgreSQL 18.2, schema 0001".
+  The first health check took 4.7 s (connection, TLS); once connected, 1.4 s for the probe's two
+  queries plus the pool's ping. From Manila each round trip to the database costs a few hundred
+  milliseconds, so a planning turn must keep its queries few and batched.
+- **This cloud session** can't reach it: the allow list holds only the laptop's address, and a cloud
+  session's outgoing address is not fixed. Tests and CI keep using local Postgres.
 
 ## Verification log
 
