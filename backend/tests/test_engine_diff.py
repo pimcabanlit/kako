@@ -41,7 +41,7 @@ def v2_to_v3(house: Villanueva) -> Diff:
     )
     v3 = compute(take_snapshot(HOUSEHOLD, house.facts, DEC_1, at("2026-12-01", 18)), house.entities)
     split = uuid.UUID("00000000-0000-4000-8000-0000000000d1")  # "split the surplus", Sep 15
-    assumptions = {split: [_fact(house, "mara", "income.monthly_net", 5_200_000).id]}
+    assumptions = {split: [_fact(house, "mara_salary", "income.monthly_net", 5_200_000).id]}
     return diff(v2, v3, house.facts, assumptions)
 
 
@@ -124,8 +124,8 @@ def test_the_fact_changes_once_each(v2_to_v3: Diff) -> None:
 def test_a_retraction_is_labelled_a_fixed_mistake(house: Villanueva) -> None:
     """Mara's ₱68,000 was a typo, retracted on Nov 21: on Dec 1 the old ₱52,000 is back."""
     facts = list(house.facts)
-    old = _fact(house, "mara", "income.monthly_net", 5_200_000)
-    typo = _fact(house, "mara", "income.monthly_net", 6_800_000)
+    old = _fact(house, "mara_salary", "income.monthly_net", 5_200_000)
+    typo = _fact(house, "mara_salary", "income.monthly_net", 6_800_000)
     facts[facts.index(typo)] = replace(
         typo, status="retracted", retracted_at=at("2026-11-21"), retraction_reason="typo"
     )
@@ -143,7 +143,7 @@ def test_a_retraction_is_labelled_a_fixed_mistake(house: Villanueva) -> None:
 
 def test_a_fact_that_ended(house: Villanueva) -> None:
     facts = list(house.facts)
-    jun13 = _fact(house, "jun", "income.thirteenth_month", 4_800_000)
+    jun13 = _fact(house, "jun_salary", "income.thirteenth_month", 4_800_000)
     facts[facts.index(jun13)] = replace(jun13, valid_to=date(2026, 12, 15))
     dec, jan = date(2026, 12, 1), date(2026, 12, 31)
     a = compute(take_snapshot(HOUSEHOLD, facts, dec), house.entities)

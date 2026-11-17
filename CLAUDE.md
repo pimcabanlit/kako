@@ -184,6 +184,9 @@ KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against loca
 uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
 uv run kako api                           # /api/v1 on 127.0.0.1:8000; /api/v1/health, docs at /api/v1/docs
 uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
+uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
+uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
+uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine's figures then (--household, --save)
 ```
 
 The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be running):
@@ -224,7 +227,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   each citing what it read; `debts.py` the payoff with the rollover; `arith.py` centavos, half-up
   rounding and ratios; `dates.py` calendar months and the 100-year horizon; `inputs.py` what it
   reads; `figures.py` the figure and the run; `diff.py` F-DIFF-1, what changed between two runs and
-  why, and the decisions to revisit). `facts/` and `engine/` use no database, clock or
+  why, and the decisions to revisit). `db/calc_store.py` stores a run with the facts it read and its
+  figures, and reads it back; `demo/` the demo household (`files.py` reads and checks
+  `data/demo-household/`, `load.py` loads it through the fact store, each change as an approved
+  proposal and then its write). `facts/` and `engine/` use no database, clock or
   randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
   any past their `max_tool_calls` ceiling, 0 by default; `health.py`, the handshake probe).
@@ -235,10 +241,13 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   database per test, migrated twice), with the checks the database must refuse.
   `test_facts_*.py` test the fact rules on rows in memory (`tests/support/facts.py` builds them);
   `test_engine_worked_example.py` checks every worked-example figure to the centavo
-  (`tests/support/villanueva.py` is that household's history), `test_engine_rules.py` the flags,
+  (`tests/support/villanueva.py` builds that household's history in memory from the demo files), `test_engine_rules.py` the flags,
   rollover, goals, what-ifs and what each figure cites, and `test_engine_properties.py` seeded
   property tests (payments equal balance plus interest, order independence, identities), and
   `test_engine_diff.py` the worked example's diff from plan v2 to v3 and each label;
+  `test_demo_files.py` the demo files and each mistake they can hold;
+  `tests/integration/test_demo_load.py` the demo loaded into Postgres: every rule passes, its figures
+  there are the worked example's (also as known at an earlier time), a run's round trip and the commands;
   `tests/integration/test_fact_store.py` each status transition, the rules on each write and the
   database guard behind them.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and

@@ -54,7 +54,7 @@ def test_plan_v2_on_sep_15(house: Villanueva) -> None:
     assert run.value("plan.unallocated") == 0
     assert run.get("savings.months_to_target").flag is None
     assert "cashflow.thirteenth_month" not in {f.key for f in run.figures}  # December only
-    # The car loan (9% a year, chosen here) is second, and gets the card's ₱6,550 from month 18.
+    # The car loan (₱420,000 at 9% a year) is second, and gets the card's ₱6,550 from month 18.
     car = house.ids["car"]
     assert run.value("debt.strategy_order", car) == 2
     assert run.value("debt.payoff_months", car) == 32
@@ -98,8 +98,9 @@ def test_plan_v3_on_dec_1(house: Villanueva) -> None:
     assert run.value("goal.required_monthly", house_fund) == 500_000
     assert run.value("goal.on_track", house_fund) == 1
     car = house.ids["car"]
-    assert run.value("debt.payoff_months", car) == 23
-    assert run.value("debt.total_interest", car) == 4_224_098
+    # The car loan at ₱401,430.63 after the Nov statement, with the card's ₱12,550 from month 8.
+    assert run.value("debt.payoff_months", car) == 22
+    assert run.value("debt.total_interest", car) == 3_891_435
 
 
 def test_plan_v3_all_extra_on_the_card(house: Villanueva) -> None:

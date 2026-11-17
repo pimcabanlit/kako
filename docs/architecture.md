@@ -213,7 +213,7 @@ current, what it replaced and which plans and decisions depended on it.
 | Meko adapter | `backend/src/kako/meko/` | One interface for every Meko call, an MCP client implementation, an in-memory fake for unit tests, the call counter and quota guard |
 | Database | `backend/src/kako/db/` | SQLAlchemy 2 async models, repositories, Alembic migrations |
 | Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, the Foundry endpoint, deployment names and their prices, budgets, demo mode |
-| Demo data | `data/demo-household/` | The synthetic household, statements, documents and session scripts |
+| Demo data | `data/demo-household/`, `backend/src/kako/demo/` | The synthetic household as files (the seed, the approved changes, statements, documents; session scripts later), read and checked by `demo/files.py` and loaded through the fact store by `demo/load.py` (`kako demo load`) |
 
 The backend is organised by domain, with `core → domain → infrastructure`: the engine and fact rules
 never import the database, Meko or the model SDK.
