@@ -33,6 +33,30 @@ Every peso figure comes from deterministic code; agents never do the maths.
 - The repo is public and all rights reserved (no open source license). Switch to
   Apache-2.0 only if the full ContextCon terms require open source.
 
+## Meko toolkit (use it, don't work from memory)
+
+Kako is built on Meko, the context and memory platform behind ContextCon. Use
+these sources for any Meko fact before writing code against it:
+
+| Need | Use |
+| --- | --- |
+| Memory, datapack and knowledge-base calls (`memory_search`, `datapack_search`, `knowledgebase_search`, AMP Postgres) | **Meko MCP server**: local Meko for dev and tests (`meko agent connect claude` registers it), Meko Cloud at `https://mcp.mekodata.ai/mcp` for the demo only |
+| How to use the MCP tools, picking a datapack | Meko's agent skills (`meko-mcp-tools`, `meko-select-datapack`) from [yugabyte/meko-skills](https://github.com/yugabyte/meko-skills), plugin `meko-agent-skills` |
+| The `meko` and `meko-cli` commands, local server, REST API | [yugabyte/meko](https://github.com/yugabyte/meko) README and `src/meko/docs/` |
+| Product docs, MCP reference, limits | [docs.mekodata.ai](https://docs.mekodata.ai/) (MCP server: `/reference/mcp-server/`), [pricing](https://mekodata.ai/pricing/) |
+| Questions to the Meko team | [Meko Discord](https://mekodata.ai/discord/) |
+
+Rules:
+
+- If the Meko MCP server or skills are not loaded in a session, say so before writing
+  Meko code instead of guessing.
+- Free tier: 1,000 conversations account-wide. Every session, test run and evaluation
+  uses one, so never point tests or experiments at Meko Cloud.
+- Meko auth comes from `meko cloud-link` or a Meko Cloud API key in the environment.
+  Never ask for, print or commit tokens.
+- The plugin and MCP wiring (`.claude/settings.json`, `.mcp.json`) arrive in the toolkit
+  PR; update this section then with the exact install steps.
+
 ## Conventions
 
 - Two-space indentation, LF line endings.
