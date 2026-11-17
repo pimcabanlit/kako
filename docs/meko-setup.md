@@ -42,8 +42,10 @@ steps), `reasoning` and `metadata` (a JSON object as a string). `conversation_ge
 
 So Kako can keep each turn's plan and reasoning in Meko and read them back to show "how we got here".
 
-**Meko Cloud:** to check: the same fields, and whether a turn or conversation has a portal URL Kako can
-link to (the portal shows decision and execution traces per conversation).
+**Meko Cloud (verified Nov 17, Meko MCP 3.2.4):** the same: `conversation_get` with
+`include_messages: true` returned the turn's `input`, `output`, `reasoning`, `plan` and `metadata`
+exactly as saved. No response carries a portal URL for the conversation or its trace (link: to check
+in the portal).
 
 ### 2. Meko Cloud from the backend with an API key
 
@@ -51,8 +53,14 @@ link to (the portal shows decision and execution traces per conversation).
 `https://mcp.mekodata.ai/mcp`, and names the datapack with `datapack_id` on each call. There is no
 Python SDK; MCP is the way in. Keys are made under Settings > API Keys and shown once.
 
-**Meko Cloud:** to check: Kako's own client (`MekoMcpSession`) completes the handshake and a tool call
-with a key from a server process.
+**Meko Cloud (verified Nov 17): yes.** Kako's own client (`MekoMcpSession`, with `User-Agent:
+kako/<version>`) completed the handshake (server "Meko MCP" 3.2.4, protocol 2025-06-18) and every tool
+call below with a `mko_tkn_` key from a server process. Two differences from local Meko:
+
+- Every call needs a `conversation_id`, as locally; `datapack_create` and `datapack_delete` refuse an
+  `agent_id` argument.
+- Meko Cloud lists more tools: the four self-learning tools, 14 `amp_*` tools and `track_token_usage`
+  (57 in all, against 40 locally).
 
 ### 3. Self-learning tools on Free
 
@@ -61,8 +69,18 @@ with a key from a server process.
 They need the datapack's owner or a maintainer, and `selflearning_verify` counts as a search. Local
 Meko 1.20261116.0 does not list them.
 
-**Meko Cloud:** to check: are they listed for a Free account, and does `selflearning_verify` report
-`improved` after a missing fact is added?
+**Meko Cloud (verified Nov 17): yes, on Free.** In the spike datapack:
+
+1. `context_search` "How much is the household's monthly electricity bill?" returned only the rent
+   memory (best score 0.50), `match_quality: low`, and the hint "Weak or no match: do not guess".
+2. `selflearning_query_log` listed it at once: band `low`, reason `weak_match`, category `coverage`,
+   to-do `add_context`.
+3. `memory_add` "The household's electricity bill is about 3,200 pesos a month."
+4. `selflearning_verify` with that `log_id`, 10 seconds later: `outcome: improved`, band `low` to
+   `high`, best score 0.50 to 0.76, `indexing: false`.
+
+So the "Context Gaps" story works on Free: a weak search, the missing fact added (after the household
+approves it), and a replay that proves the fix. Each replay counts as one search.
 
 ### 4. Meko Cloud's own extraction
 
@@ -71,9 +89,22 @@ messages, best-effort ("can occasionally miss an individual fact"). The public d
 turn it off for a Cloud datapack; `datapack_update` only has `conversation_search_opt_out`. Local Meko
 extracts only when `meko memory-extractor` is on.
 
-**Meko Cloud:** to check: is there an opt-out, how many seconds after a turn the memories appear, and
-what `source` and metadata they carry. Kako treats them as candidates either way: dreaming reconciles
-them and the household approves (docs/architecture.md).
+**Meko Cloud (verified Nov 17):**
+
+- **No opt-out.** Neither `datapack_update` nor `datapack_describe` has an extraction setting; the only
+  switch is `conversation_search_opt_out`. Every saved turn is extracted.
+- **About 17 seconds.** The turn was saved at 10:53:07 and its two memories were created at 10:53:24.
+- **What they look like.** One memory per fact, reworded with an added interpretation: "User's
+  household pays 18,000 pesos in rent each month, a recurring housing expense that affects their
+  monthly budget." Metadata holds only `meko_datapack_id`; `run_id` is the conversation id, and
+  `attributed_to: "user"`. There is no `source` field and no link to the turn's `message_id`.
+- **Kako's own memories** (`memory_add`) keep the metadata Kako passes (`{"kako_source":
+  "approved_fact", "fact_id": ...}`) and carry `role: "user"` instead of `attributed_to`.
+
+**Decision for Kako:** extraction can't be turned off, so every memory without Kako's `kako_source`
+metadata is a candidate, never a fact. Dreaming reads them (by `run_id`, the conversation), proposes
+facts, and the household approves; approved facts are written with `memory_add` and `kako_source`.
+The engine never reads memories for figures; figures come from the fact store in Postgres.
 
 ### 5. AMP on our account
 
@@ -81,12 +112,21 @@ them and the household approves (docs/architecture.md).
 must be created public (`ingress_external`) with an allow list of addresses no broader than a `/24`;
 the choice can't be changed later. The password is shown once. Each tier has a compute budget.
 
-**Meko Cloud:** to check from the laptop: create a database, connect, time a snapshot query and a
-branch, read the vCPU cap. A cloud session's outgoing address is not fixed, so tests and CI keep using
-local Postgres either way.
+**Meko Cloud (Nov 17):**
+
+- **vCPU cap on Free: 0.5 across the whole account** (`amp_core_budget`). One database with its
+  default writer (0.5 vCPU, 4 GiB, Postgres 18) uses all of it.
+- **Create:** `amp_cluster_create` with a writer, `ingress_external` and the laptop's address as a `/32`
+  took 19 seconds. The endpoint is `ep-<id>.db.mekodata.ai:<port>`, user `admin`. The password is
+  shown once (Kako passed its own).
+- **Branch:** `amp_branch_create` (zero-copy) took under 3 seconds, handshake included. But a branch
+  needs its own endpoint to be queried, and `amp_compute_create` on it was refused with
+  `FREE_TIER_CORE_LIMIT`. So on Free, branches can't serve what-ifs next to the main database.
+- **Laptop:** to check: connect, migrate, time it.
 
 ## Verification log
 
 | Date | Where | What |
 | --- | --- | --- |
 | Nov 17, 2026 | Cloud session, local Meko 1.20261116.0 | One conversation with one turn: `plan`, `reasoning` and `metadata` read back with `conversation_get`; conversation deleted |
+| Nov 17, 2026 | Cloud session, Meko Cloud (MCP 3.2.4), datapack `kako-spike` | 2 conversations, 1 turn, 1 `memory_add`, 2 searches (1 `context_search`, 1 `selflearning_verify`); AMP database, branch, refused branch endpoint |
