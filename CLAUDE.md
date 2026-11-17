@@ -209,12 +209,17 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
 - `backend/`: the FastAPI backend (uv project `kako`, Python 3.12). `src/kako/settings.py` holds every
   setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`); `cli.py` is the `kako` command;
   `health.py` the health report and `safe_error` (no secret reaches a response or a log);
-  `api/app.py` the app and `/api/v1/health`; `db/` the engine, the declarative base and Alembic
-  (`db/migrations/`, append-only once merged); `meko/` the only package that talks to Meko
+  `api/app.py` the app and `/api/v1/health`; `db/` the engine, the declarative base, the table
+  models (`db/models/`, one module per layer of `docs/data-model.md`), every enumerated column's
+  values (`db/enums.py`, held as check constraints) and Alembic (`db/migrations/`, append-only once
+  merged; `0002_tables.py` creates every table); `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
   any past their `max_tool_calls` ceiling, 0 by default; `health.py`, the handshake probe).
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
+  `tests/support/data_model.py` reads the tables out of `docs/data-model.md`: `test_schema_doc.py`
+  holds the models to it and `tests/integration/test_schema.py` the migrated database (a fresh
+  database per test, migrated twice), with the checks the database must refuse.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and
   cleans up (at most 6 tool calls).
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons. `next.config.ts`

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from kako.cli import main
 from kako.db.engine import make_engine, probe_postgres
 from tests.conftest import MakeSettings
+from tests.integration.conftest import head_revision, reset_database
 
 pytestmark = pytest.mark.integration
 
@@ -22,15 +23,10 @@ async def engine(make_settings: MakeSettings, test_database_url: str) -> AsyncEn
     return make_engine(url)
 
 
-async def _drop_alembic_table(engine: AsyncEngine) -> None:
-    async with engine.begin() as conn:
-        await conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
-
-
 async def test_migrate_twice_then_probe(
     engine: AsyncEngine, test_database_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    await _drop_alembic_table(engine)
+    await reset_database(test_database_url)
     before = await probe_postgres(engine)
     assert before.ok
     assert "not migrated" in before.detail
@@ -42,11 +38,11 @@ async def test_migrate_twice_then_probe(
 
     after = await probe_postgres(engine)
     assert after.ok
-    assert after.detail.endswith("schema 0001")
+    assert after.detail.endswith(f"schema {head_revision()}")
     assert after.version is not None
     async with engine.connect() as conn:
         revisions = (await conn.execute(text("SELECT version_num FROM alembic_version"))).all()
-    assert [r[0] for r in revisions] == ["0001"]
+    assert [r[0] for r in revisions] == [head_revision()]
     await engine.dispose()
 
 
