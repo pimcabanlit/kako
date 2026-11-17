@@ -9,7 +9,7 @@ project in the subscription.
 
 ## What is in place
 
-Status: **being set up** (Phase 1, task 5). Rows are filled in as each step is done.
+Status: **in place** (Nov 17, 2026). `check-models` passes from a cloud session; the laptop check is next.
 
 | Piece | Name | Notes |
 | --- | --- | --- |
@@ -116,6 +116,7 @@ per deployment (at most 256 output tokens each, since GPT-5 models count their h
 
 | Date | Where | Result |
 | --- | --- | --- |
+| Nov 17, 2026 | Cloud session ("First TEst" environment), as `kako-dev` | All four lines `[PASS]`: `gpt-5.4` answered in 1.5 s (13 tokens in, 4 out), `gpt-5-mini` in 1.1 s (13 in, 10 out) |
 
 ## Lessons
 
