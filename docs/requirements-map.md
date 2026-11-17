@@ -51,7 +51,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Meko feature | Status | Kako's use | Phase |
 | --- | --- | --- | --- |
 | Memory: goals, risk profile and past decisions, across sessions | Not started | One memory per approved fact, decision and preference, with Kako's ids in its metadata; replaced facts rewritten in the past tense | 4 |
-| Knowledge base: statements, budgets and planning rules (synthetic) | In progress | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) for the demo household. Written in `data/demo-household/`; the upload to Meko's knowledge base is Phase 2, task 6 | 2 |
+| Knowledge base: statements, budgets and planning rules (synthetic) | In progress | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) for the demo household. Written in `data/demo-household/`; `kako demo upload` puts them in Meko's knowledge base (tested on local Meko); the demo datapack on Meko Cloud is seeded in Phase 5 | 2 |
 | Artifacts: generated plans and reports in the datapack | Not started | Each plan report kept with `artifact_put`; its hash stored on the plan | 4 |
 | Conversations: planning sessions over time | Not started | One conversation per session, turns with `plan` and `reasoning`; dreaming reads them | 3 |
 | Traces: why each recommendation was made | Not started | The session's conversation id is its trace id; every Meko call in a turn is a span; recommendations store their turn | 3 |
@@ -116,7 +116,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Decisions keep their rejected options and their assumptions | Not started | When an assumption is replaced, the decision is flagged to revisit |
 | The number check | Not started | No figure reaches the household unless the engine produced it |
 | Reconciliation rules in code | Not started | Specialist conflicts are found by arithmetic, not by hoping a model notices |
-| A call counter for Meko's Free-tier allowances | Not started | The demo can't run out of searches |
+| A call counter for Meko's Free-tier allowances | In progress | The demo can't run out of searches. Every Meko call is counted in `meko_call` before it is sent, and Meko Cloud's capped tools stop at `KAKO_MEKO_CLOUD_CEILING`; the metrics page shows what is left (Phase 5) |
 | The agents' steps on screen and the what-if loop | Not started | Judges see the agents work: each tool call, each split tried through the engine, and what was rejected |
 | Published evidence: agent test set, dreaming's labelled set, single-agent baseline | Not started | Scores with run dates in the README show it isn't one hand-held demo path |
 

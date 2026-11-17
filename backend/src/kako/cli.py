@@ -49,6 +49,11 @@ def main(argv: list[str] | None = None) -> int:
         help="also replay the approved changes up to this time, such as 2026-12-01T12:00+08:00",
     )
     load.add_argument("--data", type=Path, help="the demo folder (default: data/demo-household)")
+    upload = demo_commands.add_parser(
+        "upload",
+        help="upload the demo's statements and reference documents to Meko's knowledge base",
+    )
+    upload.add_argument("--data", type=Path, help="the demo folder (default: data/demo-household)")
 
     validate = commands.add_parser(
         "validate", help="rules V-01 to V-08 and V-16 over a household's facts; exit 1 on any"
@@ -74,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         return _migrate()
     if args.command == "check-models":
         return _check_models()
+    if args.command == "demo" and args.demo_command == "upload":
+        return asyncio.run(_demo_upload(args.data))
     if args.command == "demo":
         return asyncio.run(_demo_load(args.through, args.data))
     if args.command == "validate":
@@ -152,6 +159,46 @@ async def _demo_load(through: datetime | None, folder: Path | None) -> int:
         return 0
 
     return await _connected(work)
+
+
+async def _demo_upload(folder: Path | None) -> int:
+    """Every demo document into Meko's knowledge base, each call counted in `meko_call`."""
+    from kako.db.engine import make_engine
+    from kako.db.meko_log import DbCallLog
+    from kako.demo.files import DEMO_DIR, DemoDataError, read_demo
+    from kako.demo.kb import AGENT, upload_demo_documents
+    from kako.meko.client import MekoError
+    from kako.meko.mcp import open_meko
+
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set: every Meko call is counted there.", file=sys.stderr)
+        return 1
+    try:
+        demo = read_demo(folder or DEMO_DIR)
+    except DemoDataError as exc:
+        print(f"The demo files don't fit the data model: {exc}", file=sys.stderr)
+        return 1
+    checks = 10
+    engine = make_engine(settings.database_url)
+    try:
+        # One conversation (the same one on every run), an upload and its status checks per file.
+        bound = 1 + len(demo.documents) * (1 + checks)
+        async with open_meko(settings, DbCallLog(engine), max_calls=bound) as meko:
+            conversation_id = await meko.create_conversation(
+                agent_id=AGENT, title="Demo knowledge base", session_key="kako-demo-kb"
+            )
+            documents = await upload_demo_documents(
+                meko, demo, conversation_id, checks=checks, pause=2.0
+            )
+    except MekoError as exc:
+        print(f"Meko ({settings.meko_target}): {exc}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+    new = sum(1 for d in documents if not d.already_uploaded)
+    print(f"{len(documents)} documents searchable in Meko ({settings.meko_target}); {new} new.")
+    return 0
 
 
 async def _household(conn: AsyncConnection, household_id: uuid.UUID | None) -> uuid.UUID | None:

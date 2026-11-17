@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,6 +40,17 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("MEKO_API_KEY", "KAKO_MEKO_API_KEY"),
     )
+    meko_datapack_id: str | None = Field(
+        default=None, description="The datapack every Meko call names; unset uses the default one"
+    )
+    # Meko Cloud's Free tier caps some tools for the account's lifetime (docs/architecture.md, Cost
+    # plan). This environment may make at most this many calls to each capped tool on Meko Cloud,
+    # counted in `meko_call`; 0 refuses them all. Local Meko has no allowances and no ceiling.
+    meko_cloud_ceiling: int = Field(default=0, ge=0, le=10_000)
+    # The most tool calls one adapter session sends, wherever Meko is: no loop runs unbounded.
+    meko_session_max_calls: int = Field(default=50, ge=1, le=1_000)
+    # The account's Langfuse project in Meko Cloud's Observe page (docs/meko-setup.md); not secret.
+    meko_langfuse_project_id: str | None = None
     health_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 
     # Azure AI Foundry. Deployment names live here and nowhere else (REVIEW.md rule 10).
@@ -72,7 +83,9 @@ class Settings(BaseSettings):
             raise ValueError("must use https:// unless it points at this machine (local Meko)")
         return value
 
-    @field_validator("model_strong", "model_fast", mode="before")
+    @field_validator(
+        "model_strong", "model_fast", "meko_datapack_id", "meko_langfuse_project_id", mode="before"
+    )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
@@ -115,6 +128,13 @@ class Settings(BaseSettings):
         """`local` when the Meko URL points at this machine; anything else counts as Meko Cloud."""
         host = urlsplit(self.meko_mcp_url).hostname or ""
         return "local" if host in LOCAL_HOSTS else "cloud"
+
+    def meko_trace_url(self, conversation_id: str) -> str | None:
+        """Meko Cloud's trace page for a conversation, or None (local Meko, or no project id)."""
+        if self.meko_target != "cloud" or self.meko_langfuse_project_id is None:
+            return None
+        query = urlencode({"project": self.meko_langfuse_project_id, "session": conversation_id})
+        return f"https://cloud.mekodata.ai/observe-hub?{query}"
 
 
 @lru_cache
