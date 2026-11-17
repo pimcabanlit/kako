@@ -204,7 +204,7 @@ current, what it replaced and which plans and decisions depended on it.
 | --- | --- | --- |
 | Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and shadcn/ui. Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas |
 | API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns, plans, why, diff, facts timeline, decisions, proposals and approvals, what-ifs, metrics |
-| Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures. No database, network, clock or randomness; a lint rule enforces it |
+| Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules, diff, what-ifs |
 | Decisions | `backend/src/kako/decisions/` | Decision records, options, assumptions, "to revisit" |

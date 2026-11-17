@@ -1,4 +1,4 @@
-# Kako data model v0.4
+# Kako data model v0.5
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -10,7 +10,7 @@ in the same change once agreed.
   [architecture.md](architecture.md#where-data-lives).
 - **Scope:** the hackathon MVP: one synthetic household, four planning areas (budget, debt, savings,
   goals), sessions, dreaming, decisions and plans. Tax is never calculated.
-- **Version:** v0.4 (Nov 17, 2026). v0.1 was the first draft. v0.2 closed eight gaps found in the
+- **Version:** v0.5 (Nov 17, 2026). v0.1 was the first draft. v0.2 closed eight gaps found in the
   Stage 5 review: `account.purpose` and `preference.debt_strategy` facts, `decision_option.tags`, an
   amount on each recommendation, `session_participant` and the speaker on evidence, `agent_step`,
   `context_gap`, and the deployment and cost on `llm_call`. It also handles Meko's own extracted
@@ -18,7 +18,10 @@ in the same change once agreed.
   task 1): every table has a column list, `figure.flag` says why a figure has no value, the system
   tables have their columns, and each table names its keys and checks. v0.4 is the fact store (task 2):
   the status transitions, proposal payloads (a proposal writes exactly the fact it names, once), and
-  a seed fact has no proposal and replaces nothing.
+  a seed fact has no proposal and replaces nothing. v0.5 is the engine (task 3): each formula's
+  edge cases, the debt rollover, the calendar, and the worked example's car loan, so every figure in
+  it can be checked; plan v2's emergency-fund wait is 12 months, not 10. The plan diff (task 4) adds
+  the `ended` label and says which facts count as a change.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -657,25 +660,42 @@ Computed in `kako/engine`, pure Python with integer centavos and `Decimal` for r
 Rounding is **half up to the centavo** at each monthly step; months are whole; ratios are kept to six
 decimals and shown to one.
 
+The rules every formula follows:
+
+- **Open entities.** A formula reads the entities open on the as-of date: `opened_on` is null or on or
+  before it, and `closed_on` is null or after it.
+- **No guessing.** A formula that needs a fact the snapshot doesn't have gives no value and the flag
+  `missing_input`, and so does every figure built from it. Two facts are optional because their absence
+  has a meaning: no `plan.allocation` is ₱0 a month, and no `income.thirteenth_month` is no 13th-month
+  pay. Input that contradicts itself (a debt with both rates, two emergency funds) is refused.
+- **The calendar.** Month *k* falls *k* months after the as-of date, on the same day, or on the month's
+  last day when it has no such day (Jan 31 + 1 month is Feb 28). A date *N* months away is as-of + *N*
+  months.
+- **The horizon** is 100 years (1,200 months). A debt still owed then never pays off; an allocation too
+  small to reach a goal or the emergency target within it counts as none (`no_allocation`).
+- **Traceable.** Each figure records the facts (and a what-if's overrides) it read and the figures it
+  was built from. A what-if's override takes the place of the fact for the same entity and attribute
+  from its `valid_from`.
+
 | Formula id | Figure key | Definition |
 | --- | --- | --- |
-| `F-INC-1` | `cashflow.monthly_income` | Sum of `income.monthly_net` over active income entities on the date. 13th-month pay is shown separately as `cashflow.thirteenth_month`, in December |
+| `F-INC-1` | `cashflow.monthly_income` | Sum of `income.monthly_net` over open income entities. 13th-month pay is shown separately as `cashflow.thirteenth_month`, only when the as-of date is in December |
 | `F-EXP-1` | `cashflow.monthly_expenses` | Sum of `expense.monthly_amount` |
-| `F-EXP-2` | `cashflow.essential_expenses` | The same, for expenses marked essential |
-| `F-DEBT-1` | `cashflow.minimum_payments` | Sum of `debt.minimum_payment` over open debts |
+| `F-EXP-2` | `cashflow.essential_expenses` | The same, for expenses marked essential (each open expense needs `expense.essential`) |
+| `F-DEBT-1` | `cashflow.minimum_payments` | Sum of `debt.minimum_payment` over open debts: open debt entities whose `debt.balance` is above zero |
 | `F-CF-1` | `cashflow.monthly_surplus` | income − expenses − minimum payments. May be negative; a negative surplus is flagged, not hidden |
 | `F-CF-2` | `cashflow.debt_payment_share` | minimum payments ÷ income |
 | `F-CF-3` | `cashflow.savings_rate` | (sum of `plan.allocation` to accounts and goals) ÷ income |
-| `F-SAV-1` | `savings.emergency_runway_months` | liquid account balances (`account.liquid` = `yes`) ÷ essential expenses |
+| `F-SAV-1` | `savings.emergency_runway_months` | liquid balance ÷ essential expenses. The liquid balance is the sum of `account.balance` over open accounts with `account.liquid` = `yes` (each open account needs `account.liquid`) |
 | `F-SAV-2` | `savings.emergency_target` | `household.emergency_months_target` × essential expenses |
-| `F-SAV-3` | `savings.months_to_target` | ceil((target − liquid balance) ÷ monthly allocation to the emergency fund, the account with `account.purpose` = `emergency`); null if the allocation is zero or no account has that purpose |
-| `F-DEBT-2` | `debt.payoff_months`, `debt.total_interest`, `debt.payoff_date` | Month-by-month: interest = round(balance × monthly rate); balance += interest; payment = min(minimum + extra allocation, balance); repeat until the balance is zero. A debt with an annual rate uses annual ÷ 12. If the payment does not exceed the first month's interest the debt never pays off, and the figure says so |
-| `F-DEBT-3` | `debt.strategy_order` | The order extra money goes to debts, from `preference.debt_strategy`: `avalanche` (highest rate first) or `snowball` (smallest balance first); freed minimums roll to the next debt. With two or more open debts and no strategy fact, the figure says the strategy is missing |
-| `F-GOAL-1` | `goal.months_to_target`, `goal.projected_date` | ceil((target − saved) ÷ monthly allocation); no interest in the MVP |
-| `F-GOAL-2` | `goal.required_monthly` | ceil((target − saved) ÷ months until `goal.target_date`) |
-| `F-GOAL-3` | `goal.on_track` | projected date ≤ target date |
-| `F-ALLOC-1` | `plan.unallocated` | surplus − sum of allocations. Must be ≥ 0 (a reconciliation rule) |
-| `F-DIFF-1` | (diff) | Two runs compared figure by figure: each changed figure, its old and new value, and the facts behind the change, labelled `replaced` (life changed), `retracted` (a mistake was fixed), `new` or `allocation` (the household chose differently) |
+| `F-SAV-3` | `savings.months_to_target` | ceil((target − liquid balance) ÷ monthly allocation to the emergency fund, the account with `account.purpose` = `emergency`); 0 once the target is reached; otherwise null with `no_allocation` if the allocation is zero, or `no_emergency_account` if no account has that purpose (each open account needs `account.purpose`) |
+| `F-DEBT-2` | `debt.payoff_months`, `debt.total_interest`, `debt.payoff_date` | The open debts are paid off together, month by month, in strategy order. For each: interest = round(balance × monthly rate); balance += interest; payment = min(its payment, balance); repeat until the balance is zero. The balance fact is the balance on the as-of date. A debt with an annual rate uses annual ÷ 12, rounded once with the interest. A debt's payment starts as its minimum plus its extra allocation; when a debt is paid off, its whole payment (with anything rolled into it) rolls to the first debt still open in strategy order, from the next month (Pim, Nov 17). Once a month passes in which no open debt's balance goes down, the debts still open never pay off (for one debt: the payment does not exceed the first month's interest), and the figures say so. The payoff date is as-of + months. Each figure reads every open debt's facts, since any of them can roll a payment over |
+| `F-DEBT-3` | `debt.strategy_order` | Each open debt's place (1 is first) in the order freed payments roll, from `preference.debt_strategy`: `avalanche` (highest monthly rate first, an annual rate counted as annual ÷ 12; ties go to the smaller balance) or `snowball` (smallest balance first; ties go to the higher rate), then by name. One open debt is first with no strategy needed. With two or more open debts and no strategy fact, the figure (and every F-DEBT-2 figure) says the strategy is missing |
+| `F-GOAL-1` | `goal.months_to_target`, `goal.projected_date` | ceil((target − saved) ÷ monthly allocation), 0 once reached; null with `no_allocation` when nothing is allocated; projected date = as-of + months. No interest in the MVP |
+| `F-GOAL-2` | `goal.required_monthly` | ceil((target − saved) ÷ months until `goal.target_date`), to the centavo; 0 once reached. The months are the monthly steps from the as-of date that land on or before the target date; with none left, the figure is `past_due` |
+| `F-GOAL-3` | `goal.on_track` | 1 when the projected date ≤ the target date, else 0 (unit `count`). A goal with no allocation is 0, flagged `no_allocation` |
+| `F-ALLOC-1` | `plan.unallocated` | surplus − sum of allocations to open debts, accounts and goals. Must be ≥ 0 (a reconciliation rule); a negative result is flagged `negative` |
+| `F-DIFF-1` | (diff) | Two runs compared figure by figure: each changed figure (value or flag, or in one run only), its old and new value, and the facts behind the change: the facts it was built from, directly or through other figures, that differ between the runs. Each is labelled `replaced` (life changed: a newer fact in the chain took its place), `retracted` (a mistake was fixed; the fact it had replaced is back), `allocation` (the household chose differently: `plan.allocation`, replaced or new), `new` (it started, or Kako learned it, after the old run) or `ended` (its window closed with nothing in its place). A fact already true and known at the old run is not a change, even when only the new run reads it. A decision whose assumption (`decision_assumption`) has been replaced or retracted by the new run's date is listed **to revisit** |
 
 ## Validation rules
 
@@ -708,8 +728,9 @@ by the engine's formulas; the build checks these numbers in a test.
 **Before: plan v2, Sep 15, 2026.** Take-home pay ₱100,000 a month (Mara ₱52,000, Jun ₱48,000).
 Expenses ₱76,000, of which ₱70,000 essential. The emergency fund is the account with `account.purpose` =
 `emergency`; the household's `preference.debt_strategy` is `avalanche`. Minimum payments ₱14,950 (credit card ₱2,550, car loan
-₱12,400). Surplus **₱9,050**. Credit card ₱85,000 at 3% a month. Emergency fund ₱150,000, a runway of
-**2.1 months** against a 3-month target.
+₱12,400). Surplus **₱9,050**. Credit card ₱85,000 at 3% a month; car loan ₱420,000 at 9% a year, so the
+card is first in avalanche order. Emergency fund ₱150,000, a runway of **2.1 months** against a 3-month
+target, reached in **12 months** at ₱5,050 a month.
 
 The debt question had two options:
 
@@ -717,7 +738,7 @@ The debt question had two options:
 | --- | --- | --- | --- | --- |
 | A: all extra on the card | ₱9,050 | ₱0 | 9 months | ₱12,460.10 |
 | B: split (chosen) | ₱4,000 | ₱5,050 | 17 months | ₱24,303.62 |
-| Minimum only | ₱0 | | never (₱2,550 only covers the interest) | |
+| Minimum only | ₱0 | | 47 months: ₱2,550 only covers the interest, so the balance stands still until the car loan is paid off in month 40 and its ₱12,400 rolls over | ₱111,635.47 |
 
 The household chose B: "Lia starts school and we want cash on hand." Option A is kept with its reason
 for rejection. They had already kept a larger cash buffer in August, and in October they chose
@@ -746,10 +767,12 @@ rejected:
 | Plan v3 | ₱10,000 | ₱10,000 | ₱5,050 | 7 months | ₱9,358.80 |
 
 Runway is **2.3 months** (₱160,100 ÷ ₱70,000), and the 3-month target (₱210,000) is reached in
-**5 months** instead of 10 at the old ₱5,050 a month.
+**5 months**, against 12 in plan v2 at ₱5,050 a month. With the card paid off in month 7, its ₱12,550
+rolls to the car loan, which is paid off in 23 months (₱42,240.98 of interest), against 32 months
+(₱58,333.22) in plan v2.
 
 **The diff Kako explains (F-DIFF-1):** income +₱16,000 because one fact was *replaced* by the new job;
-surplus ₱9,050 → ₱25,050; card extra ₱4,000 → ₱10,000; emergency target in 5 months, not 10; a new
+surplus ₱9,050 → ₱25,050; card extra ₱4,000 → ₱10,000; emergency target in 5 months, not 12; a new
 ₱5,050 a month for the house. Decision "split the surplus" rested on Mara's old salary, so it is listed
 **to revisit**, and plan v3 explains why it still leans toward flexibility, citing the promoted preference
 and the October session where it was learned.
