@@ -95,7 +95,8 @@ KAKO_AZURE_CLIENT_SECRET=<client secret value>
 - **Cloud sessions:** all six in the cloud environment's settings, and the Foundry host
   (`kako-ai.services.ai.azure.com`) under Network access → Allowed domains (added Nov 17). A running session doesn't pick up
   changes, so start a new one after editing.
-- **Laptop:** the same six in `kako/.env`, which is gitignored. Or the first three only, signed in
+- **Laptop:** the same six in `kako/.env`, which is gitignored, with its own client secret
+  (`kako-laptop`, also expiring Feb 1, 2027), so either secret can be revoked alone. Or the first three only, signed in
   with `az login` instead of the app registration.
 - The `KAKO_` prefix keeps these apart from another project's `AZURE_*` variables in a shared
   environment. Kako never reads `AZURE_*` and never uses `DefaultAzureCredential`.
