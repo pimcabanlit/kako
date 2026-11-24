@@ -61,7 +61,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Outcome | Status | How | Phase |
 | --- | --- | --- | --- |
 | A synthetic household or small-business financial profile | In progress | The Villanueva household: two adults, one child, pesos, statements and reference documents ([data-model.md](data-model.md#demo-dataset)). Its seed and 18 approved changes load through the fact store (`kako demo load`), pass every validation rule, and give the worked example's figures; the session scripts come with the sessions | 2 |
-| A planning agent system connected to Meko | In progress | Orchestrator, four specialists and dreaming, through one Meko adapter. Built: the orchestrator and specialists, with the brief's one `context_search` and one extra search per specialist (Phase 3, tasks 2 and 3); dreaming's job, extraction and checks in code (Phase 4, task 3, first part); Meko's extracted memories as candidates come next | 3–4 |
+| A planning agent system connected to Meko | In progress | Orchestrator, four specialists and dreaming, through one Meko adapter. Built: the orchestrator and specialists, with the brief's one `context_search` and one extra search per specialist (Phase 3, tasks 2 and 3); dreaming's job, extraction and checks in code, and Meko's extracted memories as candidates, each linked to what a person approves or deleted (V-14) (Phase 4, task 3) | 3–4 |
 | 3 or more sessions showing memory carrying over and the plan adapting to a life event | In progress | Sessions in August, September and October, then the new job in session 4. Built: sessions 2 and 4, recorded and replayed by `kako demo run`; session 4 is the life event and the replan. Sessions 1 and 3 come with dreaming | 4–5 |
 | Trace-backed explanations for the key recommendations | Not started | The "why" view and the Meko trace for every recommendation | 3, 5 |
 | Encouraged: a what-if scenario planner | In progress | What-ifs in the engine (Must for the engine, screen is a Should); a kept scenario as an AMP branch (Should). The engine takes hypothetical values (`Override`) in place of facts and cites them (Phase 2, task 3) | 3, 5 |
@@ -126,7 +126,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | --- | --- |
 | AMP availability and connectivity on our account | Phase 1 spike; Neon as the fallback |
 | Context Gaps (self-learning tools) may not be available on Free | Phase 1 spike; a Must if available, otherwise documented as the production path |
-| Meko Cloud extracts memories before the household approves them | Phase 1 spike (can it be turned off?); dreaming treats extracted memories as candidates either way (V-14) |
+| Meko Cloud extracts memories before the household approves them | It can't be turned off (Phase 1 spike). Built: dreaming reads each session's extracted memories as candidates; each is linked to what a person approves or deleted, and `kako dream check` holds V-14 (Phase 4, task 3) |
 | Judges may not have an Azure account | Built: `kako demo run` (Phase 3, task 9) needs local Postgres and local Meko only, and replays sessions 2 and 4 and the agent test set from `data/recorded/`. Sessions 1 and 3 join it as each is recorded |
 | "Why four specialists, not one agent?" | Built: the single-agent baseline on the agent test set (Phase 3, task 8). Specialists 98.1%, single agent 93.9%, at 110 against 40 model calls and US$0.60 against US$0.42; a small margin from one run each, written up as it is in [architecture.md](architecture.md#agents) |
 | Full terms not published | Check before submission |

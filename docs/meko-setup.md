@@ -157,6 +157,13 @@ metadata is a candidate, never a fact. Dreaming reads them (by `run_id`, the con
 facts, and the household approves; approved facts are written with `memory_add` and `kako_source`.
 The engine never reads memories for figures; figures come from the fact store in Postgres.
 
+**Listing a conversation's memories (local Meko 1.20261116.0, Nov 24, 2026):** `memory_get_all`
+ignores `run_id` and lists the datapack's 20 newest. `memory_search` with `run_id` set to the
+conversation lists only that conversation's memories, each with its `agent_id` and `run_id`, dropping
+matches below 0.2: with the household's own words as the query, a memory about a new job scored 0.68
+and a loose one ("feels relieved") 0.33. Only the agent that wrote a memory can delete it. Dreaming
+reads candidates this way (`dreaming/job.py`, `session_noted`).
+
 ### 5. AMP on our account
 
 **Docs:** AMP is a Postgres database in a datapack. To reach it from outside Meko, its writer endpoint
