@@ -20,6 +20,8 @@ PURE_MODULES = (
     "dreaming/classify.py",
     "dreaming/candidates.py",
     "agents/present.py",
+    "upkeep/sentences.py",
+    "upkeep/plan.py",
 )
 ALLOWED = ("kako.agents.present",)
 

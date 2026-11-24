@@ -183,6 +183,14 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
 5. **Meko upkeep.** Add, rewrite in the past tense, delete on retraction, promote, and `meko_link`.
    Done when: after the four sessions, memory search for "Mara's salary" returns the current value and
    the old one in the past tense, and the validation suite's link check passes.
+   Built Nov 24 (all but promotion, which comes with task 4): Meko upkeep (`kako/upkeep/`) keeps one
+   memory in Kako's words for every fact, seed facts included, as `kako:upkeep`; a replaced fact's
+   memory is rewritten in the past tense (and a memory Meko extracted for it deleted), a retracted
+   one's deleted, each linked in `meko_link` with who wrote it and the text written (migration
+   0006). It runs after each approval, at the end of `kako demo run` and with `kako meko sync`, and
+   `kako meko check` is the link check (V-13). After `kako demo run`, a memory search for "Mara's
+   salary" finds "from Dec 1, 2026, … is ₱68,000.00" and "from Mar 1, 2026 until Nov 30, 2026, … was
+   ₱52,000.00", and the check passes (`tests/integration/test_demo_mode.py`).
 6. **Context Gaps** (a Must if the Phase 1 spike found the tools). Shortfalls become `context_gap` rows
    and questions for the household; an approved answer is followed by `selflearning_verify`.
    Done when: one weak search in the demo household goes from Mid or Low to `improved`, with both scores

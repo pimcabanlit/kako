@@ -213,14 +213,50 @@ def main(argv: list[str] | None = None) -> int:
         decide.add_argument("ids", nargs="+", type=uuid.UUID, help="the proposals' ids")
         decide.add_argument("--by", required=True, help="the adult who decides, by name")
         decide.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+        if action == "approve":
+            decide.add_argument(
+                "--no-meko",
+                action="store_true",
+                help="skip Meko upkeep afterwards (run `kako meko sync` later)",
+            )
+
+    meko = commands.add_parser(
+        "meko", help="what Kako keeps in Meko: one memory per fact, kept in step with Postgres"
+    )
+    meko_commands = meko.add_subparsers(dest="meko_command", required=True)
+    sync = meko_commands.add_parser(
+        "sync",
+        help="Meko upkeep: add a memory for each fact, rewrite a replaced one in the past tense, "
+        "delete a retracted one's",
+    )
+    sync.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+    sync.add_argument(
+        "--at", type=datetime.fromisoformat, help="the time of the links (default: now)"
+    )
+    meko_check = meko_commands.add_parser(
+        "check",
+        help="V-13: every link to a memory points to one Meko holds, and no upkeep is owed; "
+        "exit 1 if not",
+    )
+    meko_check.add_argument("--household", type=uuid.UUID, help="needed when there are several")
 
     args = parser.parse_args(argv)
     if args.command == "proposals":
         if args.proposal_command == "list":
             return asyncio.run(_proposals(args.status, args.household))
         return asyncio.run(
-            _decide(args.proposal_command, args.ids, by=args.by, household_id=args.household)
+            _decide(
+                args.proposal_command,
+                args.ids,
+                by=args.by,
+                household_id=args.household,
+                use_meko=not getattr(args, "no_meko", True),
+            )
         )
+    if args.command == "meko":
+        if args.meko_command == "sync":
+            return asyncio.run(_meko_sync(args.household, args.at))
+        return asyncio.run(_meko_check(args.household))
     if args.command == "api":
         return _api(args.host, args.port, reload=args.reload)
     if args.command == "migrate":
@@ -426,6 +462,7 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
     from kako.evals.questions import TestSetError, read_test_set
     from kako.evals.runner import run_test_set
     from kako.meko.client import MekoError
+    from kako.upkeep.sync import UpkeepError, keep_up_with
 
     settings = get_settings().model_copy(update={"model_mode": "replay", "replay_strict": strict})
     try:
@@ -504,6 +541,16 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
                 print(
                     _drift(f"Agent test set ({architecture})", data["model_calls"], backend.drifted)
                 )
+        # Last, so this run's turns replay against Meko as recorded: Kako's own memory of each
+        # fact, the replaced ones in the past tense.
+        kept = await keep_up_with(engine, settings, prepared.household_id, now=datetime.now(UTC))
+        print(
+            f"\nMeko upkeep: {kept.added} memories added, {kept.rewritten} rewritten, "
+            f"{kept.deleted} deleted"
+            + (f", {kept.waiting} left for `kako meko sync`." if kept.waiting else ".")
+        )
+        for problem in kept.problems:
+            print(f"- {problem}", file=sys.stderr)
     except (
         DemoModeError,
         DemoLoadError,
@@ -512,6 +559,7 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
         MekoError,
         BriefStoreError,
         OrchestratorError,
+        UpkeepError,
     ) as exc:
         print(f"Demo mode stopped: {exc}", file=sys.stderr)
         return 1
@@ -591,7 +639,12 @@ async def _proposals(status: str, household_id: uuid.UUID | None) -> int:
 
 
 async def _decide(
-    action: str, ids: Sequence[uuid.UUID], *, by: str, household_id: uuid.UUID | None
+    action: str,
+    ids: Sequence[uuid.UUID],
+    *,
+    by: str,
+    household_id: uuid.UUID | None,
+    use_meko: bool = False,
 ) -> int:
     from kako.api.proposals import people
     from kako.db.proposal_store import ProposalError, approve, list_proposals, reject
@@ -620,9 +673,104 @@ async def _decide(
             wrote = ", ".join(f"{w.table} {w.row_id}" for w in d.written)
             state = f"already {d.status}; nothing changed" if d.already else d.status
             print(f"{d.proposal_id} {d.kind}: {state}" + (f" ({wrote})" if wrote else ""))
+        if use_meko and any(not d.already for d in decided):
+            await _upkeep(chosen, datetime.now(UTC))
         return 0
 
     return await _connected(work)
+
+
+async def _upkeep(household_id: uuid.UUID, at: datetime) -> int:
+    """Meko upkeep for one household, reported in one line; 1 if anything went wrong."""
+    from kako.db.engine import make_engine
+    from kako.health import safe_error
+    from kako.meko.client import MekoError
+    from kako.upkeep.sync import UpkeepError, keep_up_with
+
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    engine = make_engine(settings.database_url)
+    try:
+        report = await keep_up_with(engine, settings, household_id, now=at)
+    except (MekoError, UpkeepError) as exc:
+        print(
+            f"Meko upkeep didn't run: {safe_error(exc)}. Run `kako meko sync` once Meko is "
+            "reachable.",
+            file=sys.stderr,
+        )
+        return 1
+    finally:
+        await engine.dispose()
+    if report.busy:
+        print("Meko upkeep: another run is keeping this household; nothing done here.")
+        return 0
+    print(
+        f"Meko upkeep: {report.added} added, {report.rewritten} rewritten, "
+        f"{report.deleted} deleted, {report.waiting} left for the next run."
+    )
+    for problem in report.problems:
+        print(f"- {problem}", file=sys.stderr)
+    return 1 if report.problems else 0
+
+
+async def _meko_sync(household_id: uuid.UUID | None, at: datetime | None) -> int:
+    if at is not None and at.tzinfo is None:
+        print("--at needs its time zone, such as +08:00.", file=sys.stderr)
+        return 1
+    chosen: list[uuid.UUID] = []
+
+    async def work(conn: AsyncConnection) -> int:
+        found = await _household(conn, household_id)
+        if found is None:
+            return 1
+        chosen.append(found)
+        return 0
+
+    return await _connected(work) or await _upkeep(chosen[0], at or datetime.now(UTC))
+
+
+async def _meko_check(household_id: uuid.UUID | None) -> int:
+    from kako.db.engine import make_engine
+    from kako.db.meko_log import DbCallLog
+    from kako.health import safe_error
+    from kako.meko.client import MekoError
+    from kako.meko.mcp import open_meko
+    from kako.upkeep.check import check_calls, check_links, memory_links
+
+    chosen: list[uuid.UUID] = []
+
+    async def work(conn: AsyncConnection) -> int:
+        found = await _household(conn, household_id)
+        if found is None:
+            return 1
+        chosen.append(found)
+        return 0
+
+    if await _connected(work):
+        return 1
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    engine = make_engine(settings.database_url)
+    try:
+        links = await memory_links(engine, chosen[0])
+        calls = check_calls(len(links))
+        async with open_meko(settings, DbCallLog(engine), max_calls=calls) as meko:
+            problems = await check_links(engine, meko, chosen[0])
+    except MekoError as exc:
+        print(f"Can't check: {safe_error(exc)}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+    if not problems:
+        print(f"V-13 passes: {len(links)} link(s) to memories Meko holds; no upkeep owed.")
+        return 0
+    for problem in problems:
+        print(f"V-13: {problem}")
+    return 1
 
 
 async def _validate(household_id: uuid.UUID | None) -> int:

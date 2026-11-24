@@ -44,7 +44,7 @@ from kako.dreaming.extract import said_turns
 from kako.dreaming.job import people, read_session, session_noted, session_turns
 from kako.health import safe_error
 from kako.meko.adapter import AGENT_ID, Meko
-from kako.meko.client import MekoCallLimitError, MekoError, MekoToolError
+from kako.meko.client import MekoCallLimitError, MekoError, MekoToolError, is_not_found
 from kako.meko.quota import MekoQuotaError
 
 DREAM_RUN = cast(Table, DreamRun.__table__)
@@ -132,8 +132,13 @@ async def _written(
 
 
 async def _link(
-    conn: AsyncConnection, rows: Sequence[tuple[str, uuid.UUID]], memory_id: str, at: datetime
+    conn: AsyncConnection,
+    rows: Sequence[tuple[str, uuid.UUID]],
+    memory_id: str,
+    agent_id: str | None,
+    at: datetime,
 ) -> None:
+    """Tie the memory, in Meko's own words (no `text`), to what was written, naming its writer."""
     for table, row_id in rows:
         await conn.execute(
             insert(MEKO_LINK)
@@ -143,6 +148,7 @@ async def _link(
                 meko_kind="memory",
                 meko_id=memory_id,
                 created_at=at,
+                agent_id=agent_id,
             )
             .on_conflict_do_nothing()
         )
@@ -189,7 +195,8 @@ async def _link_or_wait(
         if not written:
             entry.update(state="delete", reason="what the household approved writes no fact")
             return
-        await _link(conn, written, memory_id, at)
+        agent = entry.get("agent_id")
+        await _link(conn, written, memory_id, agent if isinstance(agent, str) else None, at)
         entry.update(state="linked", links=[[t, str(i)] for t, i in written])
 
 
@@ -211,8 +218,7 @@ async def _delete(meko: Meko, run: _Run, entry: dict[str, Any], report: SettleRe
         report.waiting += 1
         return False
     except MekoToolError as exc:
-        text = str(exc).lower()
-        if "not found" not in text and "not_found" not in text:
+        if not is_not_found(exc):
             entry["error"] = safe_error(exc)
             report.problems.append(f"memory {memory_id}: {entry['error']}")
             return True
@@ -265,6 +271,34 @@ async def settle_memories(
                 .values(counts={**run.counts, "memories": entries})
             )
     return report
+
+
+async def forgotten(
+    engine: AsyncEngine, household_id: uuid.UUID, memory_id: str, reason: str
+) -> None:
+    """A linked memory Meko extracted, deleted by Meko upkeep once the fact it was linked to was
+    replaced or retracted: its entry says so, and V-14 then checks it is gone."""
+    async with engine.begin() as conn:
+        rows = await conn.execute(
+            select(DREAM_RUN.c.id, DREAM_RUN.c.counts)
+            .join(SESSION, SESSION.c.id == DREAM_RUN.c.session_id)
+            .where(DREAM_RUN.c.status == "done", SESSION.c.household_id == household_id)
+            .with_for_update(of=DREAM_RUN)
+        )
+        for run_id, counts in list(rows):
+            counts = dict(counts or {})
+            entries = [dict(e) for e in counts.get("memories") or () if isinstance(e, dict)]
+            hit = False
+            for e in entries:
+                if str(e.get("memory_id")) == memory_id and e.get("state") == "linked":
+                    e.update(state="deleted", reason=reason)
+                    hit = True
+            if hit:
+                await conn.execute(
+                    update(DREAM_RUN)
+                    .where(DREAM_RUN.c.id == run_id)
+                    .values(counts={**counts, "memories": entries})
+                )
 
 
 async def check_extracted(
