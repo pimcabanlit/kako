@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncConnection
 
     from kako.engine.figures import Figure
+    from kako.gaps.store import VerifyReport
 
 MIGRATIONS = Path(__file__).parent / "db" / "migrations"
 LOOPBACK = frozenset({"127.0.0.1", "localhost"})  # the API's Host check allows these
@@ -246,6 +247,38 @@ def main(argv: list[str] | None = None) -> int:
     )
     meko_check.add_argument("--household", type=uuid.UUID, help="needed when there are several")
 
+    gaps = commands.add_parser(
+        "gaps",
+        help="Context Gaps: Meko's weak searches as questions for the household, and each "
+        "answer checked by replaying its search (self-learning: Meko Cloud only)",
+    )
+    gap_commands = gaps.add_subparsers(dest="gap_command", required=True)
+    gaps_sync = gap_commands.add_parser(
+        "sync", help="keep each new weak search in Meko's log (low or mid) as an open gap"
+    )
+    gaps_list = gap_commands.add_parser("list", help="the household's gaps and their questions")
+    gaps_list.add_argument(
+        "--status",
+        choices=("open", "asked", "answered", "verified", "dismissed", "all"),
+        default="all",
+    )
+    gaps_answer = gap_commands.add_parser(
+        "answer", help="tie a gap to the proposal that answers it (one that writes a fact)"
+    )
+    gaps_answer.add_argument("gap", type=uuid.UUID)
+    gaps_answer.add_argument("proposal", type=uuid.UUID)
+    gaps_dismiss = gap_commands.add_parser("dismiss", help="close a gap that isn't worth answering")
+    gaps_dismiss.add_argument("gap", type=uuid.UUID)
+    gaps_dismiss.add_argument("--by", required=True, help="the adult who decides, by name")
+    gaps_verify = gap_commands.add_parser(
+        "verify",
+        help="replay each answered search once its answer is approved and in Meko "
+        "(selflearning_verify), and keep the outcome and the score after",
+    )
+    gaps_verify.add_argument("--gap", type=uuid.UUID, help="replay this answered gap again")
+    for sub in (gaps_sync, gaps_list, gaps_answer, gaps_dismiss, gaps_verify):
+        sub.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+
     args = parser.parse_args(argv)
     if args.command == "proposals":
         if args.proposal_command == "list":
@@ -264,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.meko_command == "sync":
             return asyncio.run(_meko_sync(args.household, args.at))
         return asyncio.run(_meko_check(args.household))
+    if args.command == "gaps":
+        return asyncio.run(_gaps(args))
     if args.command == "api":
         return _api(args.host, args.port, reload=args.reload)
     if args.command == "migrate":
@@ -744,7 +779,34 @@ async def _upkeep(household_id: uuid.UUID, at: datetime) -> int:
     )
     for problem in report.problems:
         print(f"- {problem}", file=sys.stderr)
-    return 1 if report.problems else 0
+    return (1 if report.problems else 0) or await _verify_waiting(household_id)
+
+
+async def _verify_waiting(household_id: uuid.UUID) -> int:
+    """After upkeep: replay the answered Context Gaps' searches, if any wait (Meko Cloud only)."""
+    from kako.db.engine import make_engine
+    from kako.gaps.store import verify_with, waiting_replays
+    from kako.health import safe_error
+    from kako.meko.adapter import SelfLearningUnavailable
+    from kako.meko.client import MekoError
+
+    settings = get_settings()
+    if settings.database_url is None:
+        return 1
+    engine = make_engine(settings.database_url)
+    try:
+        async with engine.connect() as conn:
+            if not await waiting_replays(conn, household_id):
+                return 0
+        return _verified(await verify_with(engine, settings, household_id))
+    except SelfLearningUnavailable:
+        print("Context Gaps: this Meko can't replay searches (Meko Cloud can); none replayed.")
+        return 0
+    except MekoError as exc:
+        print(f"Context Gaps weren't replayed: {safe_error(exc)}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
 
 
 async def _meko_sync(household_id: uuid.UUID | None, at: datetime | None) -> int:
@@ -803,6 +865,98 @@ async def _meko_check(household_id: uuid.UUID | None) -> int:
     for problem in problems:
         print(f"V-13: {problem}")
     return 1
+
+
+async def _gaps(args: argparse.Namespace) -> int:
+    """`kako gaps`: sync, list, answer, dismiss, verify."""
+    from kako.api.proposals import people
+    from kako.db.engine import make_engine
+    from kako.gaps.store import (
+        GapError,
+        answer_gap,
+        collect_with,
+        dismiss_gap,
+        list_gaps,
+        verify_with,
+    )
+    from kako.health import safe_error
+    from kako.meko.adapter import SelfLearningUnavailable
+    from kako.meko.client import MekoError
+
+    chosen: list[uuid.UUID] = []
+
+    async def work(conn: AsyncConnection) -> int:
+        found = await _household(conn, args.household)
+        if found is None:
+            return 1
+        chosen.append(found)
+        if args.gap_command == "list":
+            status = None if args.status == "all" else args.status
+            listed = await list_gaps(conn, found, status=status)
+            for g in listed:
+                after = f", after {g.score_after}" if g.score_after is not None else ""
+                outcome = f" ({g.verify_outcome}{after})" if g.verify_outcome else ""
+                print(f"{g.id} [{g.status}{outcome}] {g.band_before} {g.score_before} {g.reason}")
+                print(f"  {g.question or g.query}")
+                if g.proposal_id is not None:
+                    print(f"  Answered by proposal {g.proposal_id}")
+            print(f"{len(listed)} gap(s)." if listed else "No gaps.")
+            return 0
+        try:
+            if args.gap_command == "answer":
+                gap = await answer_gap(conn, found, args.gap, args.proposal)
+                await conn.commit()
+                print(
+                    f"{gap.id} answered by proposal {args.proposal}; its search is replayed once "
+                    "the proposal is approved and Meko upkeep has written it."
+                )
+                return 0
+            if args.gap_command == "dismiss":
+                person = (await people(conn, found)).get(args.by.strip().lower())
+                if person is None:
+                    print(f"No one called {args.by} in the household.", file=sys.stderr)
+                    return 1
+                gap = await dismiss_gap(conn, found, args.gap, person)
+                await conn.commit()
+                print(f"{gap.id} dismissed.")
+                return 0
+        except GapError as exc:
+            await conn.rollback()
+            print(f"Nothing changed: {exc}", file=sys.stderr)
+            return 1
+        return 0
+
+    if await _connected(work):
+        return 1
+    if args.gap_command not in ("sync", "verify"):
+        return 0
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    engine = make_engine(settings.database_url)
+    try:
+        if args.gap_command == "sync":
+            made = await collect_with(engine, settings, chosen[0])
+            print(f"{len(made)} new gap(s) from Meko's search log.")
+            return 0
+        return _verified(await verify_with(engine, settings, chosen[0], gap_id=args.gap))
+    except SelfLearningUnavailable as exc:
+        print(f"Can't: {exc}.", file=sys.stderr)
+        return 1
+    except (MekoError, GapError) as exc:
+        print(f"Can't: {safe_error(exc)}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+
+
+def _verified(report: VerifyReport) -> int:
+    print(
+        f"Context Gaps: {report.replayed} search(es) replayed, {len(report.verified)} verified "
+        f"(improved), {report.waiting} waiting."
+    )
+    return 0
 
 
 async def _validate(household_id: uuid.UUID | None) -> int:

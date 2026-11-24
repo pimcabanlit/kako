@@ -13,14 +13,18 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, Literal
 
 from kako.meko.adapter import (
+    Band,
     Context,
     Document,
     KnowledgeHit,
+    LoggedSearch,
     Memory,
     Promoted,
+    Replay,
+    SelfLearningUnavailable,
     Turn,
     check_agent_id,
     check_document,
@@ -51,6 +55,13 @@ class _Document:
     document_id: str
 
 
+def band_of(score: float | None) -> Band:
+    """Meko's bands: high from 0.75, mid from 0.50, low below or with nothing found."""
+    if score is None or score < 0.5:
+        return "low"
+    return "high" if score >= 0.75 else "mid"
+
+
 def _words(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", text.lower()))
 
@@ -71,6 +82,8 @@ class FakeMeko:
         self.memories: dict[str, _Memory] = {}
         self.documents: dict[str, _Document] = {}  # by upload key
         self.promoted: dict[str, _Memory] = {}  # collective memory: out of `memories` for good
+        self.self_learning = True  # False: like local Meko, no self-learning tools
+        self.search_log: dict[str, LoggedSearch] = {}  # each context_search, oldest first
         self.calls: list[str] = []
 
     @asynccontextmanager
@@ -227,7 +240,49 @@ class FakeMeko:
             found = tuple(sorted((m for m in memories if m.score), key=lambda m: -(m.score or 0)))
             context = Context(found[:limit], self._knowledge(query, limit))
             result.result_count = len(context.memories) + len(context.knowledge)
+            best = self._best(query)
+            band = band_of(best)
+            reason = (
+                None if band == "high" else ("weak_match" if band == "low" else "partial_match")
+            )
+            log_id = str(uuid.uuid4())
+            self.search_log[log_id] = LoggedSearch(
+                log_id, query, band, best, reason, None if band == "high" else "coverage"
+            )
             return context
+
+    def _best(self, query: str) -> float | None:
+        scores = [_score(query, m.text) for m in self.memories.values()]
+        scores += [h.score or 0.0 for h in self._knowledge(query, 50)]
+        best = max((x for x in scores if x), default=None)
+        return round(best, 3) if best is not None else None
+
+    async def logged_searches(
+        self, conversation_id: str, *, agent_id: str, band: Literal["low", "mid"]
+    ) -> tuple[LoggedSearch, ...]:
+        async with self._call("selflearning_query_log", agent_id, conversation_id):
+            if not self.self_learning:
+                raise SelfLearningUnavailable("this Meko doesn't serve the self-learning tools")
+            newest = [e for e in reversed(self.search_log.values()) if e.band == band]
+            return tuple(newest[:10])
+
+    async def replay_search(self, conversation_id: str, log_id: str, *, agent_id: str) -> Replay:
+        async with self._call("selflearning_verify", agent_id, conversation_id):
+            if not self.self_learning:
+                raise SelfLearningUnavailable("this Meko doesn't serve the self-learning tools")
+            logged = self.search_log.get(log_id)
+            if logged is None:
+                raise MekoToolError(f"selflearning_verify failed: {log_id} not found")
+            after = self._best(logged.query)
+            before = logged.score or 0.0
+            outcome: Literal["improved", "no_change", "worse"] = (
+                "improved"
+                if (after or 0.0) > before
+                else "worse"
+                if (after or 0.0) < before
+                else "no_change"
+            )
+            return Replay(outcome, logged.band, band_of(after), logged.score, after, False, False)
 
     async def search_knowledge(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5
