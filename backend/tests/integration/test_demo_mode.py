@@ -105,7 +105,8 @@ async def test_a_request_that_differs_is_reported_or_refused(
     settings = get_settings()
 
     replayed = await replay_session(migrated, settings, session, household_id)
-    assert replayed.drifted == ("s2:t1/orchestrator/1",)
+    # The planted call at least: on a machine whose Meko ranks the excerpts differently, more.
+    assert "s2:t1/orchestrator/1" in replayed.drifted
     assert replayed.calls == 6
     assert [a.answer.options[0].label for a in replayed.asked] == ["A: all extra on the card"]
     with pytest.raises(RecordingError, match="'s2:t1/orchestrator/1' has changed"):
