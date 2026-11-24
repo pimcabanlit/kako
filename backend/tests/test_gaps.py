@@ -30,7 +30,8 @@ def test_only_a_shortfall_of_coverage_is_asked() -> None:
     assert worth_asking(search(reason="nothing_matched", category="coverage"))
     assert not worth_asking(search("high"))
     assert not worth_asking(search(query="   "))
-    for reason in ("vague_prompt", "source_failed", "out_of_date_source", "source_not_searched"):
+    assert worth_asking(search(reason="below_floor"))
+    for reason in ("vague_prompt", "stale_source", "source_not_searched", "source_error"):
         assert not worth_asking(search(reason=reason)), reason
     assert not worth_asking(search(reason="weak_match", category="prompt"))  # category decides
 
@@ -137,13 +138,87 @@ async def test_mcp_reads_the_search_log_nested_or_flat() -> None:
         assert flat == Replay("no_change", "mid", "mid", 0.6, 0.6, True, True)
     assert server.tools[:2] == [
         ("selflearning_query_log", {
-            "conversation_id": "c1", "band": "low", "agent_id": AGENT, "datapack_id": "dp-1",
+            "conversation_id": "c1", "band": "low", "datapack_id": "dp-1",
         }),
         ("selflearning_verify", {
-            "conversation_id": "c1", "log_id": "q-1", "agent_id": AGENT, "datapack_id": "dp-1",
+            "conversation_id": "c1", "log_id": "q-1", "datapack_id": "dp-1",
         }),
     ]  # fmt: skip
     assert [c.tool for c in log.calls] == ["selflearning_query_log"] + ["selflearning_verify"] * 2
+
+
+async def test_mcp_reads_meko_clouds_own_answers() -> None:
+    """The answers Meko Cloud gave on Nov 24 (docs/meko-setup.md), trimmed: the log under `rows`,
+    a replay's sides as objects. Neither tool takes an `agent_id`: Meko Cloud refuses one."""
+    log = MemoryCallLog()
+    server = Server(
+        {
+            "selflearning_query_log": {
+                "datapack_id": "dp-1",
+                "band": "low",
+                "last": "7d",
+                "page": 1,
+                "page_size": 10,
+                "total": 1,
+                "has_more": False,
+                "rows": [
+                    {
+                        "id": "6b25c3a5-eed6-4263-813c-bd9c85a6cc35",
+                        "searched_at": "2026-11-24T13:10:22.900266Z",
+                        "query": "Who looks after Lia after school?",
+                        "band": "low",
+                        "best_score": 0.2971,
+                        "best_source": "memory",
+                        "result_count": 5,
+                        "reason": "weak_match",
+                        "category": "coverage",
+                        "sub_type": "memory",
+                        "todos": ["add_context"],
+                        "agent_id": "kako:orchestrator",
+                        "note": "The closest match is weak.",
+                    }
+                ],
+            },
+            "selflearning_verify": {
+                "datapack_id": "dp-1",
+                "test_prompt_id": "876dbab4-7dd9-4b19-bc4e-bf7fb49d0ba1",
+                "query": "Who looks after Lia after school?",
+                "before": {
+                    "run_no": None,
+                    "band": "low",
+                    "best_score": 0.2971,
+                    "source": "baseline",
+                },
+                "after": {"run_no": 1, "band": "low", "best_score": 0.2971},
+                "outcome": "no_change",
+                "change": None,
+                "nothing_added_since_last_run": False,
+                "indexing": False,
+                "added_since_last_run": [],
+                "hits_above_mid": 0,
+                "top_results": [],
+                "hint": "The band did not change.",
+            },
+        }
+    )
+    async for meko in _meko(server, log, datapack_id="dp-1"):
+        (found,) = await meko.logged_searches("c1", agent_id=AGENT, band="low")
+        assert found == LoggedSearch(
+            "6b25c3a5-eed6-4263-813c-bd9c85a6cc35",
+            "Who looks after Lia after school?",
+            "low",
+            0.2971,
+            "weak_match",
+            "coverage",
+        )
+        assert worth_asking(found)
+        replay = await meko.replay_search("c1", found.log_id, agent_id=AGENT)
+        assert replay == Replay("no_change", "low", "low", 0.2971, 0.2971, False, False)
+    assert all("agent_id" not in arguments for _, arguments in server.tools)
+    assert [(c.tool, c.agent_id) for c in log.calls] == [
+        ("selflearning_query_log", AGENT),
+        ("selflearning_verify", AGENT),
+    ]
 
 
 @pytest.mark.parametrize(

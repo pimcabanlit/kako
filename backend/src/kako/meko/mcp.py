@@ -232,9 +232,10 @@ class McpMeko:
         return Promoted(memories, total if isinstance(total, int) else len(memories))
 
     async def _self_learning(self, tool: str, agent_id: str, arguments: dict[str, Any]) -> Any:
-        """A self-learning tool: a deployment that doesn't serve it says it has no such tool."""
+        """A self-learning tool: a deployment that doesn't serve it says it has no such tool. These
+        tools take no `agent_id` (Meko Cloud refuses one); the call is counted as the caller's."""
         try:
-            return await self._call(tool, agent_id, arguments)
+            return await self._call(tool, agent_id, arguments, agent=False)
         except MekoToolError:
             raise
         except MekoError as exc:
@@ -458,10 +459,11 @@ def _promoted(item: Any) -> Memory:
     )
 
 
-# Meko's self-learning answers, read leniently: the tool reference names the fields' meaning, not
-# every key, so each is looked for under the names Meko uses elsewhere. A field Kako needs that
-# isn't there is a protocol error, never a guess.
-LIST_KEYS = ("results", "searches", "items", "entries", "logs", "queries")
+# Meko's self-learning answers. Meko Cloud (verified Nov 24, docs/meko-setup.md) lists the log under
+# `rows`, each with `id`, `query`, `band`, `best_score`, `reason` and `category`, and a replay's
+# `before` and `after` as objects with `band` and `best_score`. Other names Meko uses elsewhere are
+# still read, leniently; a field Kako needs that isn't there is a protocol error, never a guess.
+LIST_KEYS = ("rows", "results", "searches", "items", "entries", "logs", "queries")
 
 
 def _first(item: dict[str, Any], *keys: str) -> Any:

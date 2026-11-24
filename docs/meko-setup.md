@@ -133,12 +133,30 @@ Meko 1.20261116.0 does not list them.
 So the "Context Gaps" story works on Free: a weak search, the missing fact added (after the household
 approves it), and a replay that proves the fix. Each replay counts as one search.
 
-Kako reads both tools in `backend/src/kako/meko/mcp.py` (Phase 4, task 6). The tool reference names
-what each field means but not every key, so the answer is read leniently (the list under `results` or
-a similar key; `log_id` or `id`, `band` or `match_quality`, `best_score` or `score`; before and after
-nested or flat), and a field Kako needs that isn't there is an error, never a guess. Local Meko answers
-"unknown tool", which the adapter turns into `SelfLearningUnavailable`: `kako gaps` says so and changes
-nothing.
+Kako reads both tools in `backend/src/kako/meko/mcp.py` (Phase 4, task 6). Neither takes an
+`agent_id` (Meko Cloud refuses the call with a validation error), so the adapter leaves it out and
+counts the call as the caller's. `selflearning_query_log` lists its searches under `rows`, each with
+`id`, `query`, `band`, `best_score`, `reason`, `category`, `sub_type` and `todos`; `selflearning_verify`
+answers with `outcome`, `before` and `after` (each `band` and `best_score`), `indexing` and
+`nothing_added_since_last_run`. Other names Meko uses elsewhere are still read, leniently, and a field
+Kako needs that isn't there is an error, never a guess. Local Meko answers "unknown tool", which the
+adapter turns into `SelfLearningUnavailable`: `kako gaps` says so and changes nothing.
+
+**Kako's Context Gaps on Meko Cloud (verified Nov 24, Meko MCP on `mcp.mekodata.ai`).** In a throwaway
+datapack, with the demo household loaded through Nov 21 into a fresh Postgres and
+`KAKO_MEKO_CLOUD_CEILING=60`:
+
+1. `kako meko sync`: 35 memories added.
+2. One `context_search` "Who looks after Lia after school?": best score 0.297.
+3. `kako gaps sync`: one gap, band `low`, score 0.297, reason `weak_match`, category `coverage`.
+4. A `constraint.note` fact ("Lola Remy looks after Lia after school.") proposed, tied with
+   `kako gaps answer`, and approved with `kako proposals approve --by Mara`. Upkeep added its memory,
+   and the replay that follows it reported `improved`, 0.297 to 0.578, with `indexing: false`. The
+   gap is `verified`.
+
+The datapack and its conversations were deleted afterwards. The run used 1 of the account's
+lifetime datapacks, 10 conversations (all deleted), 36 `memory_add`, 1 `context_search` and 2
+`selflearning_verify` (one, before the answer, only to read the answer's shape).
 
 ### 4. Meko Cloud's own extraction
 

@@ -26,10 +26,10 @@ class LoggedSearch(Protocol):
     def category(self) -> str | None: ...
 
 
-# Meko's reasons for a search that fell short for want of content (its Self-learning tab, Analyze).
-COVERAGE: Final = frozenset(
-    {"weak_match", "partial_match", "nothing_matched", "below_quality_floor"}
-)
+# Meko's reasons for a search that fell short for want of content (`selflearning_query_log`,
+# category `coverage`). Its others: `vague_prompt`, `stale_source`, `source_not_searched` and
+# `source_error`.
+COVERAGE: Final = frozenset({"weak_match", "partial_match", "nothing_matched", "below_floor"})
 MAX_QUERY: Final = 500  # characters of a search kept in a question
 
 
