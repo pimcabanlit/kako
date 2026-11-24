@@ -310,3 +310,9 @@ it led to.
   the order of their database ids, which differ between databases, so a request's digest differed.
   Tool output now follows the debts' payoff order (`in_order` in `agents/tools.py`), a test swaps the
   ids to prove it, and the recordings replay on a fresh database (`kako demo run`).
+- **And on CI:** CI's local Meko ranks the brief's search excerpts differently from the machine these
+  were recorded on (their scores are near-equal, about 0.0001), so every session-2 request there
+  differs from its recording, as do 18 of the specialists' 110 test-set requests and 6 of the single
+  agent's 40. A judge's machine can do the same, so `kako demo run` replays each reply by its call
+  key and reports the requests that differed (`--strict` refuses them). On CI both test-set scores
+  still come out exactly as saved.
