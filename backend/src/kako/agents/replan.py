@@ -69,19 +69,29 @@ class Replan:
     revisit: tuple[Revisit, ...]
 
     @property
+    def moved(self) -> tuple[FigureChange, ...]:
+        """The figures whose value moved: a figure that has none before or after (a goal whose
+        facts don't exist yet) hasn't moved."""
+        return tuple(c for c in self.diff.figures if _value(c.old) != _value(c.new))
+
+    @property
     def areas(self) -> tuple[str, ...]:
         """The specialists whose figures moved, in a fixed order."""
         found = set()
-        for change in self.diff.figures:
+        for change in self.moved:
             head = change.ref.key.partition(".")[0]
             found.add(AREAS.get(head, AREAS_GOAL if head == "goal" else "budget"))
         return tuple(a for a in ("budget", "debt", "savings", "goals") if a in found)
 
 
-def _headline(diff: Diff) -> list[FigureChange]:
+def _value(figure: Figure | None) -> object:
+    return None if figure is None else figure.value
+
+
+def _headline(replan: Replan) -> list[FigureChange]:
     rank = {key: n for n, key in enumerate(HEADLINE)}
     return sorted(
-        (c for c in diff.figures if c.ref.key in rank),
+        (c for c in replan.moved if c.ref.key in rank),
         key=lambda c: (rank[c.ref.key], str(c.ref.entity_id)),
     )
 
@@ -133,10 +143,10 @@ def _named(fact: FactRow, names: dict[uuid.UUID, str]) -> str:
 def brief_lines(replan: Replan, refs: Refs, decisions: dict[uuid.UUID, str]) -> list[str]:
     """The replan as the agents read it in the brief: refs they can cite, old and new values."""
     lines = [f"Compared with {replan.since}. Figures before → now:"]
-    for change in _headline(replan.diff):
+    for change in _headline(replan):
         figure = _figure_of(change)
         lines.append(f"- {refs.figure(figure)}: {_was(change)} → {_now(change)}")
-    others = len(replan.diff.figures) - len(_headline(replan.diff))
+    others = len(replan.moved) - len(_headline(replan))
     if others:
         lines.append(f"- and {others} more figures (read them with get_figures)")
     lines.append("Facts behind the changes:")
@@ -158,7 +168,7 @@ def changes_lines(replan: Replan, entities: tuple[EntityRow, ...]) -> list[str]:
     """What changed, as the household reads it: figures by their meaning, facts by name."""
     names = {e.id: e.name for e in entities}
     lines = [f"What changed since {replan.since}:"]
-    for change in _headline(replan.diff):
+    for change in _headline(replan):
         meaning = GLOSSARY.get(change.ref.key, change.ref.key)
         about = f" ({names[change.ref.entity_id]})" if change.ref.entity_id in names else ""
         lines.append(f"- {meaning[0].upper()}{meaning[1:]}{about}: {_was(change)} → {_now(change)}")

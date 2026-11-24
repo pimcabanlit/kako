@@ -98,7 +98,7 @@ async def _last_decision(
     row = (await conn.execute(query)).first()
     if row is None:
         return None
-    named = f"the decision of {day(row.valid_from)} ({row.title}): {row.label}"
+    named = f"the decision of {day(row.valid_from)} in {row.title} ({row.label})"
     return row.id, row.valid_from, row.decided_at, named
 
 

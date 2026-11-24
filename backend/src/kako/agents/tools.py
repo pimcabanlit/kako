@@ -21,7 +21,7 @@ import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from kako.agents.answers import Allocation, Citation
 from kako.agents.brief import FREE_TEXT, Brief, BriefInputs, data, decision_lines
@@ -36,6 +36,9 @@ from kako.facts.model import EntityRow, FactRow
 from kako.facts.snapshot import Snapshot
 from kako.meko.adapter import Meko
 from kako.planning.reconcile import fits
+
+if TYPE_CHECKING:  # proposing builds on these tools
+    from kako.agents.proposing import HeldChange
 
 ALLOCATABLE: Final = ("debt", "account", "goal")  # plan.allocation's entity kinds
 MAX_ALLOCATIONS: Final = 8
@@ -118,7 +121,7 @@ class TurnState:
     stored: dict[str, uuid.UUID] = field(default_factory=dict)
     # Changes the household stated, checked and held by `propose_change` (`agents.proposing`), kept
     # as pending proposals with the turn.
-    proposed: list[Any] = field(default_factory=list)
+    proposed: list[HeldChange] = field(default_factory=list)  # propose_change, pending
     said_on: date | None = None  # the household's date when it spoke (the session's date)
 
     @property

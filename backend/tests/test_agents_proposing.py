@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from kako.agents.brief import BriefInputs, LifeEventView, render_brief
+from kako.agents.numbers import check_texts
 from kako.agents.proposing import HeldChange, parse_stated, proposal_tool
 from kako.agents.tool_loop import ToolInputError
 from kako.agents.tools import TurnState
@@ -171,3 +172,17 @@ def test_the_tool_schema_is_strict(house: Villanueva) -> None:
 )
 def test_values_as_the_household_writes_them(attribute_key: str, text: str, value: object) -> None:
     assert parse_stated(attribute_key, text) == value
+
+
+async def test_what_a_turn_proposed_may_be_named_in_its_reply(house: Villanueva) -> None:
+    """The reply can tell the household what waits for its yes: the proposed day and amount are
+    numbers the number check knows, as the household's own (checked) words."""
+    state = _state(house, message="My take-home pay will be ₱68,000 a month from Jan 15.")
+    reply = "I've proposed ₱68,000 a month from Jan 15, 2027."
+    (before,) = check_texts(state, [("reply", "the reply", reply)])
+    assert [n.text for n in before.unmatched] == ["Jan 15, 2027"]
+    salary = {**SALARY, "valid_from": "2027-01-15"}
+    await _propose(state, quote=state.message, facts=[salary])
+    (after,) = check_texts(state, [("reply", "the reply", reply)])
+    assert after.unmatched == ()
+    assert {n.match for n in after.numbers} == {"proposed:C1"}

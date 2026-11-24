@@ -320,7 +320,11 @@ async def _keep_proposals(
                         idempotency_key=idempotency_key(
                             f"{session.session_id}:{seed}", held.kind, held.target
                         ),
-                        evidence=[Evidence("turn", seed, change.quote, speaker)],
+                        evidence=[
+                            Evidence(
+                                "turn", f"{session.conversation_id}:{seed}", change.quote, speaker
+                            )
+                        ],
                         today=session.on,
                         created_at=datetime.now(UTC),
                     )
@@ -365,7 +369,7 @@ def trace_turn(
         steps.insert(
             1,
             f"Replanned as of {state.snapshot.on.isoformat()} against {replan.since}: "
-            f"{len(replan.diff.figures)} figures moved, {len(replan.revisit)} decisions to revisit",
+            f"{len(replan.moved)} figures moved, {len(replan.revisit)} decisions to revisit",
         )
     if proposed:
         steps.append(f"Proposed {len(proposed)} change(s) for the household's yes")

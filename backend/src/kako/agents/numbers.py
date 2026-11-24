@@ -38,7 +38,9 @@ from typing import Final
 from kako.agents.checks import Number, Subject, TextCheck
 from kako.agents.tools import MESSAGE_CHARS, TurnState, said_amounts
 from kako.engine.figures import Figure
-from kako.facts.model import FactRow
+from kako.facts.attributes import attribute
+from kako.facts.model import FactRow, FactValue
+from kako.facts.proposals import parse_fact, parse_life_event
 from kako.facts.reading import MAX_DIGITS, MAX_PLACES, Kind, Token, scan
 
 SHOWN_UNMATCHED: Final = 12  # the most unmatched numbers named back to the model
@@ -103,6 +105,35 @@ def _add_fact(pool: Pool, fact: FactRow, name: str) -> None:
     pool.dates.setdefault(fact.valid_from, name)  # "from Dec 1, 2026": when it took effect
 
 
+def _held(state: TurnState) -> list[tuple[str, str | None, FactValue | None, date]]:
+    """The changes this turn proposed (pending), each named by its change: a life event's day, and
+    each fact's attribute, value and the day it takes effect."""
+    found: list[tuple[str, str | None, FactValue | None, date]] = []
+    for change in state.proposed:
+        name = f"proposed:{change.ref}"
+        for held in change.proposals:
+            if held.kind == "life_event":
+                found.append((name, None, None, parse_life_event(held.payload).occurs_on))
+            else:
+                fact = parse_fact(held.kind, held.payload)
+                found.append((name, fact.attribute, fact.value, fact.valid_from))
+    return found
+
+
+def _add_held(pool: Pool, name: str, key: str | None, value: FactValue | None, on: date) -> None:
+    pool.refs.add(name)
+    pool.dates.setdefault(on, name)
+    kind = attribute(key).value_type if key is not None else None
+    if kind == "money" and isinstance(value, int):
+        pool.money.setdefault(Decimal(value) / 100, name)
+    elif kind == "rate" and isinstance(value, Decimal):
+        pool.percent.setdefault(value * 100, name)
+    elif kind == "int" and isinstance(value, int):
+        pool.counts.setdefault(Decimal(value), name)
+    elif kind == "date" and isinstance(value, date):
+        pool.dates.setdefault(value, name)
+
+
 def pool_of(state: TurnState) -> Pool:
     """Everything a number in this turn may match: the turn's run first, then each what-if in the
     order it ran, the snapshot's facts, the what-ifs' allocations, the household's own words."""
@@ -126,6 +157,8 @@ def pool_of(state: TurnState) -> Pool:
     for ref, what_if in state.what_ifs.items():
         for a in what_if.allocations:
             pool.money.setdefault(Decimal(a.centavos) / 100, f"allocation:{ref}:{a.entity_ref}")
+    for name, key, value, on in _held(state):  # what this turn proposed, from their words
+        _add_held(pool, name, key, value, on)
     said = said_amounts(state.message[:MESSAGE_CHARS])
     for token in scan(state.message[:MESSAGE_CHARS]):
         for day in token.dates:
