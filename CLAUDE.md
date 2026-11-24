@@ -238,7 +238,18 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   Meko call Kako makes; `mcp.py`, that interface over MCP (`open_meko`); `fake.py`, the same in memory
   for unit tests; `quota.py`, the call counter and quota guard every call goes through;
   `health.py`, the handshake probe). `db/meko_log.py` counts the calls in `meko_call`, and
-  `demo/kb.py` uploads the demo's documents to the knowledge base.
+  `demo/kb.py` uploads the demo's documents to the knowledge base. `agents/` the agents' plumbing:
+  `chat.py` (a model call's request and reply as plain values, the request digest, the token
+  estimate), `model_manager.py` (the only module that imports a model SDK: `check_models`, the
+  live Foundry backend `FoundryChat`, and `ModelManager.chat`, which picks the tier's deployment,
+  refuses a call past the turn's token budget or the daily spend cap, retries at most
+  `KAKO_MODEL_MAX_RETRIES` times and logs every attempt with its cost), `recorded.py` (recorded
+  responses: `RecordingBackend` saves replies by call key, `ReplayBackend` answers from the file
+  with no network; `KAKO_MODEL_MODE`), `spend.py` (cost from the per-token prices, the `llm_call`
+  log protocol), `turn.py` (a turn's token budget and step numbers, the `agent_step` log protocol)
+  and `tool_loop.py` (`run_agent`: one agent's bounded loop, at most 4 counted tool calls and
+  then only its final tool, every tool call an `agent_step`). `db/llm_log.py` and
+  `db/agent_steps.py` write those two tables, each row committed on its own.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
   `tests/support/data_model.py` reads the tables out of `docs/data-model.md`: `test_schema_doc.py`
@@ -257,6 +268,11 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   database guard behind them.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and
   cleans up (at most 6 tool calls).
+  `test_model_calls.py` (budgets, the cap, retries, cost and the log), `test_tool_loop.py` (the
+  loop's bounds and steps), `test_recorded.py` (a two-agent turn recorded, then replayed with every
+  socket refused) and `test_model_sdk_imports.py` (Ruff refuses a model SDK anywhere but the model
+  manager) use the scripted model in `tests/support/models.py`, never Foundry;
+  `tests/integration/test_agent_logs.py` writes and reads `llm_call` and `agent_step`.
   `test_meko_quota.py` and `test_meko_adapter.py` test the counter, the guard, `McpMeko` against a
   scripted server, `FakeMeko` and the demo upload; `tests/integration/test_meko_adapter.py` runs the
   adapter on local Meko with every call counted in Postgres (documents go to a throwaway datapack),

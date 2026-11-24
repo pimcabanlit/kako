@@ -208,7 +208,7 @@ current, what it replaced and which plans and decisions depended on it.
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules, diff, what-ifs |
 | Decisions | `backend/src/kako/decisions/` | Decision records, options, assumptions, "to revisit" |
-| Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), orchestrator, the four specialists, brief builder, tools, number check, the step log, prompts |
+| Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), the tool loop with its bounds and the step log, recorded responses, orchestrator, the four specialists, brief builder, tools, number check, prompts |
 | Dreaming | `backend/src/kako/dreaming/` | The job, extraction, classification, patterns, proposals |
 | Meko adapter | `backend/src/kako/meko/` | One interface for every Meko call, an MCP client implementation, an in-memory fake for unit tests, the call counter and quota guard |
 | Database | `backend/src/kako/db/` | SQLAlchemy 2 async models, repositories, Alembic migrations |
@@ -259,6 +259,14 @@ calling Foundry, so no Azure account is needed. It replays the scripted sessions
 questions needs live mode with a Foundry deployment. The README says both plainly and gives setup steps
 for each.
 
+**Recorded responses** (`agents/recorded.py`). A recording is a JSON file of model replies, each under
+the key of the call it answered: `<turn seed>/<agent path>/<n>`, such as `session-2:turn-1/debt#1/2`.
+Keys, not request hashes, so a turn replays in the same order on any machine, whatever ids its local
+database and local Meko gave things; each call also keeps its request's SHA-256, and a strict replay
+(the default) refuses a reply whose prompt has changed since it was recorded. `KAKO_MODEL_MODE` picks
+`live`, `record` (live, saving each reply; it costs money, so it needs Pim's yes first) or `replay`
+(no network, no Azure settings). Tests use a scripted model instead and never call Foundry.
+
 **AMP constraints** (from Meko's AMP reference): a database is reached from outside Meko only through
 an `ingress_external` endpoint with an allow-list of `/32` source addresses chosen at create time, so the
 laptop's public IP goes on the allow-list (and is checked again before recording); creating a branch or compute can block for up to 5 minutes; only the
@@ -277,7 +285,7 @@ not queried. A kept scenario branch is a record, not a second database.
 | A person decides | Every fact, event, decision, preference and promotion starts as a proposal; promotion asks twice because it can't be undone |
 | Traceable advice | Every recommendation has a figure source and a non-figure source (V-11), and its Meko turn |
 | Prompt injection | Session text, memories and documents are passed as data; agents have read tools and `propose_*` tools only; nothing an agent says can write without approval |
-| Spend and quota | Token budget per turn and a daily cap; an Azure budget with email alerts on Kako's own resource group; a Meko call counter with a ceiling per environment, so rehearsals can't use up the Free tier's lifetime allowances |
+| Spend and quota | Token budget per turn (`KAKO_TURN_TOKEN_BUDGET`) and a daily cap (`KAKO_DAILY_SPEND_CAP_USD`), both checked in the model manager before each call, with at most `KAKO_MODEL_MAX_RETRIES` retries and every attempt in `llm_call`; an Azure budget with email alerts on Kako's own resource group; a Meko call counter with a ceiling per environment, so rehearsals can't use up the Free tier's lifetime allowances |
 | Meko's own extraction | Meko Cloud extracts memories from the household's words before anyone approves them. Dreaming treats them as candidates; each ends linked to an approved fact or deleted. A Phase 1 test checks whether extraction can be turned off on a Cloud datapack (local Meko allows it) |
 | Not financial advice | Synthetic household only; the app and README say so; no product picks, no tax calculations |
 | Secrets | Environment variables only; `.env` is gitignored and `.env.example` lists the names |

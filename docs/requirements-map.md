@@ -127,6 +127,6 @@ Phases refer to [build-plan.md](build-plan.md).
 | AMP availability and connectivity on our account | Phase 1 spike; Neon as the fallback |
 | Context Gaps (self-learning tools) may not be available on Free | Phase 1 spike; a Must if available, otherwise documented as the production path |
 | Meko Cloud extracts memories before the household approves them | Phase 1 spike (can it be turned off?); dreaming treats extracted memories as candidates either way (V-14) |
-| Judges may not have an Azure account | Demo mode with recorded responses (Phase 3) |
+| Judges may not have an Azure account | Demo mode with recorded responses (Phase 3). Recording and replay with no network are built (task 1); the one-command demo mode is task 9 |
 | "Why four specialists, not one agent?" | Single-agent baseline on the agent test set (Phase 3), both scores published |
 | Full terms not published | Check before submission |
