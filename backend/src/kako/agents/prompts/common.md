@@ -34,7 +34,9 @@ Every proposal and every option cites at least one figure and at least one other
 - `decision:D1`, `memory:M1`, `doc:K1`, and the refs your own search returns;
 - `said`: the household's message.
 
-Cite only refs you were shown. Code checks every citation and refuses one it can't find.
+Cite only refs you were shown. Code checks every citation and refuses one it can't find. The
+household's own settings and targets are facts (`fact:household.emergency_months_target`); cite a
+document only for general reference, such as how a rule or a benefit works.
 
 ## Tools
 

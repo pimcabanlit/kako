@@ -190,6 +190,8 @@ uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: i
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
 uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine's figures then (--household, --save)
 uv run kako demo upload                   # the demo's statements and reference documents into Meko's knowledge base (counted in meko_call)
+uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko)
+KAKO_MODEL_MODE=replay KAKO_RECORDED_RESPONSES=../data/recorded/session-2.json uv run kako ask …   # the same turn from a recording, no Foundry
 ```
 
 The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be running):
@@ -259,8 +261,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   (`TurnState` and the agents' tools: `get_figures`, `get_facts`, `get_decisions`, one extra
   `search_memory`, `run_what_if`; amount specs and citations resolved and checked in code),
   `specialists.py` (the four specialists and `submit_proposal`), `orchestrator.py` (`answer_turn`:
-  the `ask_*` tools, at most 4 a turn, and `submit_answer`) and `prompts/` (the shared rules, then
-  one file per role; every system prompt is the shared rules, the brief, then the role).
+  the `ask_*` tools, at most 4 a turn, and `submit_answer`), `ask.py` (one turn for `kako ask`: a
+  session, the brief, the answer and what it cost) and `prompts/` (the shared rules, then one file
+  per role; every system prompt is the shared rules, the brief, then the role). Recorded real runs
+  live in `data/recorded/`, and each is logged in `docs/tuning-log.md`.
   `db/llm_log.py` and `db/agent_steps.py` write those two tables, each row committed on its own.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
@@ -289,7 +293,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   citations, one search, proposals), and `test_agents_turn.py` runs session 2 with a scripted model:
   options A and B with the worked example's figures, cited, what each agent was sent, and the
   parallel turn recorded and replayed strictly; `tests/integration/test_agents_turn.py` runs the same
-  turn on the demo household in Postgres and local Meko (the brief's search and a specialist's).
+  turn on the demo household in Postgres and local Meko (the brief's search and a specialist's), and
+  `tests/integration/test_ask.py` records a turn through `ask` and replays it with `kako ask`.
   `test_brief.py` builds the worked example's brief in memory (under budget, with the approved
   preference; Meko results wrapped; trimming in order), and `tests/integration/test_brief_store.py`
   gathers it from the demo household in Postgres and local Meko, with its one search counted.
