@@ -9,19 +9,28 @@ check against the turn's run, and the run it was compared with is stored.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any
 
+import httpx
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kako.agents.ask import Asked, Started, render_answer, run_turn, start_session, trace_turn
+from kako.api.app import create_app
+from kako.api.sessions import Services
+from kako.db.meko_log import DbCallLog
 from kako.db.proposal_store import approve
 from kako.demo.files import read_demo
 from kako.demo.load import load_demo
+from kako.meko.adapter import Meko
 from tests.conftest import MakeSettings
+from tests.integration.test_session_api import _probes
 from tests.support.models import ScriptedBackend, calls
 
 pytestmark = pytest.mark.integration
@@ -337,3 +346,80 @@ async def test_session_4_proposes_the_new_job_then_replans_in_three_parts(
     assert kept.metadata["kako_replan_before_run_id"] == str(replanned.before_run_id)
     assert kept.metadata["kako_revisit_decision_ids"] == [str(revisit.decision_id)]
     assert kept.metadata["kako_replan_since_decision_id"] == str(replan.since_decision)
+
+
+async def test_session_4_through_the_api(
+    migrated: AsyncEngine, make_settings: MakeSettings
+) -> None:
+    """The same session through the API: the turn names who wrote it, the new job waits for a yes
+    on the proposals API, and the next turn returns the replan's other two parts."""
+    async with migrated.connect() as conn:
+        household_id = await load_demo(
+            conn, read_demo(), through=datetime(2026, 11, 20, 19, tzinfo=MANILA)
+        )
+        await conn.commit()
+    people = await _people(migrated, household_id)
+    settings = make_settings(model_strong="kako-strong", model_fast="kako-fast")
+
+    @asynccontextmanager
+    async def no_meko(log: DbCallLog, max_calls: int) -> AsyncIterator[Meko | None]:
+        yield None
+
+    script = {**turn_1(), **turn_2()}
+    async with httpx.AsyncClient() as http:
+        services = Services(
+            settings, migrated, no_meko, lambda: ScriptedBackend(script), http, asyncio.Lock()
+        )
+        app = create_app(settings, probes=_probes(), services=services)
+        app.state.services = services
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:8000") as api:
+            session = (
+                await api.post(
+                    "/api/v1/sessions", json={"title": "Session 4", "household_date": "2026-11-20"}
+                )
+            ).json()
+            turns = f"/api/v1/sessions/{session['id']}/turns"
+            stranger = await api.post(
+                turns, json={"message": NEWS, "seed": T1, "person_id": str(uuid.uuid4())}
+            )
+            told = await api.post(
+                turns, json={"message": NEWS, "seed": T1, "person_id": str(people["Mara"])}
+            )
+            assert told.status_code == 200, told.text
+            changes = told.json()["changes"]
+            approved = await api.post(
+                "/api/v1/proposals/approve",
+                json={
+                    "proposal_ids": [c["proposal_id"] for c in changes],
+                    "person_id": str(people["Mara"]),
+                },
+            )
+            assert approved.status_code == 200, approved.text
+            asked = await api.post(
+                turns, json={"message": ASK, "seed": T2, "person_id": str(people["Jun"])}
+            )
+            assert asked.status_code == 200, asked.text
+
+    assert stranger.status_code == 422
+    assert "no such person in this household" in stranger.text
+    assert told.json()["replan"] is None
+    assert [c["kind"] for c in changes] == ["life_event", "replace_fact"]
+    assert told.json()["not_proposed"] == []
+    answer = asked.json()
+    assert answer["changes"] == []
+    replan = answer["replan"]
+    assert replan["since"] == "the decision of Sep 15, 2026 in Session 2 (B: split)"
+    assert replan["what_changed"][0] == (
+        "Take-home pay a month, all incomes: ₱100,000.00 → ₱116,000.00"
+    )
+    assert replan["why"].startswith("Mara's salary goes from ₱52,000 to ₱68,000")
+    assert (
+        "Mara's salary income.monthly_net: ₱52,000.00 → ₱68,000.00 from Dec 1, 2026 (replaced)"
+        in replan["because"]
+    )
+    assert replan["because"][-1].startswith("To revisit: “How hard should we pay down")
+    assert len(replan["revisit_decision_ids"]) == 1
+    assert replan["before_run_id"]
+    assert [o["label"] for o in answer["options"]] == ["A: all extra on the card", "B: split"]
+    assert answer["flagged"] == []
