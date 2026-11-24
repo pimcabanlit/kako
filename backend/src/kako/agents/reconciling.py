@@ -27,7 +27,7 @@ from kako.agents.present import Refs, figure_value, money
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult
 from kako.agents.tools import TurnState, WhatIf, object_schema
 from kako.agents.turn import short
-from kako.planning.reconcile import Ask, Conflict, Shown, check_split, reconcile
+from kako.planning.reconcile import KINDS, Ask, Conflict, Shown, check_split, reconcile
 
 MAX_SPLITS: Final = 3
 TOGETHER: Final = "rec"  # the prefix of the asks-together what-ifs: rec-W1
@@ -99,10 +99,24 @@ class Reconciler:
         return self.open.conflicts if self.open else ()
 
     def _asks(self) -> tuple[Ask, ...]:
+        """Each specialist's latest proposal that moves money: asked again, a specialist's new
+        proposal takes the place of its old one."""
+        latest: dict[str, SpecialistProposal] = {}
+        for p in self._proposals():
+            latest.pop(p.specialist, None)  # keep the order of the latest asks
+            latest[p.specialist] = p
         return tuple(
             Ask(p.specialist, p.what_if, tuple((a.entity_id, a.centavos) for a in p.allocations))
-            for p in self._proposals()
+            for p in latest.values()
             if p.what_if is not None
+        )
+
+    def _ordered(self, conflicts: Sequence[Conflict]) -> tuple[Conflict, ...]:
+        """In a stable order (kind, then the entity's ref), never by random ids, so the note is
+        the same on every load and a recorded turn replays."""
+        refs = self.state.refs
+        return tuple(
+            sorted(conflicts, key=lambda c: (KINDS.index(c.kind), refs.entity(c.entity_id) or ""))
         )
 
     def after_round(self) -> str | None:
@@ -110,9 +124,18 @@ class Reconciler:
         for the orchestrator, or None."""
         asks = self._asks()
         seen = tuple(a.what_if for a in asks)
-        if len(asks) < 2 or seen == self._seen:
+        if seen == self._seen:
             return None
         self._seen = seen
+        if len(asks) < 2:
+            if self.open is None:
+                return None
+            self.open = None  # a specialist asked again no longer moves money
+            return (
+                "Kako's reconciliation rules (code, not the household): only one specialist's "
+                "latest proposal moves money now, so there is nothing to reconcile and the "
+                "earlier conflict is closed."
+            )
         state = self.state
         ref = state.next_ref(TOGETHER)
         together = reconcile(
@@ -150,9 +173,10 @@ class Reconciler:
                 f"You can offer {ref} as an option."
             )
             return "\n".join(lines)
-        self.open = _Open(what_if, together.conflicts)
+        conflicts = self._ordered(together.conflicts)
+        self.open = _Open(what_if, conflicts)
         lines.append("Conflicts:")
-        lines += [f"- {describe(c, state.refs)}" for c in together.conflicts]
+        lines += [f"- {describe(c, state.refs)}" for c in conflicts]
         left = MAX_SPLITS - len(self.splits)
         lines.append(
             f"Resolve them. You may try up to {left} more splits with run_what_if; the rules check "
@@ -166,7 +190,7 @@ class Reconciler:
     def check(self, what_if: WhatIf) -> tuple[Conflict, ...]:
         """What the rules find in one what-if: nothing means it fits."""
         state = self.state
-        return check_split(
+        found = check_split(
             what_if.run,
             ref=what_if.ref,
             allocations={a.entity_id: a.centavos for a in what_if.allocations},
@@ -174,6 +198,7 @@ class Reconciler:
             current=state.current_allocations(),
             kinds=state.kinds(),
         )
+        return self._ordered(found)
 
     def split_tool(self, what_if_tool: Tool) -> Tool:
         """The orchestrator's `run_what_if`: while a conflict is open, each call is a split, at
@@ -240,6 +265,11 @@ class Reconciler:
         state = self.state
         rejected_allocations: tuple[Allocation, ...] = ()
         if chosen:
+            if chosen.startswith(TOGETHER + "-W"):
+                raise ToolInputError(
+                    f"{chosen} is the proposals together, which the rules found in conflict: "
+                    "resolve with a split of your own or a specialist's what-if"
+                )
             option = next((o for o in options if o.what_if == chosen), None)
             if option is None:
                 raise ToolInputError(

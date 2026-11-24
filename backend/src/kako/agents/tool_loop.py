@@ -180,6 +180,7 @@ async def run_agent(
             return AgentRun(answer, text, counted, model_calls)
         note = between_rounds() if between_rounds is not None else None
         if note:
-            # Written by code from engine figures and refs, never from untrusted text.
+            # Written by code: engine figures, amounts and refs. A ref is a slug of a name
+            # ([a-z0-9-] only), so no household text reaches the note as words of its own.
             messages.append(Message("user", note))
     return AgentRun(None, text, counted, model_calls)

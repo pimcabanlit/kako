@@ -240,6 +240,10 @@ async def test_at_most_three_splits(house: Villanueva, make_settings: MakeSettin
         ),
         ({"resolution": {**RESOLVED, "what_if": "", "rejected": "debt1-W1"}}, "rejected is"),
         ({"resolution": {**RESOLVED, "reason": " "}}, "reason must be a non-empty string"),
+        (
+            {"resolution": {**RESOLVED, "what_if": "rec-W1"}},
+            "rec-W1 is the proposals together, which the rules found in conflict",
+        ),
     ],
 )
 async def test_a_resolution_is_checked_in_code(
@@ -322,3 +326,42 @@ async def test_no_answer_shows_the_conflict_as_it_is(
     assert answer.resolution is not None
     assert answer.resolution.chosen is None
     assert answer.resolution.reason == "No resolution was given, so the conflict is shown as it is."
+
+
+async def test_a_specialist_asked_again_replaces_its_proposal(
+    house: Villanueva, make_settings: MakeSettings
+) -> None:
+    """Debt first asks the whole surplus for the card (over, with savings' split); asked again it
+    keeps to Jun's ₱4,000. Only its latest proposal counts, and the two now fit together."""
+    script = _session_2_script()
+    answer = json.loads(script[f"{SEED}/orchestrator/2"].tool_calls[0].arguments)
+    answer["options"] = answer["options"][1:]  # B, savings1-W1
+    script[f"{SEED}/orchestrator/2"] = calls(
+        ("ask_debt", {"question": "Keep to Jun's ₱4,000 on the card."})
+    )
+    script[f"{SEED}/debt#2/1"] = calls(
+        ("run_what_if", {"allocations": [{"entity": "debt:credit-card", "amount": "said:4000"}]})
+    )
+    script[f"{SEED}/debt#2/2"] = calls(
+        (
+            "submit_proposal",
+            {
+                "summary": "Jun's ₱4,000 on the card pays it off in 17 months.",
+                "what_if": "debt2-W1",
+                "sources": [f"figure:debt2-W1:{CARD_PAYOFF}", "said"],
+            },
+        )
+    )
+    script[f"{SEED}/orchestrator/3"] = calls(("submit_answer", {**answer, "resolution": None}))
+    manager, backend = _manager(make_settings, script)
+    state = _state(house)
+    result = await answer_turn(manager, manager.turn(SEED), state)
+
+    first = _request(backend, f"{SEED}/orchestrator/2").messages[-1].content or ""
+    assert "Conflicts:" in first
+    second = _request(backend, f"{SEED}/orchestrator/3").messages[-1].content or ""
+    assert "as what-if rec-W2" in second
+    assert "They fit together" in second
+    assert "debt1-W1" not in second
+    assert result.resolution is None
+    assert [o.what_if for o in result.options] == ["savings1-W1"]
