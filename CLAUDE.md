@@ -192,6 +192,11 @@ uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine'
 uv run kako demo upload                   # the demo's statements and reference documents into Meko's knowledge base (counted in meko_call)
 uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko)
 KAKO_MODEL_MODE=replay KAKO_RECORDED_RESPONSES=../data/recorded/session-2.json uv run kako ask …   # the same turn from a recording, no Foundry
+uv run kako demo run                      # demo mode: migrate, load the whole story, upload the documents, replay the scripted sessions (local Meko, no Azure)
+uv run kako demo run --test-set           # … and replay the agent test set for each recorded architecture
+uv run kako test-set                      # the agent test set's score, replayed from data/recorded/test-set-specialists.json (needs the household loaded through Dec 1)
+uv run kako test-set --architecture single --only q01,q07   # the single-agent baseline, some questions (--household, --save: data/test-set/results/)
+KAKO_MODEL_MODE=record uv run kako test-set   # record it on Foundry (spends; log a prediction in docs/tuning-log.md first)
 ```
 
 The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be running):
@@ -278,8 +283,17 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   and the API: the session's conversation, the brief, the turn's run stored, the answer, its plan
   and checks stored, the turn kept in Meko with its steps, reasons and ids, and what it cost) and
   `prompts/` (the shared rules, then one file per role; every system prompt is the shared rules,
-  the brief, then the role). Recorded real runs
-  live in `data/recorded/`, and each is logged in `docs/tuning-log.md`.
+  the brief, then the role), and `single.py` (`answer_alone`, the single-agent baseline: one agent on
+  the strong deployment with every read tool, its own what-ifs and search, and the same
+  `submit_answer`, prompt `prompts/single.md`). Tool output lists figures in the engine's key order,
+  then the debts' payoff order, never by database id (`in_order`), so a recording replays on any
+  database. Recorded real runs live in `data/recorded/`, and each is logged in `docs/tuning-log.md`.
+  `evals/` the agent test set: `questions.py` reads and checks `data/test-set/questions.toml`,
+  `scoring.py` scores one answer against what its question expects (each check named, a failed turn
+  0), and `runner.py` runs the set through `ask` for either architecture and reports the score, model
+  calls, tokens, cost and Meko calls. `demo/sessions.py` reads the scripted sessions
+  (`data/demo-household/sessions/`) and `demo/mode.py` is `kako demo run`: local Meko only, the
+  household with its whole story, the documents uploaded once, each session replayed strictly.
   `db/llm_log.py`, `db/agent_steps.py` and `db/number_checks.py` write those three tables, each row
   committed on its own.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
@@ -326,6 +340,11 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `tests/integration/test_ask.py` records a turn through `ask` and replays it with `kako ask`, with
   every text's `number_check` row against the stored run, and a planted wrong number regenerated and
   logged.
+  `test_evals.py` holds every expected number in the test set to the engine and scores session 2's
+  scripted turn and the single agent's; `test_demo_sessions.py` the session files and each mistake;
+  `tests/integration/test_demo_mode.py` runs `kako demo run --test-set` on a fresh database and local
+  Meko with no Azure settings, then again, and its refusals; `test_agent_tools.py` also checks that
+  tool output doesn't change when the entities' ids sort the other way.
   `test_brief.py` builds the worked example's brief in memory (under budget, with the approved
   preference; Meko results wrapped; trimming in order), and `tests/integration/test_brief_store.py`
   gathers it from the demo household in Postgres and local Meko, with its one search counted.

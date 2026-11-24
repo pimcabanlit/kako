@@ -15,7 +15,7 @@ Which model answers is `KAKO_MODEL_MODE`'s choice: live Foundry, recording a liv
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -33,6 +33,7 @@ from kako.agents.present import money
 from kako.agents.reconciling import LABELS, render_resolution
 from kako.agents.recorded import ChatBackend
 from kako.agents.tools import TurnState
+from kako.agents.turn import TurnContext
 from kako.db.agent_steps import DbStepLog
 from kako.db.calc_store import save_run
 from kako.db.llm_log import DbLlmLog
@@ -48,6 +49,8 @@ from kako.settings import Settings
 SESSION = cast(Table, Session.__table__)
 LLM_CALL = cast(Table, LlmCall.__table__)
 AGENT = "kako:orchestrator"
+# What answers a turn: the orchestrator with its specialists, or the single-agent baseline.
+Answerer = Callable[[ModelManager, TurnContext, TurnState], Awaitable[TurnAnswer]]
 LOCAL_PREFIX: Final = "local-"  # a session's id with no Meko conversation
 REASONING_CHARS: Final = 4_000
 # A turn's Meko calls at most: the conversation, the brief's search, one extra search for the
@@ -89,6 +92,7 @@ class Asked:
     meko_message_id: str | None = None  # the turn in Meko's conversation
     meko_error: str | None = None  # why Meko didn't keep the turn, if it didn't
     what_if_runs: dict[str, uuid.UUID] = field(default_factory=dict)
+    state: TurnState | None = None  # what the turn's tools read: the snapshot, refs and what-ifs
 
 
 async def start_session(
@@ -156,9 +160,11 @@ async def run_turn(
     message: str,
     known_at: datetime | None,
     seed: str,
+    answerer: Answerer = answer_turn,
 ) -> Asked:
     """Answer the household's `message` in `session`, as of the session's date (and as known at
-    `known_at`), and keep it: the plan in Postgres, the turn in Meko."""
+    `known_at`), and keep it: the plan in Postgres, the turn in Meko. `answerer` is the
+    orchestrator and its specialists; the agent test set also passes the single-agent baseline."""
     if meko is not None and not session.in_meko:
         raise SessionError("this session has no Meko conversation")
     conversation = session.conversation_id if meko is not None else None
@@ -190,7 +196,7 @@ async def run_turn(
     turn = manager.turn(
         seed, session_id=session.session_id, steps=DbStepLog(engine, session.session_id)
     )
-    answer = await answer_turn(manager, turn, state)
+    answer = await answerer(manager, turn, state)
     saved = await save_answer(
         engine,
         state,
@@ -240,6 +246,7 @@ async def run_turn(
         message_id,
         meko_error,
         dict(state.stored),
+        state,
     )
 
 
@@ -331,13 +338,22 @@ async def ask(
     title: str,
     seed: str,
     call_log: DbCallLog | None = None,
+    answerer: Answerer = answer_turn,
 ) -> Asked:
     """`kako ask`: a new session for the household as of `on`, and one turn in it."""
     session = await start_session(
         engine, meko, household_id=household_id, on=on, title=title, call_log=call_log
     )
     return await run_turn(
-        engine, meko, settings, backend, session, message=message, known_at=known_at, seed=seed
+        engine,
+        meko,
+        settings,
+        backend,
+        session,
+        message=message,
+        known_at=known_at,
+        seed=seed,
+        answerer=answerer,
     )
 
 

@@ -825,8 +825,18 @@ that doesn't hold the household yet:
 Money is written in pesos with two decimals and read as exact centavos; a rate is a decimal fraction.
 Every file is checked before anything is written, and an error names the file and line.
 
-Later phases add `sessions/` (the household's lines for sessions 1 to 4, each with its speaker; both
-adults take part; used to test dreaming and as the scripted path demo mode replays) and `recorded/` (the
-recorded model responses for demo mode and tests).
+- `sessions/*.toml`: the scripted sessions demo mode replays (`backend/src/kako/demo/sessions.py`). Each
+  names its title, the household's date (`on`), what Kako knew then (`known_at`, with its time zone, so
+  a database holding the whole story answers as it would have then), its recording (a file name in
+  `data/recorded/`) and its turns, each with the speaker (a key in `people.csv`), a seed unique across
+  the sessions, and the message. Session 2 is written; sessions 1, 3 and 4 join with Phase 4 (session 4
+  needs the life-event replan), both adults taking part, and dreaming is tested on them too.
+
+`data/recorded/` (beside the demo folder) holds model responses recorded on Foundry, keyed by turn seed,
+agent and call number, and checked against each request's digest when replayed: `session-2.json` for
+session 2, and `test-set-specialists.json` and `test-set-single.json` for the agent test set. Each
+recording is logged in `docs/tuning-log.md`. `data/test-set/questions.toml` is the agent test set:
+each question's date, `known_at`, message, why it is in the set and what a good answer must hold
+(`backend/src/kako/evals/`); `data/test-set/results/` keeps each architecture's last full run.
 
 No real person, bank, employer or account. Names are fictional; amounts are plausible, not sampled.

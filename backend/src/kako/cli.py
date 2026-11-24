@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from kako.settings import get_settings
 
@@ -57,6 +57,16 @@ def main(argv: list[str] | None = None) -> int:
         help="upload the demo's statements and reference documents to Meko's knowledge base",
     )
     upload.add_argument("--data", type=Path, help="the demo folder (default: data/demo-household)")
+    run = demo_commands.add_parser(
+        "run",
+        help="demo mode: the demo household with its whole story, its documents in local Meko, "
+        "and the scripted sessions replayed from recordings (no Azure settings needed)",
+    )
+    run.add_argument(
+        "--test-set",
+        action="store_true",
+        help="also replay the agent test set for each architecture that has its recording",
+    )
 
     validate = commands.add_parser(
         "validate", help="rules V-01 to V-08 and V-16 over a household's facts; exit 1 on any"
@@ -98,6 +108,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     ask.add_argument("--no-meko", action="store_true", help="no Meko search for this turn")
 
+    test_set = commands.add_parser(
+        "test-set",
+        help="the agent test set: every question a turn on the demo household, scored in code "
+        "(KAKO_MODEL_MODE: replay by default from data/recorded/test-set-<architecture>.json)",
+    )
+    test_set.add_argument(
+        "--architecture",
+        choices=("specialists", "single"),
+        default="specialists",
+        help="the orchestrator with its specialists, or the single-agent baseline",
+    )
+    test_set.add_argument("--only", help="question ids, such as q01,q07")
+    test_set.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+    test_set.add_argument(
+        "--save",
+        action="store_true",
+        help="write the report to data/test-set/results/<architecture>.json (whole set only)",
+    )
+
     args = parser.parse_args(argv)
     if args.command == "api":
         return _api(args.host, args.port, reload=args.reload)
@@ -105,6 +134,15 @@ def main(argv: list[str] | None = None) -> int:
         return _migrate()
     if args.command == "check-models":
         return _check_models()
+    if args.command == "demo" and args.demo_command == "run":
+        from kako.demo.mode import DemoModeError, check_target
+
+        try:  # before the migration, so a wrong target is never touched
+            check_target(get_settings())
+        except DemoModeError as exc:
+            print(f"Demo mode can't start: {exc}", file=sys.stderr)
+            return 1
+        return _migrate() or asyncio.run(_demo_run(test_set=args.test_set))
     if args.command == "demo" and args.demo_command == "upload":
         return asyncio.run(_demo_upload(args.data))
     if args.command == "demo":
@@ -124,6 +162,10 @@ def main(argv: list[str] | None = None) -> int:
                 seed=args.seed,
                 use_meko=not args.no_meko,
             )
+        )
+    if args.command == "test-set":
+        return asyncio.run(
+            _test_set(args.architecture, args.only, household_id=args.household, save=args.save)
         )
     parser.error(f"unknown command {args.command}")
     return 2
@@ -240,6 +282,98 @@ async def _demo_upload(folder: Path | None) -> int:
         await engine.dispose()
     new = sum(1 for d in documents if not d.already_uploaded)
     print(f"{len(documents)} documents searchable in Meko ({settings.meko_target}); {new} new.")
+    return 0
+
+
+async def _demo_run(*, test_set: bool) -> int:
+    """Demo mode: everything from local services and recordings (`demo/mode.py`)."""
+    from kako.agents.ask import render_answer
+    from kako.agents.brief_store import BriefStoreError
+    from kako.agents.chat import ModelError
+    from kako.agents.orchestrator import OrchestratorError
+    from kako.agents.recorded import ReplayBackend
+    from kako.db.engine import make_engine
+    from kako.demo.files import DemoDataError, read_demo
+    from kako.demo.load import DemoLoadError
+    from kako.demo.mode import DemoModeError, check_target, prepare, replay_session
+    from kako.demo.sessions import RECORDED_DIR, DemoSessionError, read_sessions
+    from kako.evals.questions import TestSetError, read_test_set
+    from kako.evals.runner import run_test_set
+    from kako.meko.client import MekoError
+
+    settings = get_settings().model_copy(update={"model_mode": "replay", "replay_strict": True})
+    try:
+        check_target(settings)
+        demo = read_demo()
+        sessions = read_sessions(people=frozenset(p.key for p in demo.people))
+    except (DemoModeError, DemoDataError, DemoSessionError) as exc:
+        print(f"Demo mode can't start: {exc}", file=sys.stderr)
+        return 1
+    database_url = settings.database_url
+    if database_url is None:  # check_target refuses it; this keeps the type narrow
+        return 1
+    engine = make_engine(database_url)
+    try:
+        prepared = await prepare(engine, settings, demo)
+        print(
+            f"{demo.household.name}: "
+            + ("loaded with its whole story" if prepared.loaded else "already loaded")
+            + f"; {prepared.documents} documents searchable in local Meko "
+            f"({prepared.new_documents} new).\n"
+        )
+        played = 0
+        for session in sessions:
+            if not session.recording.exists():
+                print(f"{session.title}: no recording yet ({session.recording.name}), skipped.\n")
+                continue
+
+            def show(asked: Any, title: str = session.title) -> None:
+                print(f"== {title}, turn {asked.seed} ==")
+                print(render_answer(asked, settings) + "\n")
+
+            await replay_session(engine, settings, session, prepared.household_id, shown=show)
+            played += 1
+        if test_set:
+            questions = read_test_set()
+            for architecture in ("specialists", "single"):
+                path = RECORDED_DIR / f"test-set-{architecture}.json"
+                if not path.exists():
+                    print(f"Agent test set ({architecture}): no recording yet, skipped.")
+                    continue
+                replay = settings.model_copy(update={"recorded_responses": path})
+                report = await run_test_set(
+                    engine,
+                    replay,
+                    ReplayBackend(path, strict=True),
+                    questions,
+                    household_id=prepared.household_id,
+                    architecture="single" if architecture == "single" else "specialists",
+                )
+                data = report.as_json()
+                print(
+                    f"Agent test set ({architecture}): {report.score:.1%} over "
+                    f"{data['questions']} questions ({data['checks_passed']}/"
+                    f"{data['checks_total']} checks), {data['answered']} answered, "
+                    f"{data['model_calls']} model calls replayed."
+                )
+    except (
+        DemoModeError,
+        DemoLoadError,
+        TestSetError,
+        ModelError,
+        MekoError,
+        BriefStoreError,
+        OrchestratorError,
+    ) as exc:
+        print(f"Demo mode stopped: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+    print(
+        f"\nDemo mode replayed {played} session(s) from recordings: no Azure settings, no model "
+        "calls. Look around with `uv run kako api` and the web app; asking new questions needs "
+        "live mode with a Foundry deployment."
+    )
     return 0
 
 
@@ -391,6 +525,82 @@ async def _ask(
         return 1
     finally:
         await engine.dispose()
+
+
+async def _test_set(
+    architecture: str, only: str | None, *, household_id: uuid.UUID | None, save: bool
+) -> int:
+    import json
+
+    from kako.agents.chat import ModelError
+    from kako.agents.model_manager import chat_backend
+    from kako.db.engine import make_engine
+    from kako.evals.questions import TEST_SET, TestSetError, read_test_set
+    from kako.evals.runner import Outcome, render_report, run_test_set
+
+    settings = get_settings()
+    database_url = settings.database_url
+    if database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    if settings.meko_target != "local":
+        # Every question is a Meko conversation: never spent from Meko Cloud's lifetime 1,000.
+        print("The test set runs on local Meko only (MEKO_MCP_URL).", file=sys.stderr)
+        return 1
+    if settings.model_mode != "live" and settings.recorded_responses is None:
+        recording = TEST_SET.parent.parent / "recorded" / f"test-set-{architecture}.json"
+        settings = settings.model_copy(update={"recorded_responses": recording})
+    try:
+        questions = read_test_set()
+    except TestSetError as exc:
+        print(f"The test set can't be read: {exc}", file=sys.stderr)
+        return 1
+    if only:
+        wanted = {q.strip() for q in only.split(",") if q.strip()}
+        unknown = wanted - {q.id for q in questions}
+        if unknown:
+            print(f"No such questions: {', '.join(sorted(unknown))}", file=sys.stderr)
+            return 1
+        if save:
+            print("--save writes a whole run: leave out --only.", file=sys.stderr)
+            return 1
+        questions = tuple(q for q in questions if q.id in wanted)
+    try:
+        backend = chat_backend(settings)
+    except ModelError as exc:
+        print(f"No model to answer with: {exc}", file=sys.stderr)
+        return 1
+    engine = make_engine(database_url)
+    try:
+        async with engine.connect() as conn:
+            chosen = await _household(conn, household_id)
+        if chosen is None:
+            return 1
+
+        def progress(o: Outcome) -> None:
+            note = f" ({o.error})" if o.error else ""
+            print(f"{o.question.id}: {o.score.value:.0%}{note}", file=sys.stderr, flush=True)
+
+        report = await run_test_set(
+            engine,
+            settings,
+            backend,
+            questions,
+            household_id=chosen,
+            architecture="single" if architecture == "single" else "specialists",
+            progress=progress,
+        )
+    finally:
+        await engine.dispose()
+    print(render_report(report))
+    if save:
+        path = TEST_SET.parent / "results" / f"{architecture}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(report.as_json(), indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        print(f"Saved {path}")
+    return 0
 
 
 def _shown(figure: Figure) -> str:

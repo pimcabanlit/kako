@@ -67,7 +67,7 @@ class OrchestratorError(Exception):
 
 
 @dataclass
-class _Asked:
+class AskedSpecialists:
     """The specialists asked this turn, in the order asked."""
 
     times: dict[str, int] = field(default_factory=dict)
@@ -113,7 +113,7 @@ def _ask_tool(
     turn: TurnContext,
     state: TurnState,
     specialist: Specialist,
-    asked: _Asked,
+    asked: AskedSpecialists,
 ) -> Tool:
     async def ask(arguments: dict[str, Any]) -> ToolResult:
         question = _text(arguments, "question", MAX_QUESTION)
@@ -149,7 +149,7 @@ def _ask_tool(
     )
 
 
-def _option(state: TurnState, raw: Any, asked: _Asked) -> Option:
+def _option(state: TurnState, raw: Any, asked: AskedSpecialists) -> Option:
     if not isinstance(raw, dict):
         raise ToolInputError("each option is an object")
     label = _text(raw, "label", MAX_LABEL)
@@ -175,7 +175,7 @@ def _option(state: TurnState, raw: Any, asked: _Asked) -> Option:
     return Option(label, summary, ref, what_if.allocations, citations, tuple(specialists))
 
 
-def _answer_tool(state: TurnState, asked: _Asked, reconciler: Reconciler) -> Tool:
+def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconciler) -> Tool:
     async def submit_answer(arguments: dict[str, Any]) -> ToolResult:
         reply = _text(arguments, "reply", MAX_REPLY)
         raw = arguments.get("options")
@@ -261,14 +261,14 @@ def _answer_tool(state: TurnState, asked: _Asked, reconciler: Reconciler) -> Too
 
 async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState) -> TurnAnswer:
     """The orchestrator's checked answer to the household's message."""
-    asked = _Asked()
+    asked = AskedSpecialists()
     reconciler = Reconciler(state, lambda: [p for p in asked.proposals if p is not None])
     tools = [
         *read_tools(state),
         decisions_tool(state),
         reconciler.split_tool(what_if_tool(state, PATH)),
         *(_ask_tool(manager, turn, state, s, asked) for s in SPECIALISTS),
-        _answer_tool(state, asked, reconciler),
+        answer_tool(state, asked, reconciler),
     ]
     user = (
         "The household's message: "
