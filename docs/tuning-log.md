@@ -402,3 +402,22 @@ it led to.
 - **Run:** `KAKO_MODEL_MODE=record uv run kako dream eval --save` on a fresh database with the demo
   household loaded through Dec 1 (gpt-5.4), recorded to `data/recorded/dreaming.json`. Pim approved
   up to US$0.50.
+  Spent **US$0.0758** (13 calls, 32,541 tokens in, 16,896 of them cached, and 2,165 out).
+- **Result:** **13 of 15 found (87%), 2 wrong, 0 unquoted: FAIL** (needs 90%). Every call handed
+  in claims of the right shape the first time. d04, d05 and d09 handed in nothing, as they should.
+  d01 to d03, d06, d07, d10, d12 and d13 were found exactly, the corrections included. Two misses:
+  - **d08** ("we want the emergency fund to cover 6 months of expenses, not 3"): marked as a
+    correction, so code proposed retracting the target of 3 and writing 6 from Mar 1. That is two
+    wrong proposals, and the change from today was missed. The household changed its mind; it never
+    said Kako had it wrong.
+  - **d11** ("we're expecting a baby in April 2027"): the life event came back with `occurs_on` empty,
+    so code refused it.
+- **Root cause:** the prompt's one example of a correction is "the rent is ₱38,000, not 40,000", so
+  "6 months, not 3" read as a correction. And the prompt says how to write a day but not a month with
+  its year, while "copy, never calculate" made the model unwilling to write April 2027 as 2027-04-01.
+- **Change made:** the prompt now says a correction is a value that was never right ("I misread",
+  "sorry, I told you wrong"), and a decision to change ("we've decided on a bigger target", "from now
+  on") is a change, even when they also say the old value. Its examples are not the labelled set's
+  words, so the set still measures it. It also says a month with its year is written as its first
+  day ("June 2027" is 2027-06-01), which V-09 already accepts. This run's recording is kept as
+  `data/recorded/dreaming-run10.json`; the next run, after Pim's yes, records `dreaming.json`.

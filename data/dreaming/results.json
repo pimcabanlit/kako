@@ -1,0 +1,266 @@
+{
+ "mode": "record",
+ "at": "2026-11-24T11:34:45.890512+00:00",
+ "expected": 15,
+ "found": 13,
+ "score": "0.867",
+ "wrong": 2,
+ "unquoted": 0,
+ "passed": false,
+ "input_tokens": 32541,
+ "output_tokens": 2165,
+ "cost_usd": "0.075813",
+ "results": [
+  {
+   "id": "d01",
+   "expected": 2,
+   "found": [
+    "life_event new_job on 2026-12-01",
+    "replace_fact income:mara-s-salary/income.monthly_net = 6800000 from 2026-12-01"
+   ],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "new",
+     "shown": "Life event (new_job) on Dec 1, 2026: I got a new job",
+     "reason": ""
+    },
+    {
+     "outcome": "replace",
+     "shown": "Mara's salary: income.monthly_net = ₱68,000.00 from Dec 1, 2026, replacing ₱52,000.00 (since Mar 1, 2026)",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d02",
+   "expected": 1,
+   "found": [
+    "replace_fact income:jun-s-salary/income.monthly_net = 5100000 from 2027-01-01"
+   ],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "new",
+     "shown": "Life event (raise) on Jan 1, 2027: my take-home pay goes up to ₱51,000 a month",
+     "reason": ""
+    },
+    {
+     "outcome": "replace",
+     "shown": "Jun's salary: income.monthly_net = ₱51,000.00 from Jan 1, 2027, replacing ₱48,000.00 (since Mar 1, 2026)",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d03",
+   "expected": 2,
+   "found": [
+    "retract expense:rent-and-utilities/expense.monthly_amount",
+    "new_fact expense:rent-and-utilities/expense.monthly_amount = 3800000 from 2026-03-01"
+   ],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "retract",
+     "shown": "Rent and utilities: expense.monthly_amount = ₱38,000.00 from Mar 1, 2026, not ₱40,000.00",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d04",
+   "expected": 0,
+   "found": [],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d05",
+   "expected": 0,
+   "found": [],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d06",
+   "expected": 2,
+   "found": [
+    "new_fact income:mara-s-salary/income.pay_day = 15 from 2026-11-20",
+    "new_fact income:mara-s-salary/income.thirteenth_month = 5200000 from 2026-11-20"
+   ],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "new",
+     "shown": "Mara's salary: income.pay_day = 15 from Nov 20, 2026",
+     "reason": ""
+    },
+    {
+     "outcome": "new",
+     "shown": "Mara's salary: income.thirteenth_month = ₱52,000.00 from Nov 20, 2026",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d07",
+   "expected": 2,
+   "found": [
+    "replace_fact expense:school-and-transport/expense.monthly_amount = 1200000 from 2027-01-01",
+    "replace_fact expense:eating-out/expense.monthly_amount = 400000 from 2026-11-20"
+   ],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "replace",
+     "shown": "School and transport: expense.monthly_amount = ₱12,000.00 from Jan 1, 2027, replacing ₱10,000.00 (since Mar 1, 2026)",
+     "reason": ""
+    },
+    {
+     "outcome": "replace",
+     "shown": "Eating out: expense.monthly_amount = ₱4,000.00 from Nov 20, 2026, replacing ₱6,000.00 (since Mar 1, 2026)",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d08",
+   "expected": 1,
+   "found": [],
+   "missed": [
+    "replace_fact household/household.emergency_months_target = 6 from 2026-11-20"
+   ],
+   "wrong": [
+    "Retract The household: household.emergency_months_target = 3 (since Mar 1, 2026): said to be wrong",
+    "The household: household.emergency_months_target = 6 from Mar 1, 2026, in its place"
+   ],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "retract",
+     "shown": "The household: household.emergency_months_target = 6 from Mar 1, 2026, not 3",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d09",
+   "expected": 0,
+   "found": [],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d10",
+   "expected": 1,
+   "found": [
+    "retract income:jun-s-salary/income.thirteenth_month"
+   ],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "retract",
+     "shown": "Retract Jun's salary: income.thirteenth_month = ₱48,000.00 (since Mar 1, 2026)",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d11",
+   "expected": 1,
+   "found": [],
+   "missed": [
+    "life_event baby on 2027-04-01"
+   ],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "refused",
+     "shown": "Life event",
+     "reason": "occurs_on '' isn't a date written as \"2026-12-01\""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d12",
+   "expected": 2,
+   "found": [
+    "retract debt:car-loan/debt.annual_rate",
+    "new_fact debt:car-loan/debt.annual_rate = 0.095 from 2026-03-01"
+   ],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "retract",
+     "shown": "Car loan: debt.annual_rate = 9.5% from Mar 1, 2026, not 9% a year",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  },
+  {
+   "id": "d13",
+   "expected": 1,
+   "found": [
+    "replace_fact expense:rent-and-utilities/expense.monthly_amount = 4200000 from 2026-11-20"
+   ],
+   "missed": [],
+   "wrong": [],
+   "unquoted": [],
+   "findings": [
+    {
+     "outcome": "replace",
+     "shown": "Rent and utilities: expense.monthly_amount = ₱42,000.00 from Nov 20, 2026, replacing ₱40,000.00 (since Mar 1, 2026)",
+     "reason": ""
+    }
+   ],
+   "model_calls": 1,
+   "error": null
+  }
+ ]
+}
