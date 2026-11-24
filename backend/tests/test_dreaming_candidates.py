@@ -47,10 +47,9 @@ def _noted(ref: str, text: str) -> Noted:
 
 
 def test_each_candidate_settles_to_one_fate() -> None:
-    proposal, fact = uuid.uuid4(), uuid.uuid4()
-    waits = Settled(QUOTE, ON, (proposal,), ())
-    holds = Settled(QUOTE, ON, (), (("fact", fact),))
-    nothing = Settled(QUOTE, ON, (), ())
+    proposal = uuid.uuid4()
+    waits = Settled(QUOTE, ON, (proposal,))
+    nothing = Settled(QUOTE, ON, ())  # the same as Kako holds, proposed already, or refused
     noted = [
         _noted("m1", "Mara's take-home pay will be 68,000 pesos a month from December 1."),
         _noted("m2", "Mara's pay goes up to 68,000 pesos, with a 10,000 signing bonus."),
@@ -58,19 +57,18 @@ def test_each_candidate_settles_to_one_fate() -> None:
         _noted("m4", "Mara earns 68,000 pesos a month."),
         _noted("m5", "Mara's pay is 68,000 pesos."),
     ]
-    fates = settle(noted, {"m1": [waits], "m2": [waits], "m4": [holds], "m5": [nothing]})
+    fates = settle(noted, {"m1": [waits], "m2": [waits], "m4": [nothing], "m5": [nothing]})
     assert [(c.noted.ref, c.fate) for c in fates] == [
         ("m1", "waiting"),
         ("m2", "delete"),
         ("m3", "delete"),
-        ("m4", "link"),
+        ("m4", "delete"),
         ("m5", "delete"),
     ]
     assert fates[0].proposal_ids == (proposal,)
     assert fates[1].reason == "it holds a number the household didn't say: 10000"
     assert fates[2].reason == "no claim says the same as it"
-    assert fates[3].held == (("fact", fact),)
-    assert fates[4].reason == "its claim was refused, a conflict or deferred"
+    assert fates[3].reason == "its claim made nothing new for a person to approve"
 
 
 def test_a_claim_names_noted_memories_by_ref() -> None:

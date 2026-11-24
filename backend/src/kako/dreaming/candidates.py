@@ -6,11 +6,13 @@ spike 4). Kako treats each one as a **candidate**: dreaming shows it to the extr
 noted memory (`m1`), and a claim may name the noted memories it says the same as. Then each one
 settles to exactly one fate (V-14: every one ends linked to an approved fact or deleted):
 
-- **waiting** on the proposals its claim made (or that the session made already from the same
-  words): linked to what they write once a person approves, deleted once none can be approved.
-- **link** to what Kako holds already: its claim was the same as a fact or life event Kako has.
-- **delete**: no claim names it, its claim was refused, a conflict or deferred, or it holds a
-  number its claim's quote doesn't (Meko's words never add a number to the household's).
+- **waiting** on the proposals its claim made now, which show its words to the household: linked to
+  what they write once a person approves every one of them, deleted once any is turned down.
+- **delete**: anything else. No claim names it; its claim was refused, a conflict or deferred; it
+  holds a number its claim's quote doesn't (Meko's words never add a number to the household's);
+  or its claim made nothing new to approve (the same as Kako holds, or proposed by the session
+  already), so no person would see its words. A memory is marked approved in a brief only once a
+  person has approved every proposal that showed it.
 
 A memory Kako wrote itself carries `kako_` metadata and is never a candidate.
 """
@@ -27,7 +29,7 @@ from kako.facts.evidence import text_unquoted
 
 MAX_NOTED: Final = 20  # candidates read from one session
 MAX_TEXT: Final = 600
-Fate = Literal["waiting", "link", "delete"]
+Fate = Literal["waiting", "delete"]
 
 
 @dataclass(frozen=True)
@@ -46,8 +48,7 @@ class Settled:
 
     quote: str
     said_on: date
-    proposal_ids: tuple[uuid.UUID, ...]  # made now, or by the session already
-    held: tuple[tuple[str, uuid.UUID], ...]  # (fact or life_event, id): the same as Kako holds
+    proposal_ids: tuple[uuid.UUID, ...]  # made now, each showing the memory's words
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,6 @@ class Candidate:
     fate: Fate
     reason: str
     proposal_ids: tuple[uuid.UUID, ...] = ()
-    held: tuple[tuple[str, uuid.UUID], ...] = ()
 
 
 def _kako_written(metadata: Mapping[str, Any]) -> bool:
@@ -99,11 +99,10 @@ def settle(noted: Sequence[Noted], named: Mapping[str, Sequence[Settled]]) -> li
             )
             continue
         waiting = tuple(dict.fromkeys(i for c in claims for i in c.proposal_ids))
-        held = tuple(dict.fromkeys(h for c in claims for h in c.held))
         if waiting:
-            fates.append(Candidate(n, "waiting", "waits for the household's yes", waiting, held))
-        elif held:
-            fates.append(Candidate(n, "link", "the same as what Kako holds", held=held))
+            fates.append(Candidate(n, "waiting", "waits for the household's yes", waiting))
         else:
-            fates.append(Candidate(n, "delete", "its claim was refused, a conflict or deferred"))
+            fates.append(
+                Candidate(n, "delete", "its claim made nothing new for a person to approve")
+            )
     return fates

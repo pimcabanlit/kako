@@ -222,6 +222,42 @@ async def test_a_memory_whose_proposals_are_rejected_is_deleted(
         assert linked.scalar_one() == 0
 
 
+async def test_a_memory_is_linked_only_once_all_it_says_is_approved(
+    migrated: AsyncEngine, test_meko_url: str, make_settings: MakeSettings
+) -> None:
+    """Mara's memory waits on the new job and her salary: approving the job alone links nothing,
+    and turning the salary down deletes it, so a brief never shows it as approved."""
+    settings = _settings(make_settings, test_meko_url)
+    session, run_id, _, _ = await _run(migrated, settings)
+    await _settle(settings, migrated)
+    mara = await _scalar(
+        migrated, "SELECT id FROM person WHERE display_name = 'Mara' AND household_id = :s",
+        session.household_id,
+    )  # fmt: skip
+    kinds = {
+        kind: pid
+        for pid in await _proposals(migrated, run_id, "s9:t1")
+        for kind in [await _scalar(migrated, "SELECT kind FROM proposal WHERE id = :s", pid)]
+    }
+    async with migrated.connect() as conn:
+        await approve(
+            conn, [kinds["life_event"]], person_id=mara, decided_at=ENDED + timedelta(hours=1)
+        )
+        await conn.commit()
+    settled = await _settle(settings, migrated)
+    assert (settled.linked, settled.deleted, settled.waiting) == (0, 0, 1)
+    async with migrated.connect() as conn:
+        await reject(
+            conn, [kinds["replace_fact"]], person_id=mara, decided_at=ENDED + timedelta(hours=2)
+        )
+        await conn.commit()
+    settled = await _settle(settings, migrated)
+    assert (settled.linked, settled.deleted, settled.problems) == (0, 1, [])
+    async with migrated.connect() as conn:
+        assert (await conn.execute(text("SELECT count(*) FROM meko_link"))).scalar_one() == 0
+    assert await _check(settings, migrated) == []
+
+
 async def test_meko_words_never_hold_a_number_for_v09(
     migrated: AsyncEngine, test_meko_url: str, make_settings: MakeSettings
 ) -> None:

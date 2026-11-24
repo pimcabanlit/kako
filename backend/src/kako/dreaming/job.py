@@ -10,7 +10,7 @@ Ending a session queues its run (`end_session`); `run_dream` does it:
    it, in which turn) and the idempotency key of the turn it was said in. A proposal the session
    already made from the same words is **already**: dreaming never proposes it twice.
 5. **Candidates.** The memories Meko extracted from the session on its own are shown to extraction
-   as noted memories; each settles to waiting, link or delete (`candidates.py`), kept in the run's
+   as noted memories; each settles to waiting or delete (`candidates.py`), kept in the run's
    counts, and `memories.py` carries it out in Meko and `meko_link` (V-14).
 
 The run is done once: a done run does nothing again; a failed one may run again, and what it
@@ -78,7 +78,6 @@ class Outcome:
     outcome: str  # the finding's, or `already` (the session proposed it) or `refused`
     reason: str
     proposal_ids: tuple[uuid.UUID, ...] = ()
-    existing: tuple[uuid.UUID, ...] = ()  # for `already`: the session's proposals
 
 
 @dataclass(frozen=True)
@@ -367,10 +366,7 @@ async def _propose(
         fresh = {id(f) for f in group if not any(k in existing for g, _, k in keyed if g is f)}
         for f in group:
             if id(f) not in fresh:
-                ids = tuple(existing[k] for g, _, k in keyed if g is f and k in existing)
-                outcomes.append(
-                    Outcome(f, "already", "proposed in the session already", existing=ids)
-                )
+                outcomes.append(Outcome(f, "already", "proposed in the session already"))
         if not fresh:
             continue
         made: dict[int, list[uuid.UUID]] = {}
@@ -444,10 +440,7 @@ def _fates(
         settled = Settled(
             claims[c - 1].quote,
             said_on,
-            tuple(dict.fromkeys(i for o in mine for i in (*o.proposal_ids, *o.existing))),
-            tuple(
-                o.finding.held for o in mine if o.outcome == "same" and o.finding.held is not None
-            ),
+            tuple(dict.fromkeys(i for o in mine for i in o.proposal_ids)),
         )
         for n in memories:
             by_ref.setdefault(n.ref, []).append(settled)
@@ -465,7 +458,6 @@ def candidate_json(c: Candidate) -> dict[str, Any]:
         "state": c.fate,
         "reason": short(c.reason, 200),
         "proposal_ids": [str(i) for i in c.proposal_ids],
-        "held": [[table, str(i)] for table, i in c.held],
     }
 
 

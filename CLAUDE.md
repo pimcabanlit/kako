@@ -319,7 +319,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   session: `claims.py` (pure: the claims `submit_claims` hands in, checked for shape), `classify.py`
   (pure: each claim against what Kako holds, the quote in its turn, V-09, new, replace, retract,
   correction, same, conflict, refused or deferred, and the proposals it makes), `candidates.py`
-  (pure: which memories Meko extracted are candidates, and each one's fate: waiting, link or
+  (pure: which memories Meko extracted are candidates, and each one's fate: waiting or
   delete), `extract.py` (the brief and the one structured model call, prompt `prompts/dreaming.md`),
   `job.py` (`end_session` queues a `dream_run`; `run_dream` reads the session's turns from its Meko
   conversation as the agent that wrote them and its extracted memories (`search_memories`),

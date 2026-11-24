@@ -3,12 +3,11 @@
 A dreaming run keeps each memory Meko extracted from the session in its counts (`memories`), with
 the fate `candidates.py` gave it. `settle_memories` carries the fates out, as often as it is run:
 
-- **waiting**: once a person approves one of its proposals, `meko_link` ties the memory to the fact
-  or life event that proposal wrote (**linked**); once none of them is pending or approved (the
-  household said no, or the proposal expired), or what was approved writes nothing (a retraction),
-  it is to be deleted. Still pending: it waits.
-- **link**: `meko_link` ties it to the fact or life event Kako holds (**linked**); if that row is
-  gone, it is to be deleted.
+- **waiting**: once a person has approved every one of its proposals, each of which showed the
+  memory's words as `extracted_memory` evidence, `meko_link` ties it to the facts and life events
+  they wrote (**linked**), and the brief marks it approved. Once any of them is rejected or expired,
+  or what was approved writes nothing (a retraction), it is to be deleted. While any is pending, it
+  waits.
 - **delete**: deleted in Meko as the agent that wrote it, the only one Meko lets delete it
   (**deleted**). One gone already counts as deleted. One written by an agent that isn't Kako's
   can't be: it is **undeletable**, and the V-14 check says so.
@@ -31,7 +30,15 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from kako.agents.ask import LOCAL_PREFIX
-from kako.db.models import DreamRun, Fact, LifeEvent, MekoLink, Proposal, Session
+from kako.db.models import (
+    DreamRun,
+    Fact,
+    LifeEvent,
+    MekoLink,
+    Proposal,
+    ProposalEvidence,
+    Session,
+)
 from kako.dreaming.candidates import MAX_NOTED
 from kako.dreaming.extract import said_turns
 from kako.dreaming.job import people, read_session, session_noted, session_turns
@@ -46,7 +53,8 @@ PROPOSAL = cast(Table, Proposal.__table__)
 FACT = cast(Table, Fact.__table__)
 LIFE_EVENT = cast(Table, LifeEvent.__table__)
 MEKO_LINK = cast(Table, MekoLink.__table__)
-OPEN: Final = frozenset({"waiting", "link", "delete"})  # states settling still has to carry out
+EVIDENCE = cast(Table, ProposalEvidence.__table__)
+OPEN: Final = frozenset({"waiting", "delete"})  # states settling still has to carry out
 WRITTEN: Final = {"fact": FACT, "life_event": LIFE_EVENT}
 CHECK_RUNS: Final = 100  # dreamed sessions one check reads
 CHECK_CALLS: Final = 2 * CHECK_RUNS  # each: its turns and its memories
@@ -123,26 +131,6 @@ async def _written(
     return found
 
 
-async def _held(
-    conn: AsyncConnection, household_id: uuid.UUID, held: Sequence[Any]
-) -> list[tuple[str, uuid.UUID]]:
-    """Of the rows a `link` candidate names, those this household holds (a fact not retracted)."""
-    found: list[tuple[str, uuid.UUID]] = []
-    for item in held:
-        if not isinstance(item, list | tuple) or len(item) != 2 or item[0] not in WRITTEN:
-            continue
-        (row_id,) = _ids([item[1]]) or (None,)
-        if row_id is None:
-            continue
-        table = WRITTEN[item[0]]
-        query = select(table.c.id).where(table.c.id == row_id, table.c.household_id == household_id)
-        if item[0] == "fact":
-            query = query.where(table.c.status != "retracted")
-        if (await conn.execute(query)).first() is not None:
-            found.append((item[0], row_id))
-    return found
-
-
 async def _link(
     conn: AsyncConnection, rows: Sequence[tuple[str, uuid.UUID]], memory_id: str, at: datetime
 ) -> None:
@@ -163,41 +151,46 @@ async def _link(
 async def _link_or_wait(
     engine: AsyncEngine, run: _Run, entry: dict[str, Any], at: datetime
 ) -> None:
-    """Move a waiting or link entry on, in one transaction: linked, still waiting, or delete."""
+    """Move a waiting entry on, in one transaction: still waiting, linked or to delete. It is linked
+    only when a person approved every proposal it waits on, each of which showed its words."""
+    memory_id = str(entry["memory_id"])
+    ids = _ids(entry.get("proposal_ids"))
     async with engine.begin() as conn:
-        if entry["state"] == "link":
-            rows = await _held(conn, run.household_id, entry.get("held") or ())
-            if not rows:
-                entry.update(state="delete", reason="what it was the same as is gone")
-                return
-        else:
-            ids = _ids(entry.get("proposal_ids"))
-            statuses = (
-                {
-                    r.id: r.status
-                    for r in await conn.execute(
-                        select(PROPOSAL.c.id, PROPOSAL.c.status).where(
-                            PROPOSAL.c.id.in_(ids), PROPOSAL.c.household_id == run.household_id
-                        )
-                    )
-                }
-                if ids
-                else {}
-            )
-            approved = [i for i, s in statuses.items() if s == "approved"]
-            rows = await _written(conn, run.household_id, approved) if approved else []
-            if not rows:
-                if "pending" in statuses.values():
-                    return
-                why = (
-                    "what the household approved writes no fact"
-                    if approved
-                    else "the household didn't approve it"
+        statuses: dict[uuid.UUID, str] = {}
+        if ids:
+            rows = await conn.execute(
+                select(PROPOSAL.c.id, PROPOSAL.c.status).where(
+                    PROPOSAL.c.id.in_(ids), PROPOSAL.c.household_id == run.household_id
                 )
-                entry.update(state="delete", reason=why)
-                return
-        await _link(conn, rows, str(entry["memory_id"]), at)
-        entry.update(state="linked", links=[[t, str(i)] for t, i in rows])
+            )
+            statuses = {r.id: r.status for r in rows}
+        if not ids or len(statuses) != len(set(ids)):
+            entry.update(state="delete", reason="what it waits on isn't this household's")
+            return
+        if any(s in ("rejected", "expired") for s in statuses.values()):
+            entry.update(state="delete", reason="the household didn't approve it")
+            return
+        if "pending" in statuses.values():
+            return
+        shown = {
+            r.proposal_id
+            for r in await conn.execute(
+                select(EVIDENCE.c.proposal_id).where(
+                    EVIDENCE.c.proposal_id.in_(ids),
+                    EVIDENCE.c.kind == "extracted_memory",
+                    EVIDENCE.c.ref == memory_id,
+                )
+            )
+        }
+        if shown != set(ids):
+            entry.update(state="delete", reason="a person approved it without seeing its words")
+            return
+        written = await _written(conn, run.household_id, ids)
+        if not written:
+            entry.update(state="delete", reason="what the household approved writes no fact")
+            return
+        await _link(conn, written, memory_id, at)
+        entry.update(state="linked", links=[[t, str(i)] for t, i in written])
 
 
 async def _delete(meko: Meko, run: _Run, entry: dict[str, Any], report: SettleReport) -> bool:
@@ -252,7 +245,7 @@ async def settle_memories(
         if not any(e.get("state") in OPEN for e in entries):
             continue
         for entry in entries:
-            if entry.get("state") in ("waiting", "link"):
+            if entry.get("state") == "waiting":
                 await _link_or_wait(engine, run, entry, now)
                 if entry["state"] == "linked":
                     report.linked += 1

@@ -255,11 +255,12 @@ queues the run; `kako dream run` runs what is queued, one at a time. The code is
    knowledge until a person says yes; a fact approved from dreaming's proposal says so (`source_kind`
    `dreaming`). The run keeps what it found in `dream_run.counts`.
 7. **Settle the candidates** (`dreaming/memories.py`, after each run and with `kako dream settle`).
-   Each noted memory has one fate, kept in `dream_run.counts`: **waiting** on its claim's proposals
-   (linked in `meko_link` to the fact or life event a person approves; deleted once the household
-   says no), **link** to what Kako holds already (its claim was the same), or **delete** (no claim
-   names it, its claim was refused, a conflict or deferred, or it holds a number its claim's quote
-   doesn't). A memory is deleted as the agent that wrote it, the only one Meko allows. So every
+   Each noted memory has one fate, kept in `dream_run.counts`: **waiting** on the proposals its claim
+   made now, each showing its words, or **delete** (no claim names it; its claim was refused, a
+   conflict or deferred; it holds a number its claim's quote doesn't; or its claim made nothing new,
+   so no person would see its words). A waiting memory is linked in `meko_link` to what was written
+   only once a person has approved every one of those proposals, and deleted once any is turned
+   down: the brief marks a linked memory approved, so its words must be what the household saw. A memory is deleted as the agent that wrote it, the only one Meko allows. So every
    extracted memory ends linked to an approved fact or deleted (V-14, checked by `kako dream check`,
    which also finds a memory Meko extracted after the run).
 8. **On approval**, the fact store writes the rows; the Meko adapter then adds Kako's own memory,
