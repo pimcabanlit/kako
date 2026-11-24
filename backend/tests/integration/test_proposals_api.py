@@ -153,7 +153,12 @@ async def test_the_command_line(
     assert f'Evidence (turn conv-4:s4:t1): Mara: "{JOB}"' in out
     assert await asyncio.to_thread(run, "proposals", "approve", str(salary), "--by", "Lia") == 1
     assert "only an adult" in capsys.readouterr().err
-    assert await asyncio.to_thread(run, "proposals", "approve", str(salary), "--by", "mara") == 0
+    assert (
+        await asyncio.to_thread(
+            run, "proposals", "approve", str(salary), "--by", "mara", "--no-meko"
+        )
+        == 0
+    )
     assert f"{salary} replace_fact: approved (fact " in capsys.readouterr().out
     assert await asyncio.to_thread(run, "proposals", "approve", str(salary), "--by", "Jun") == 0
     assert "already approved; nothing changed" in capsys.readouterr().out
