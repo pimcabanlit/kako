@@ -110,6 +110,8 @@ class Finding:
     # Ties a fact to its life event: approved together, the event first.
     life_event_id: uuid.UUID | None = None
     subject: tuple[uuid.UUID | None, str] | None = field(default=None, compare=False)
+    # For `same`: what Kako holds that it says the same as (fact or life_event, its id).
+    held: tuple[str, uuid.UUID] | None = None
 
 
 class _Refused(Exception):
@@ -200,7 +202,8 @@ def _fact(
         raise _Refused(f"{key}: {exc}") from None
     stated = f"{what} = {_shown(key, value)}"
     if at is not None and at.value == value:
-        return _with(base, "same", stated, f"Kako holds it already (since {day(at.valid_from)})")
+        same = _with(base, "same", stated, f"Kako holds it already (since {day(at.valid_from)})")
+        return replace(same, held=("fact", at.id))
     if claim.correction and at is not None:
         if at.replaced_by is not None and any(
             f.id == at.replaced_by and known(f, known_.known_at) for f in known_.facts
@@ -300,7 +303,8 @@ def _event(
     base = Finding(0, turn, claim.quote, "same", what)
     for event_id, kind, on in (*known_.life_events, *((i, k, o) for k, o, i in held)):
         if (kind, on) == (event.kind, occurs_on):
-            return _with(base, "same", what, "Kako has it already"), event_id
+            same = _with(base, "same", what, "Kako has it already")
+            return replace(same, held=("life_event", event_id)), event_id
     event_id = new_id()
     proposal = Proposal(
         "life_event",

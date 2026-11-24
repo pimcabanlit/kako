@@ -164,6 +164,22 @@ def main(argv: list[str] | None = None) -> int:
         type=datetime.fromisoformat,
         help="the time its proposals are made, with its zone (default: now)",
     )
+    dream_settle = dream_commands.add_parser(
+        "settle",
+        help="carry out what each memory Meko extracted from a dreamed session comes to: linked "
+        "to what a person approved, or deleted (V-14)",
+    )
+    dream_settle.add_argument(
+        "--at",
+        type=datetime.fromisoformat,
+        help="the time of the links, with its zone (default: now)",
+    )
+    dream_check = dream_commands.add_parser(
+        "check",
+        help="V-14: every memory Meko extracted from a dreamed session is linked, waits on a "
+        "pending proposal, or is gone from Meko; exit 1 if not",
+    )
+    dream_check.add_argument("--household", type=uuid.UUID, help="only this household's sessions")
     dream_eval = dream_commands.add_parser(
         "eval",
         help="dreaming's labelled set on the demo household, scored in code. It replays "
@@ -265,6 +281,10 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_dream_end(args.session, args.at))
         if args.dream_command == "run":
             return asyncio.run(_dream_run(args.session, args.at))
+        if args.dream_command == "settle":
+            return asyncio.run(_dream_settle(args.at))
+        if args.dream_command == "check":
+            return asyncio.run(_dream_check(args.household))
         return asyncio.run(_dream_eval(args.only, household_id=args.household, save=args.save))
     parser.error(f"unknown command {args.command}")
     return 2
@@ -929,7 +949,8 @@ async def _dream_run(session_id: uuid.UUID | None, at: datetime | None) -> int:
     from kako.agents.model_manager import chat_backend
     from kako.db.engine import make_engine
     from kako.db.meko_log import DbCallLog
-    from kako.dreaming.job import DREAM_RUN, DreamError, queued_runs, run_dream
+    from kako.dreaming.job import DREAM_RUN, MEKO_CALLS, DreamError, queued_runs, run_dream
+    from kako.dreaming.memories import settle_memories
     from kako.health import safe_error
     from kako.meko.client import MekoError
     from kako.meko.mcp import open_meko
@@ -967,10 +988,10 @@ async def _dream_run(session_id: uuid.UUID | None, at: datetime | None) -> int:
         for run_id in runs:
             calls = DbCallLog(engine)
             try:
-                async with open_meko(settings, calls, max_calls=4) as meko:
-                    report = await run_dream(
-                        engine, meko, settings, backend, run_id, now=at or datetime.now(UTC)
-                    )
+                async with open_meko(settings, calls, max_calls=MEKO_CALLS) as meko:
+                    now = at or datetime.now(UTC)
+                    report = await run_dream(engine, meko, settings, backend, run_id, now=now)
+                    settled = await settle_memories(engine, meko, now=now, run_id=run_id)
             except (DreamError, MekoError, ModelError) as exc:
                 print(f"Dreaming run {run_id} failed: {safe_error(exc)}", file=sys.stderr)
                 failed += 1
@@ -985,9 +1006,76 @@ async def _dream_run(session_id: uuid.UUID | None, at: datetime | None) -> int:
             for o in report.outcomes:
                 why = f": {o.reason}" if o.reason else ""
                 print(f"- {o.outcome}: {o.finding.shown}{why}")
+            if report.candidates:
+                print(
+                    f"Memories Meko extracted: {len(report.candidates)}; {settled.linked} linked, "
+                    f"{settled.deleted} deleted, {settled.waiting} waiting."
+                )
+                for problem in settled.problems:
+                    print(f"- {problem}", file=sys.stderr)
     finally:
         await engine.dispose()
     return 1 if failed else 0
+
+
+async def _dream_settle(at: datetime | None) -> int:
+    from kako.db.engine import make_engine
+    from kako.db.meko_log import DbCallLog
+    from kako.dreaming.job import MEKO_CALLS
+    from kako.dreaming.memories import settle_memories
+    from kako.health import safe_error
+    from kako.meko.client import MekoError
+    from kako.meko.mcp import open_meko
+
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    if at is not None and at.tzinfo is None:
+        print("--at needs its time zone, such as +08:00.", file=sys.stderr)
+        return 1
+    engine = make_engine(settings.database_url)
+    try:
+        async with open_meko(settings, DbCallLog(engine), max_calls=MEKO_CALLS) as meko:
+            report = await settle_memories(engine, meko, now=at or datetime.now(UTC))
+    except MekoError as exc:
+        print(f"Can't settle: {safe_error(exc)}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+    print(f"{report.linked} linked, {report.deleted} deleted, {report.waiting} waiting.")
+    for problem in report.problems:
+        print(f"- {problem}", file=sys.stderr)
+    return 1 if report.problems else 0
+
+
+async def _dream_check(household_id: uuid.UUID | None) -> int:
+    from kako.db.engine import make_engine
+    from kako.db.meko_log import DbCallLog
+    from kako.dreaming.memories import CHECK_CALLS, check_extracted
+    from kako.health import safe_error
+    from kako.meko.client import MekoError
+    from kako.meko.mcp import open_meko
+
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    engine = make_engine(settings.database_url)
+    try:
+        async with open_meko(settings, DbCallLog(engine), max_calls=CHECK_CALLS) as meko:
+            problems = await check_extracted(engine, meko, household_id=household_id)
+    except MekoError as exc:
+        print(f"Can't check: {safe_error(exc)}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+    if not problems:
+        print("V-14 passes: every memory Meko extracted from a dreamed session is settled.")
+        return 0
+    for problem in problems:
+        print(f"V-14: {problem}")
+    return 1
 
 
 async def _dream_eval(only: str | None, *, household_id: uuid.UUID | None, save: bool) -> int:

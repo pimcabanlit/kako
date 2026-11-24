@@ -15,7 +15,12 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "kako"
 PURE_PACKAGES = ("facts", "engine", "planning", "decisions")
 # Pure modules in packages that aren't, and the one pure module of `kako.agents` they may use (the
 # way the agents write values: pesos, days).
-PURE_MODULES = ("dreaming/claims.py", "dreaming/classify.py", "agents/present.py")
+PURE_MODULES = (
+    "dreaming/claims.py",
+    "dreaming/classify.py",
+    "dreaming/candidates.py",
+    "agents/present.py",
+)
 ALLOWED = ("kako.agents.present",)
 
 BANNED_MODULES = (

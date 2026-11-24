@@ -9,6 +9,9 @@ Ending a session queues its run (`end_session`); `run_dream` does it:
 4. **Propose** what is new as pending proposals with `dream_run_id`, the quote as evidence (who said
    it, in which turn) and the idempotency key of the turn it was said in. A proposal the session
    already made from the same words is **already**: dreaming never proposes it twice.
+5. **Candidates.** The memories Meko extracted from the session on its own are shown to extraction
+   as noted memories; each settles to waiting, link or delete (`candidates.py`), kept in the run's
+   counts, and `memories.py` carries it out in Meko and `meko_link` (V-14).
 
 The run is done once: a done run does nothing again; a failed one may run again, and what it
 proposed the first time is found under its keys. The model and the household's words never
@@ -39,9 +42,11 @@ from kako.db.fact_store import load_entities, load_facts
 from kako.db.llm_log import DbLlmLog
 from kako.db.models import DreamRun, Household, LifeEvent, Person, Proposal, Session
 from kako.db.proposal_store import Evidence, ProposalError, propose
+from kako.dreaming.candidates import MAX_NOTED, Candidate, Noted, Settled, noted_memories, settle
 from kako.dreaming.claims import SaidTurn
 from kako.dreaming.classify import PROPOSING, Finding, Known, classify
 from kako.dreaming.extract import DreamInputs, Extraction, extract, said_turns
+from kako.facts.evidence import text_unquoted
 from kako.facts.proposals import PayloadError, idempotency_key, parse_life_event
 from kako.facts.snapshot import take_snapshot
 from kako.health import safe_error
@@ -55,6 +60,10 @@ PERSON = cast(Table, Person.__table__)
 PROPOSAL = cast(Table, Proposal.__table__)
 LIFE_EVENT = cast(Table, LifeEvent.__table__)
 MAX_LISTED: Final = 40  # findings kept in a run's counts
+AGENT: Final = "kako:dreaming"
+QUERY_CHARS: Final = 2_000  # the household's words, as the search for the session's memories
+# Meko calls for one run and its settling: the turns, the memories, a delete for each.
+MEKO_CALLS: Final = 2 + MAX_NOTED
 
 
 class DreamError(Exception):
@@ -69,6 +78,7 @@ class Outcome:
     outcome: str  # the finding's, or `already` (the session proposed it) or `refused`
     reason: str
     proposal_ids: tuple[uuid.UUID, ...] = ()
+    existing: tuple[uuid.UUID, ...] = ()  # for `already`: the session's proposals
 
 
 @dataclass(frozen=True)
@@ -80,6 +90,7 @@ class DreamReport:
     outcomes: tuple[Outcome, ...] = ()
     model_calls: int = 0
     error: str | None = None
+    candidates: tuple[Candidate, ...] = ()
 
     @property
     def proposed(self) -> tuple[uuid.UUID, ...]:
@@ -153,7 +164,7 @@ async def _finish(
 
 
 @dataclass(frozen=True)
-class _Session:
+class DreamSession:
     id: uuid.UUID
     household_id: uuid.UUID
     household_name: str
@@ -162,7 +173,7 @@ class _Session:
     datapack_id: str | None
 
 
-async def _session(conn: AsyncConnection, session_id: uuid.UUID) -> _Session:
+async def read_session(conn: AsyncConnection, session_id: uuid.UUID) -> DreamSession:
     row = (
         await conn.execute(
             select(
@@ -182,7 +193,7 @@ async def _session(conn: AsyncConnection, session_id: uuid.UUID) -> _Session:
         raise DreamError("no such session")
     if row.ended_at is None:
         raise DreamError("the session hasn't ended: dreaming runs after it")
-    return _Session(
+    return DreamSession(
         row.id,
         row.household_id,
         row.name,
@@ -192,7 +203,7 @@ async def _session(conn: AsyncConnection, session_id: uuid.UUID) -> _Session:
     )
 
 
-async def _people(conn: AsyncConnection, household_id: uuid.UUID) -> list[Any]:
+async def people(conn: AsyncConnection, household_id: uuid.UUID) -> list[Any]:
     rows = await conn.execute(
         select(PERSON.c.id, PERSON.c.display_name, PERSON.c.role)
         .where(PERSON.c.household_id == household_id)
@@ -236,7 +247,9 @@ async def household_known(
     return known, tuple((e.kind, e.occurs_on, e.description) for e in events)
 
 
-async def _turns(meko: Meko, session: _Session, names: dict[uuid.UUID, str]) -> list[SaidTurn]:
+async def session_turns(
+    meko: Meko, session: DreamSession, names: dict[uuid.UUID, str]
+) -> list[SaidTurn]:
     """The household's turns Kako kept for this session, in order: a message with no seed, or
     one that names another session, isn't one of them."""
     if session.conversation_id.startswith(LOCAL_PREFIX):
@@ -266,6 +279,21 @@ async def _turns(meko: Meko, session: _Session, names: dict[uuid.UUID, str]) -> 
     return turns
 
 
+def memory_query(turns: Sequence[SaidTurn]) -> str:
+    """What finds the session's memories: the household's own words (Meko extracts from them)."""
+    return " ".join(t.text for t in turns)[:QUERY_CHARS]
+
+
+async def session_noted(
+    meko: Meko, conversation_id: str, turns: Sequence[SaidTurn]
+) -> tuple[Noted, ...]:
+    """The memories Meko extracted from the session on its own (one search), as candidates."""
+    if not turns:
+        return ()
+    found = await meko.search_memories(conversation_id, memory_query(turns), agent_id=AGENT)
+    return noted_memories(found, conversation_id)
+
+
 async def dream_over(
     manager: ModelManager,
     steps: StepLog,
@@ -286,21 +314,36 @@ async def dream_over(
     return extraction, classify(extraction.claims, inputs.turns, known, new_id=uuid.uuid4)
 
 
-async def _existing(conn: AsyncConnection, keys: Sequence[str]) -> set[str]:
+async def _existing(conn: AsyncConnection, keys: Sequence[str]) -> dict[str, uuid.UUID]:
     if not keys:
-        return set()
+        return {}
     rows = await conn.execute(
-        select(PROPOSAL.c.idempotency_key).where(PROPOSAL.c.idempotency_key.in_(list(keys)))
+        select(PROPOSAL.c.idempotency_key, PROPOSAL.c.id).where(
+            PROPOSAL.c.idempotency_key.in_(list(keys))
+        )
     )
-    return {r.idempotency_key for r in rows}
+    return {r.idempotency_key: r.id for r in rows}
+
+
+def _noted_evidence(noted: Sequence[Noted], f: Finding) -> list[Evidence]:
+    """The noted memories a claim names, as evidence the household sees (never a quote for
+    V-09), when they hold no number the claim's quote doesn't."""
+    if f.turn is None:
+        return []
+    return [
+        Evidence("extracted_memory", n.memory_id, n.text)
+        for n in noted
+        if not text_unquoted(n.text, [f.quote], today=f.turn.said_on)
+    ]
 
 
 async def _propose(
     engine: AsyncEngine,
-    session: _Session,
+    session: DreamSession,
     run_id: uuid.UUID,
     findings: list[Finding],
     at: datetime,
+    named: dict[int, list[Noted]] | None = None,
 ) -> list[Outcome]:
     """Each claim's proposals in one transaction (a life event with its facts, a retraction with
     the value that takes its place), checked again by the store. Refused: reported, never
@@ -324,7 +367,10 @@ async def _propose(
         fresh = {id(f) for f in group if not any(k in existing for g, _, k in keyed if g is f)}
         for f in group:
             if id(f) not in fresh:
-                outcomes.append(Outcome(f, "already", "proposed in the session already"))
+                ids = tuple(existing[k] for g, _, k in keyed if g is f and k in existing)
+                outcomes.append(
+                    Outcome(f, "already", "proposed in the session already", existing=ids)
+                )
         if not fresh:
             continue
         made: dict[int, list[uuid.UUID]] = {}
@@ -341,6 +387,7 @@ async def _propose(
                             f.turn.person_id,
                         ),
                         *(Evidence("fact", str(e.fact_id), e.quote) for e in f.evidence),
+                        *_noted_evidence((named or {}).get(f.claim, ()), f),
                     ]
                     done = await propose(
                         conn,
@@ -371,9 +418,63 @@ async def _propose(
     return sorted(outcomes, key=lambda o: order[id(o.finding)])
 
 
-def _counts(outcomes: Sequence[Outcome], extraction: Extraction) -> dict[str, Any]:
+def _named(noted: Sequence[Noted], extraction: Extraction) -> dict[int, list[Noted]]:
+    """The noted memories each claim names (by its position from 1); unknown refs are dropped."""
+    by_ref = {n.ref: n for n in noted}
+    return {
+        c: [by_ref[r] for r in claim.memories if r in by_ref]
+        for c, claim in enumerate(extraction.claims or (), start=1)
+        if any(r in by_ref for r in claim.memories)
+    }
+
+
+def _fates(
+    noted: Sequence[Noted],
+    named: dict[int, list[Noted]],
+    extraction: Extraction,
+    outcomes: Sequence[Outcome],
+    on: date,
+) -> list[Candidate]:
+    """Each noted memory's fate, from what the claims that name it came to."""
+    claims = extraction.claims or ()
+    by_ref: dict[str, list[Settled]] = {}
+    for c, memories in named.items():
+        mine = [o for o in outcomes if o.finding.claim == c]
+        said_on = next((o.finding.turn.said_on for o in mine if o.finding.turn), on)
+        settled = Settled(
+            claims[c - 1].quote,
+            said_on,
+            tuple(dict.fromkeys(i for o in mine for i in (*o.proposal_ids, *o.existing))),
+            tuple(
+                o.finding.held for o in mine if o.outcome == "same" and o.finding.held is not None
+            ),
+        )
+        for n in memories:
+            by_ref.setdefault(n.ref, []).append(settled)
+    return settle(noted, by_ref)
+
+
+def candidate_json(c: Candidate) -> dict[str, Any]:
+    """A candidate as the run keeps it; `state` moves on as `memories.py` carries it out."""
+    return {
+        "ref": c.noted.ref,
+        "memory_id": c.noted.memory_id,
+        "agent_id": c.noted.agent_id,
+        "text": short(c.noted.text, 200),
+        "fate": c.fate,
+        "state": c.fate,
+        "reason": short(c.reason, 200),
+        "proposal_ids": [str(i) for i in c.proposal_ids],
+        "held": [[table, str(i)] for table, i in c.held],
+    }
+
+
+def _counts(
+    outcomes: Sequence[Outcome], extraction: Extraction, candidates: Sequence[Candidate] = ()
+) -> dict[str, Any]:
     kinds = Counter(p.kind for o in outcomes if o.proposal_ids for p in o.finding.proposals)
     return {
+        "memories": [candidate_json(c) for c in candidates],
         "claims": len(extraction.claims or ()),
         "model_calls": extraction.model_calls,
         "proposals": dict(sorted(kinds.items())),
@@ -420,19 +521,21 @@ async def run_dream(
     session_id = claimed.session_id
     try:
         async with engine.connect() as conn:
-            session = await _session(conn, session_id)
-            people = await _people(conn, session.household_id)
+            session = await read_session(conn, session_id)
+            household = await people(conn, session.household_id)
             known, events = await household_known(conn, session.household_id, now)
-        names = {p.id: p.display_name for p in people}
-        turns = said_turns(await _turns(meko, session, names))
+        names = {p.id: p.display_name for p in household}
+        turns = said_turns(await session_turns(meko, session, names))
+        noted = await session_noted(meko, session.conversation_id, turns)
         inputs = DreamInputs(
             session.household_name,
-            tuple((p.display_name, p.role) for p in people),
+            tuple((p.display_name, p.role) for p in household),
             session.on,
             tuple(known.entities.values()),
             take_snapshot(session.household_id, known.facts, session.on, now).facts,
             events,
             turns,
+            noted,
         )
         manager = ModelManager(settings, backend, DbLlmLog(engine))
         extraction, findings = await dream_over(
@@ -444,10 +547,20 @@ async def run_dream(
         )
         if extraction.claims is None:
             raise DreamError("the extraction step handed in no claims")
-        outcomes = await _propose(engine, session, run_id, findings, now)
+        named = _named(noted, extraction)
+        outcomes = await _propose(engine, session, run_id, findings, now, named)
+        candidates = _fates(noted, named, extraction, outcomes, session.on)
     except Exception as exc:
         error = safe_error(exc)
         await _finish(engine, run_id, "failed", now, {"error": error})
         raise
-    await _finish(engine, run_id, "done", now, _counts(outcomes, extraction))
-    return DreamReport(run_id, session_id, "done", True, tuple(outcomes), extraction.model_calls)
+    await _finish(engine, run_id, "done", now, _counts(outcomes, extraction, candidates))
+    return DreamReport(
+        run_id,
+        session_id,
+        "done",
+        True,
+        tuple(outcomes),
+        extraction.model_calls,
+        candidates=tuple(candidates),
+    )

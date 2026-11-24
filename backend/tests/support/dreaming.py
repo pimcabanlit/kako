@@ -30,6 +30,7 @@ def _claim(
         "correction": correction,
         "life_event": event,
         "facts": list(facts),
+        "memories": [],
     }
 
 
