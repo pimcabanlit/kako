@@ -8,9 +8,13 @@ least one of that what-if's figures and one other source (V-11), drawing only on
 were asked. The options' allocations are the what-if's, which the engine ran: no number in an
 option comes from the model.
 
+Once two or more specialists propose a move, code reconciles their proposals together and tells
+the orchestrator what the rules found (`agents.reconciling`); while a conflict is open its
+`run_what_if` calls are splits the rules check, and its answer carries the resolution.
+
 Bounds kept in code: at most 4 specialist asks a turn, at most 8 counted tool calls for the
-orchestrator, and the specialists' own bounds (`agents.specialists`). Reconciling the specialists'
-proposals together (task 4) and the number check over the reply (task 5) come next.
+orchestrator, at most 3 splits, and the specialists' own bounds (`agents.specialists`). The number
+check over the reply (task 5) comes next.
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ from kako.agents.brief import data
 from kako.agents.chat import ToolSpec
 from kako.agents.model_manager import ModelManager
 from kako.agents.present import money
+from kako.agents.reconciling import RESOLUTION_SCHEMA, Reconciler
 from kako.agents.specialists import run_specialist, system_prompt
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult, run_agent
 from kako.agents.tools import (
@@ -165,7 +170,7 @@ def _option(state: TurnState, raw: Any, asked: _Asked) -> Option:
     return Option(label, summary, ref, what_if.allocations, citations, tuple(specialists))
 
 
-def _answer_tool(state: TurnState, asked: _Asked) -> Tool:
+def _answer_tool(state: TurnState, asked: _Asked, reconciler: Reconciler) -> Tool:
     async def submit_answer(arguments: dict[str, Any]) -> ToolResult:
         reply = _text(arguments, "reply", MAX_REPLY)
         raw = arguments.get("options")
@@ -182,11 +187,15 @@ def _answer_tool(state: TurnState, asked: _Asked) -> Tool:
             raise ToolInputError('recommended must be an option\'s label, or ""')
         if recommended.strip() and recommended.strip() not in labels:
             raise ToolInputError(f"recommended {recommended!r} isn't one of the options' labels")
+        resolution = reconciler.resolution(
+            arguments.get("resolution"), options, recommended.strip() or None
+        )
         answer = TurnAnswer(
             reply,
             options,
             recommended.strip() or None,
             tuple(p for p in asked.proposals if p is not None),
+            resolution,
         )
         summary = f"{len(options)} options" + (
             f", recommends {answer.recommended}" if answer.recommended else ""
@@ -210,12 +219,15 @@ def _answer_tool(state: TurnState, asked: _Asked) -> Tool:
             "submit_answer",
             "Hand in the turn's answer. Call it once, last. reply: what the household reads. "
             'options: 0 to 4, each one what-if, cited. recommended: an option\'s label, or "" '
-            "when the choice is the household's.",
+            "when the choice is the household's. resolution: null unless code reported a "
+            'conflict; then the split that resolves it and the what-if you rejected, or both "" '
+            "to leave the choice to the household, with your reason.",
             object_schema(
                 {
                     "reply": {"type": "string"},
                     "options": {"type": "array", "items": option},
                     "recommended": {"type": "string"},
+                    "resolution": RESOLUTION_SCHEMA,
                 }
             ),
         ),
@@ -228,12 +240,13 @@ def _answer_tool(state: TurnState, asked: _Asked) -> Tool:
 async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState) -> TurnAnswer:
     """The orchestrator's checked answer to the household's message."""
     asked = _Asked()
+    reconciler = Reconciler(state, lambda: [p for p in asked.proposals if p is not None])
     tools = [
         *read_tools(state),
         decisions_tool(state),
-        what_if_tool(state, PATH),
+        reconciler.split_tool(what_if_tool(state, PATH)),
         *(_ask_tool(manager, turn, state, s, asked) for s in SPECIALISTS),
-        _answer_tool(state, asked),
+        _answer_tool(state, asked, reconciler),
     ]
     user = (
         "The household's message: "
@@ -251,6 +264,7 @@ async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState
         tools=tools,
         max_output_tokens=manager.settings.orchestrator_max_output_tokens,
         max_tool_calls=MAX_TOOL_CALLS,
+        between_rounds=reconciler.after_round,
     )
     if isinstance(run.answer, TurnAnswer):
         return run.answer
@@ -258,4 +272,4 @@ async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState
         raise OrchestratorError("the orchestrator ended the turn with no answer")
     # A plain reply with no options: shown as it is, still subject to the number check (task 5).
     proposals = tuple(p for p in asked.proposals if p is not None)
-    return TurnAnswer(run.text.strip()[:MAX_REPLY], (), None, proposals)
+    return TurnAnswer(run.text.strip()[:MAX_REPLY], (), None, proposals, reconciler.unresolved())

@@ -25,6 +25,7 @@ from kako.agents.brief_store import gather_brief
 from kako.agents.model_manager import ModelManager
 from kako.agents.orchestrator import answer_turn
 from kako.agents.present import money
+from kako.agents.reconciling import render_resolution
 from kako.agents.recorded import ChatBackend
 from kako.agents.tools import TurnState
 from kako.db.agent_steps import DbStepLog
@@ -117,7 +118,8 @@ async def ask(
 
 def render_answer(asked: Asked) -> str:
     """The answer as the command prints it: the reply, each option with its allocations and
-    cited figures, then each specialist's proposal and what the turn cost."""
+    cited figures, how a conflict between the specialists was resolved (and the option rejected),
+    then each specialist's proposal and what the turn cost."""
     answer = asked.answer
     lines = [answer.reply, ""]
     for option in answer.options:
@@ -129,6 +131,8 @@ def render_answer(asked: Asked) -> str:
             lines.append(f"  cites {c.ref}" + (f" = {c.shown}" if c.figure is not None else ""))
     if not answer.options:
         lines.append("No options.")
+    if answer.resolution is not None:
+        lines += ["", *render_resolution(answer.resolution)]
     lines.append("")
     for p in answer.proposals:
         lines.append(f"{p.specialist} ({p.what_if or 'no change'}): {p.summary}")

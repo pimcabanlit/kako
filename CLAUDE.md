@@ -235,8 +235,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   why, and the decisions to revisit). `db/calc_store.py` stores a run with the facts it read and its
   figures, and reads it back; `demo/` the demo household (`files.py` reads and checks
   `data/demo-household/`, `load.py` loads it through the fact store, each change as an approved
-  proposal and then its write). `facts/` and `engine/` use no database, clock or
-  randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
+  proposal and then its write). `planning/reconcile.py` holds the reconciliation rules: the
+  specialists' asks together through the engine, over-allocation, opposite moves and missed goal
+  dates, and the same rules on one split. `facts/`, `engine/` and `planning/` use no database,
+  clock or randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
   any past their `max_tool_calls` ceiling, 0 by default; `adapter.py`, the one interface for every
   Meko call Kako makes; `mcp.py`, that interface over MCP (`open_meko`); `fake.py`, the same in memory
@@ -252,7 +254,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   with no network; `KAKO_MODEL_MODE`), `spend.py` (cost from the per-token prices, the `llm_call`
   log protocol), `turn.py` (a turn's token budget and step numbers, the `agent_step` log protocol)
   and `tool_loop.py` (`run_agent`: one agent's bounded loop, at most 4 counted tool calls and
-  then only its final tool, every tool call an `agent_step`), `present.py` (what agents see: stable
+  then only its final tool, every tool call an `agent_step`, and a note from code between rounds),
+  `present.py` (what agents see: stable
   refs such as `debt:credit-card`, figures and facts written out as ₱9,050.00, 12 months, Feb 15,
   2028), `brief.py` (`render_brief`, pure: the brief within `KAKO_BRIEF_TOKEN_BUDGET`, people's and
   Meko's words wrapped in `<data>` blocks, and what it drops first when over budget) and
@@ -261,7 +264,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   (`TurnState` and the agents' tools: `get_figures`, `get_facts`, `get_decisions`, one extra
   `search_memory`, `run_what_if`; amount specs and citations resolved and checked in code),
   `specialists.py` (the four specialists and `submit_proposal`), `orchestrator.py` (`answer_turn`:
-  the `ask_*` tools, at most 4 a turn, and `submit_answer`), `ask.py` (one turn for `kako ask`: a
+  the `ask_*` tools, at most 4 a turn, and `submit_answer`), `reconciling.py` (the orchestrator's
+  side of reconciliation: the rules' note on the proposals together, at most 3 splits each checked
+  by the rules, and the resolution with the option rejected), `ask.py` (one turn for `kako ask`: a
   session, the brief, the answer and what it cost) and `prompts/` (the shared rules, then one file
   per role; every system prompt is the shared rules, the brief, then the role). Recorded real runs
   live in `data/recorded/`, and each is logged in `docs/tuning-log.md`.
@@ -271,6 +276,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `tests/support/data_model.py` reads the tables out of `docs/data-model.md`: `test_schema_doc.py`
   holds the models to it and `tests/integration/test_schema.py` the migrated database (a fresh
   database per test, migrated twice), with the checks the database must refuse.
+  `test_reconcile.py` tests the reconciliation rules on the worked example (the asks together,
+  over-allocation, opposite moves, missed goal dates, one split), and `test_agents_reconcile.py`
+  the what-if loop with a scripted model: session 2's over-allocation caught, splits tried and
+  logged, the resolution checked in code and shown with the rejected option.
   `test_facts_*.py` test the fact rules on rows in memory (`tests/support/facts.py` builds them);
   `test_engine_worked_example.py` checks every worked-example figure to the centavo
   (`tests/support/villanueva.py` builds that household's history in memory from the demo files), `test_engine_rules.py` the flags,

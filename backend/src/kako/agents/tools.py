@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -30,6 +31,7 @@ from kako.engine.figures import Figure
 from kako.facts.model import EntityRow, FactRow
 from kako.facts.snapshot import Snapshot
 from kako.meko.adapter import Meko
+from kako.planning.reconcile import fits
 
 ALLOCATABLE: Final = ("debt", "account", "goal")  # plan.allocation's entity kinds
 MAX_ALLOCATIONS: Final = 8
@@ -312,15 +314,34 @@ class TurnState:
 
     # -- what-ifs ----------------------------------------------------------------------------
 
-    def what_if(self, prefix: str, allocations: tuple[Allocation, ...]) -> WhatIf:
-        run = self._compute({a.entity_id: a.centavos for a in allocations})
-        unallocated = run.get("plan.unallocated").value
-        ref = f"{prefix}-W{sum(1 for k in self.what_ifs if k.startswith(prefix + '-W')) + 1}"
+    def next_ref(self, prefix: str) -> str:
+        """The next what-if ref for an agent's prefix: `debt1-W1`, `debt1-W2` and so on."""
+        return f"{prefix}-W{sum(1 for k in self.what_ifs if k.startswith(prefix + '-W')) + 1}"
+
+    def run_allocations(self, amounts: Mapping[uuid.UUID, int]) -> Run:
+        """The engine on the turn's snapshot with these monthly allocations; the rest as now."""
+        return self._compute(dict(amounts))
+
+    def add_what_if(self, ref: str, allocations: tuple[Allocation, ...], run: Run) -> WhatIf:
         # Fits only when the engine says what is left, and it isn't below ₱0.
-        fits = isinstance(unallocated, int) and unallocated >= 0
-        result = WhatIf(ref, allocations, run, over_allocated=not fits)
+        result = WhatIf(ref, allocations, run, over_allocated=not fits(run))
         self.what_ifs[ref] = result
         return result
+
+    def what_if(self, prefix: str, allocations: tuple[Allocation, ...]) -> WhatIf:
+        run = self._compute({a.entity_id: a.centavos for a in allocations})
+        return self.add_what_if(self.next_ref(prefix), allocations, run)
+
+    def kinds(self) -> dict[uuid.UUID, str]:
+        return {e.id: e.kind for e in self.entities}
+
+    def current_allocations(self) -> dict[uuid.UUID, int]:
+        """Each entity's monthly allocation now: its `plan.allocation` fact in the snapshot."""
+        found: dict[uuid.UUID, int] = {}
+        for fact in self.snapshot.facts:
+            if fact.attribute == "plan.allocation" and fact.entity_id is not None:
+                found[fact.entity_id] = fact.value_money or 0
+        return found
 
 
 def _strings(arguments: dict[str, Any], name: str) -> list[str]:
@@ -462,6 +483,7 @@ def what_if_tool(state: TurnState, path: str = ORCHESTRATOR) -> Tool:
             "\n".join(lines),
             short(summary),
             outcome="rejected" if result.over_allocated else "ok",
+            value=result,
         )
 
     return Tool(

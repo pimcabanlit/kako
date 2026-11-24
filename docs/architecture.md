@@ -123,12 +123,20 @@ flowchart LR
    an answer rests on results the agent has read.
    Every tool call by every agent is logged as an `agent_step` (the agent, the tool, a short input and
    result, the what-if run if any), which the "agents' steps" view shows.
-6. **Reconciliation in code.** The engine runs once more with all proposed allocations together. Rules
-   find over-allocation (the asks add up to more than the surplus), opposite moves, and goals that miss
-   their date. Each conflict goes back to the orchestrator with the figures. **The what-if loop:** the
-   orchestrator may try up to 3 other splits through `run_what_if`; only the reconciliation rules can
-   say a split fits. Its resolution, each split it tried and the option it rejected are recorded and
-   shown. If no split fits after 3 tries, the household sees the conflict and the options, not a guess.
+6. **Reconciliation in code.** Once two or more specialists propose a move, the engine runs once more
+   with all their allocations together (each entity takes its own specialist's amount: the debt
+   specialist's for a debt, savings' for an account, goals' for a goal). Rules
+   (`planning/reconcile.py`) find over-allocation (together the asks leave less than ₱0 of the
+   surplus), opposite moves (one raises an allocation another lowers), and goals that miss their date.
+   The asks together become a what-if of the turn (`rec-W1`), and code tells the orchestrator what it
+   found, with the figures, in a note between its rounds of tool calls. **The what-if loop:** while a
+   conflict is open, each `run_what_if` the orchestrator makes is a split, at most 3 a turn; only the
+   reconciliation rules can say a split fits, and each split is an `agent_step` (`rejected` when the
+   rules refuse it). The answer then carries the resolution: a split that fits, offered as an option
+   and recommended, with the what-if it rejected and why; or, when nothing (a preference, a decision,
+   the household's own words) supports one split or no split fits, the choice left to the household,
+   which sees the conflict and the options, not a guess. The resolution, each split tried and the
+   option rejected are shown, and stored in `reconciliation` with the plan.
 7. **The number check.** Every number in the reply, the recommendations and the resolutions must match a
    figure of the run or a fact in the snapshot (rule V-10). A failure is regenerated once with the
    mismatch named; if it fails again, the reply is shown with the unmatched numbers flagged, never
@@ -221,7 +229,7 @@ current, what it replaced and which plans and decisions depended on it.
 | API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns, plans, why, diff, facts timeline, decisions, proposals and approvals, what-ifs, metrics |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
-| Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules, diff, what-ifs |
+| Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |
 | Decisions | `backend/src/kako/decisions/` | Decision records, options, assumptions, "to revisit" |
 | Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), the tool loop with its bounds and the step log, recorded responses, orchestrator, the four specialists, brief builder, tools, number check, prompts |
 | Dreaming | `backend/src/kako/dreaming/` | The job, extraction, classification, patterns, proposals |
