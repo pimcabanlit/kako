@@ -206,8 +206,9 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    and questions for the household; an approved answer is followed by `selflearning_verify`.
    Done when: one weak search in the demo household goes from Mid or Low to `improved`, with both scores
    stored.
-   Built Nov 24 (all but the done-when, which needs Meko Cloud: local Meko has no self-learning
-   tools): `kako/gaps/` keeps each shortfall of coverage in Meko's search log
+   Built Nov 24, and the done-when met on Meko Cloud the same day in a throwaway datapack: "Who looks
+   after Lia after school?" went from `low` 0.297 to `improved` 0.578, both scores stored
+   (docs/meko-setup.md, spike 3). `kako/gaps/` keeps each shortfall of coverage in Meko's search log
    (`selflearning_query_log`, low and mid bands) as an open `context_gap` with a question written by
    code (`kako gaps sync`, `POST /api/v1/gaps/sync`). An adult ties the proposal that answers it, one
    that writes a fact (`kako gaps answer`), or dismisses it. Once that proposal is approved and Meko
