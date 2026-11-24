@@ -377,3 +377,28 @@ it led to.
   ref. The number check's send-back fixed it in one try.
 - **Change made:** none yet; one send-back costs one strong call (about US$0.02). If it happens again
   in session 4's next recording, the prompt will say to name them in words.
+
+### 10. Dreaming's labelled set, first real run (Nov 24, 2026)
+
+- **Change tested:** Phase 4, task 3. Dreaming's extraction step (`dreaming/extract.py`, prompt
+  `agents/prompts/dreaming.md`): one call to `submit_claims` per session over a brief of what Kako
+  holds, the noted memories (none in the labelled set) and the household's turns. Code checks every
+  claim (`dreaming/classify.py`). The labelled set (`data/dreaming/labelled.toml`) has 13 sessions
+  and 15 expected proposals; a careful scripted extraction finds all 15.
+- **Prediction (written before the run):**
+  - **Found:** 14 or 15 of 15 (93% to 100%), so the set passes (90%). The likeliest miss is a
+    correction: d10's retraction with an empty value (the model writes `correction` false, or leaves
+    the claim out because there is no new number), or d03 and d12 not marked as corrections, which
+    code then calls a conflict (a value for the same day as the one Kako holds) instead of a
+    retraction.
+  - **Unquoted:** 0. Code refuses any claim with a number not in its quote, so none can be proposed;
+    a refusal shows as a miss instead.
+  - **Wrong proposals:** 0 to 2. The likeliest: a life event nobody stated (a `big_expense` for d07's
+    school costs, or a `raise` in d02, which is a maybe and so not wrong), or d05's what-if or d09's
+    wish handed in as a fact.
+  - **Shape:** every call hands in claims the first time; at most one wrong shape sent back.
+  - **Cost:** 13 strong calls (14 with a send-back), about 3,000 to 5,000 tokens in and 300 to 1,500
+    out each: **US$0.08 to US$0.25**.
+- **Run:** `KAKO_MODEL_MODE=record uv run kako dream eval --save` on a fresh database with the demo
+  household loaded through Dec 1 (gpt-5.4), recorded to `data/recorded/dreaming.json`. Pim approved
+  up to US$0.50.
