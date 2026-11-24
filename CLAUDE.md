@@ -189,7 +189,7 @@ uv run kako check-models                  # Foundry settings, Entra ID sign-in, 
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
 uv run kako proposals list                # what waits for the household (--status pending|approved|rejected|expired|all, --household)
-uv run kako proposals approve <id>… --by Mara   # approve together and write what each names; again changes nothing (reject: the same)
+uv run kako proposals approve <id>… --by Mara   # approve together and write what each names, then Meko upkeep (--no-meko); again changes nothing (reject: the same)
 uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine's figures then (--household, --save)
 uv run kako demo upload                   # the demo's statements and reference documents into Meko's knowledge base (counted in meko_call)
 uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko, --by Mara: who says it)
@@ -204,6 +204,8 @@ uv run kako dream end <session>           # end a session (once) and queue its d
 uv run kako dream run                     # run the queued or failed dreaming runs: read the session, one extraction, checks in code, pending proposals (--session, --at)
 uv run kako dream settle                  # carry out each memory Meko extracted from a dreamed session: linked to what a person approved, or deleted (--at)
 uv run kako dream check                   # V-14 against Meko: each extracted memory linked, waiting on a pending proposal, or gone; exit 1 if not (--household)
+uv run kako meko sync                     # Meko upkeep: a memory per fact, a replaced one rewritten in the past tense, a retracted one's deleted (--household, --at; also after each approval)
+uv run kako meko check                    # V-13: every link to a memory points to one Meko holds, and no upkeep is owed; exit 1 if not (--household)
 uv run kako dream eval                    # dreaming's labelled set, replayed from data/recorded/dreaming.json; exit 1 under 90% found or on any unquoted number (--only, --household, --save)
 ```
 
@@ -324,7 +326,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `job.py` (`end_session` queues a `dream_run`; `run_dream` reads the session's turns from its Meko
   conversation as the agent that wrote them and its extracted memories (`search_memories`),
   extracts, classifies and proposes in one transaction, and marks the run done or failed with why)
-  and `memories.py` (`settle_memories` links or deletes each candidate, `check_extracted` is V-14). `demo/sessions.py` reads the scripted sessions
+  and `memories.py` (`settle_memories` links or deletes each candidate, `check_extracted` is V-14,
+  `forgotten` marks one upkeep deleted). `upkeep/` is Meko upkeep: `sentences.py` (a fact as one
+  sentence, the past tense once replaced) and `plan.py` (the steps owed: add, rewrite, delete), both
+  pure; `sync.py` (`keep_up`: the steps as `kako:upkeep`, each memory changed as the agent that wrote
+  it, links in `meko_link` with the text written, at most 60 steps a run, one run per household at a
+  time; after each approval, at the end of `kako demo run`, `kako meko sync`) and `check.py` (V-13). `demo/sessions.py` reads the scripted sessions
   (`data/demo-household/sessions/`) and `demo/mode.py` is `kako demo run`: local Meko only, the
   household with its whole story, the documents uploaded once, each session replayed by call key
   (a request that differs from its recording, as when another machine's Meko ranks the brief's
@@ -393,7 +400,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   a recording, the API); `test_dreaming_candidates.py` which memories are candidates and each
   fate, and `tests/integration/test_dreaming_memories.py` the candidates on local Meko: shown to
   extraction, one linked after approval, one deleted after rejection, the rest deleted, Kako's own
-  untouched, Meko's words never a quote for V-09, and `kako dream settle` and `check`; `test_demo_sessions.py` the session files and each mistake;
+  untouched, Meko's words never a quote for V-09, and `kako dream settle` and `check`;
+  `test_upkeep.py` the sentences and the plan, and `tests/integration/test_upkeep.py` upkeep on the
+  demo household in a throwaway datapack (every fact kept, Mara's old salary in the past tense after
+  her new job, a retraction, Meko's words deleted once replaced, `kako meko sync` and `check`); `test_demo_sessions.py` the session files and each mistake;
   `tests/integration/test_demo_mode.py` runs `kako demo run --test-set` on a fresh database and local
   Meko with no Azure settings, then again (session 4 isn't replayed twice), and its refusals, session 4
   recorded from the scripted model with its approval and the rows it writes, and `kako demo record`'s

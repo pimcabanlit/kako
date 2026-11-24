@@ -263,9 +263,13 @@ queues the run; `kako dream run` runs what is queued, one at a time. The code is
    down: the brief marks a linked memory approved, so its words must be what the household saw. A memory is deleted as the agent that wrote it, the only one Meko allows. So every
    extracted memory ends linked to an approved fact or deleted (V-14, checked by `kako dream check`,
    which also finds a memory Meko extracted after the run).
-8. **On approval**, the fact store writes the rows; the Meko adapter then adds Kako's own memory,
-   rewrites a replaced one in the past tense, deletes a retracted one and promotes what was approved
-   for sharing (Phase 4, tasks 4 and 5).
+8. **On approval**, the fact store writes the rows; Meko upkeep (`kako/upkeep/`) then adds Kako's
+   own memory of each new fact, rewrites a replaced one in the past tense (and deletes Meko's own
+   words about it), and deletes a retracted one's memories, each as the agent that wrote it. It
+   compares each fact's sentence with what it last wrote (`meko_link.text`), so it does only what
+   is owed, and what it can't do now (Meko unreachable, its step bound) waits for the next run or
+   `kako meko sync`; an approval never fails because of it. Promotion of what was approved for
+   sharing comes with Phase 4, task 4.
 
 Dreaming is a fixed workflow with one model step (extraction); the orchestrator and specialists are the
 agentic part. The docs and the video say so.
@@ -306,6 +310,7 @@ current, what it replaced and which plans and decisions depended on it.
 | Decisions | `backend/src/kako/decisions/` (pure) and `backend/src/kako/db/proposal_store.py` (the writes) | The fixed list of option tags, the facts a decision rests on (`assumptions.py`), and decision records written on approval with their options and assumptions; "to revisit" is F-DIFF-1 |
 | Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), the tool loop with its bounds and the step log, recorded responses, orchestrator, the four specialists, brief builder, tools, number check, prompts |
 | Dreaming | `backend/src/kako/dreaming/` | The job (`job.py`), extraction (`extract.py`), the claims and the checks and classification in code (`claims.py`, `classify.py`, pure), proposals; patterns with task 4 |
+| Meko upkeep | `backend/src/kako/upkeep/` | Kako's own memory of each fact: the sentence (`sentences.py`) and the steps owed (`plan.py`), both pure; carrying them out as `kako:upkeep` (`sync.py`: after every approval, at the end of demo mode, `kako meko sync`); V-13 (`check.py`, `kako meko check`) |
 | Meko adapter | `backend/src/kako/meko/` | One interface for every Meko call, an MCP client implementation, an in-memory fake for unit tests, the call counter and quota guard |
 | Database | `backend/src/kako/db/` | SQLAlchemy 2 async models, repositories, Alembic migrations |
 | Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, the Foundry endpoint, deployment names and their prices, budgets, demo mode |
