@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from kako.settings import Settings, get_settings
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Sequence
 
     from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -66,6 +66,12 @@ def main(argv: list[str] | None = None) -> int:
         "--test-set",
         action="store_true",
         help="also replay the agent test set for each architecture that has its recording",
+    )
+    run.add_argument(
+        "--strict",
+        action="store_true",
+        help="refuse a call whose request differs from its recording (by default its reply is "
+        "replayed and the difference reported)",
     )
 
     validate = commands.add_parser(
@@ -143,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         except DemoModeError as exc:
             print(f"Demo mode can't start: {exc}", file=sys.stderr)
             return 1
-        return _migrate() or asyncio.run(_demo_run(test_set=args.test_set))
+        return _migrate() or asyncio.run(_demo_run(test_set=args.test_set, strict=args.strict))
     if args.command == "demo" and args.demo_command == "upload":
         return asyncio.run(_demo_upload(args.data))
     if args.command == "demo":
@@ -286,7 +292,7 @@ async def _demo_upload(folder: Path | None) -> int:
     return 0
 
 
-async def _demo_run(*, test_set: bool) -> int:
+async def _demo_run(*, test_set: bool, strict: bool) -> int:
     """Demo mode: everything from local services and recordings (`demo/mode.py`)."""
     from kako.agents.ask import render_answer
     from kako.agents.brief_store import BriefStoreError
@@ -302,7 +308,7 @@ async def _demo_run(*, test_set: bool) -> int:
     from kako.evals.runner import run_test_set
     from kako.meko.client import MekoError
 
-    settings = get_settings().model_copy(update={"model_mode": "replay", "replay_strict": True})
+    settings = get_settings().model_copy(update={"model_mode": "replay", "replay_strict": strict})
     try:
         check_target(settings)
         demo = read_demo()
@@ -332,7 +338,10 @@ async def _demo_run(*, test_set: bool) -> int:
                 print(f"== {title}, turn {asked.seed} ==")
                 print(render_answer(asked, settings) + "\n")
 
-            await replay_session(engine, settings, session, prepared.household_id, shown=show)
+            replayed = await replay_session(
+                engine, settings, session, prepared.household_id, strict=strict, shown=show
+            )
+            print(_drift(session.title, replayed.calls, replayed.drifted))
             played += 1
         if test_set:
             questions = read_test_set()
@@ -342,10 +351,11 @@ async def _demo_run(*, test_set: bool) -> int:
                     print(f"Agent test set ({architecture}): no recording yet, skipped.")
                     continue
                 replay = settings.model_copy(update={"recorded_responses": path})
+                backend = ReplayBackend(path, strict=strict)
                 report = await run_test_set(
                     engine,
                     replay,
-                    ReplayBackend(path, strict=True),
+                    backend,
                     questions,
                     household_id=prepared.household_id,
                     architecture="single" if architecture == "single" else "specialists",
@@ -356,6 +366,9 @@ async def _demo_run(*, test_set: bool) -> int:
                     f"{data['questions']} questions ({data['checks_passed']}/"
                     f"{data['checks_total']} checks), {data['answered']} answered, "
                     f"{data['model_calls']} model calls replayed."
+                )
+                print(
+                    _drift(f"Agent test set ({architecture})", data["model_calls"], backend.drifted)
                 )
     except (
         DemoModeError,
@@ -376,6 +389,16 @@ async def _demo_run(*, test_set: bool) -> int:
         "live mode with a Foundry deployment."
     )
     return 0
+
+
+def _drift(what: str, calls: int, drifted: Sequence[str]) -> str:
+    if not drifted:
+        return f"{what}: every request matched its recording."
+    return (
+        f"{what}: {len(drifted)} of {calls} requests differed from the recording, most likely "
+        "because this machine's Meko ranked the brief's search results differently; their "
+        "recorded replies were replayed (`--strict` refuses them)."
+    )
 
 
 async def _household(conn: AsyncConnection, household_id: uuid.UUID | None) -> uuid.UUID | None:

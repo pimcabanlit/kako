@@ -193,7 +193,7 @@ uv run kako demo upload                   # the demo's statements and reference 
 uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko)
 KAKO_MODEL_MODE=replay KAKO_RECORDED_RESPONSES=../data/recorded/session-2.json uv run kako ask …   # the same turn from a recording, no Foundry
 uv run kako demo run                      # demo mode: migrate, load the whole story, upload the documents, replay the scripted sessions (local Meko, no Azure)
-uv run kako demo run --test-set           # … and replay the agent test set for each recorded architecture
+uv run kako demo run --test-set           # … and replay the agent test set for each recorded architecture (--strict: refuse a request that differs from its recording)
 uv run kako test-set                      # the agent test set's score, replayed from data/recorded/test-set-specialists.json (needs the household loaded through Dec 1)
 uv run kako test-set --architecture single --only q01,q07   # the single-agent baseline, some questions (--household, --save: data/test-set/results/)
 KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
@@ -293,7 +293,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   0), and `runner.py` runs the set through `ask` for either architecture and reports the score, model
   calls, tokens, cost and Meko calls. `demo/sessions.py` reads the scripted sessions
   (`data/demo-household/sessions/`) and `demo/mode.py` is `kako demo run`: local Meko only, the
-  household with its whole story, the documents uploaded once, each session replayed strictly.
+  household with its whole story, the documents uploaded once, each session replayed by call key
+  (a request that differs from its recording, as when another machine's Meko ranks the brief's
+  search results differently, is replayed and reported; `--strict` refuses it).
   `db/llm_log.py`, `db/agent_steps.py` and `db/number_checks.py` write those three tables, each row
   committed on its own.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when

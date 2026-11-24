@@ -11,6 +11,12 @@ are the ones recorded on Foundry. It:
    like any other: the plan in Postgres, the turn in a new Meko conversation;
 4. with `--test-set`, replays the agent test set for each architecture that has its recording.
 
+Each reply is found by its call's key (turn seed, agent, call number). A request can differ from the
+one recorded when this machine's Meko ranks the brief's search results differently (the scores of
+near-equal excerpts depend on the CPU), so by default the reply is replayed anyway and the calls
+whose request differed are counted and reported. `--strict` refuses them instead, as the tests on
+the recording machine do.
+
 Asking anything else needs live mode with a Foundry deployment (`kako ask`, `kako api`).
 """
 
@@ -42,6 +48,13 @@ STATUS_CHECKS: Final = 10
 
 class DemoModeError(Exception):
     """Demo mode can't run here, such as on Meko Cloud or a database with part of the story."""
+
+
+@dataclass(frozen=True)
+class Replayed:
+    asked: list[Asked]
+    calls: int  # model calls replayed
+    drifted: tuple[str, ...]  # their keys whose request differed from the recording (lenient)
 
 
 @dataclass(frozen=True)
@@ -111,10 +124,11 @@ async def replay_session(
     session: DemoSession,
     household_id: uuid.UUID,
     *,
+    strict: bool = False,
     shown: Callable[[Asked], None] | None = None,
-) -> list[Asked]:
+) -> Replayed:
     """One scripted session: a new session, each turn answered from its recording."""
-    backend = ReplayBackend(session.recording, strict=True)
+    backend = ReplayBackend(session.recording, strict=strict)
     replay = settings.model_copy(
         update={"model_mode": "replay", "recorded_responses": session.recording}
     )
@@ -143,4 +157,4 @@ async def replay_session(
             asked.append(answer)
             if shown is not None:
                 shown(answer)
-    return asked
+    return Replayed(asked, sum(a.model_calls for a in asked), tuple(backend.drifted))
