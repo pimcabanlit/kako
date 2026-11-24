@@ -421,3 +421,20 @@ it led to.
   words, so the set still measures it. It also says a month with its year is written as its first
   day ("June 2027" is 2027-06-01), which V-09 already accepts. This run's recording is kept as
   `data/recorded/dreaming-run10.json`; the next run, after Pim's yes, records `dreaming.json`.
+
+### 11. Dreaming's labelled set again, after the prompt fix (Nov 24, 2026)
+
+- **Change tested:** entry 10's prompt change: a correction is a value that was never right, a
+  decision to change is not one, and a month with its year is written as its first day.
+- **Prediction (written before the run):**
+  - **Found:** 15 of 15 (100%); at worst 14 (93%), still a pass. d08 is now a change from the day
+    it was said, and d11's baby is dated 2027-04-01.
+  - **Risk to watch:** the corrections that were right in entry 10 (d03, d10, d12) turn into
+    changes because the prompt now leans away from `correction`. d12 ("I misread") and d10 ("I don't
+    get a 13th month pay") should hold. d03 ("rent and utilities are ₱38,000 a month, not ₱40,000")
+    is the one most at risk, which would be a miss and a wrong proposal.
+  - **Wrong:** 0 to 1. **Unquoted:** 0 (code refuses any). Every call's shape right first time.
+  - **Cost:** 13 strong calls, about US$0.08 like entry 10 (**US$0.06 to US$0.12**). Pim approved up
+    to US$0.25.
+- **Run:** `KAKO_MODEL_MODE=record uv run kako dream eval --save` on the same fresh database (the
+  demo household through Dec 1, gpt-5.4), recorded to `data/recorded/dreaming.json`.
