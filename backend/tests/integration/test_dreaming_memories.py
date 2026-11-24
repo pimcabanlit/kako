@@ -24,7 +24,7 @@ from kako.cli import main as _main
 from kako.db.meko_log import DbCallLog
 from kako.db.proposal_store import Evidence, ProposalError, approve, propose, reject
 from kako.dreaming.job import end_session
-from kako.dreaming.memories import check_extracted, settle_memories
+from kako.dreaming.memories import check_extracted, forgotten, settle_memories
 from kako.facts.proposals import life_event_payload
 from kako.meko.adapter import Meko
 from kako.meko.mcp import open_meko
@@ -182,6 +182,20 @@ async def test_each_extracted_memory_ends_linked_or_deleted(
     assert await _check(settings, migrated) == []
     again = await _settle(settings, migrated)  # nothing left to do
     assert (again.linked, again.deleted, again.waiting) == (0, 0, 0)
+
+    # Once its fact is replaced or retracted, Meko upkeep deletes it (tests/integration/
+    # test_upkeep.py) and the run's entry says so, so V-14 still holds.
+    async with open_meko(settings, DbCallLog(migrated), max_calls=1) as meko:
+        await meko.delete_memory(session.conversation_id, left[SAME], agent_id=AGENT)
+    async with migrated.begin() as conn:
+        await conn.execute(text("DELETE FROM meko_link WHERE meko_id = :m"), {"m": left[SAME]})
+    await forgotten(migrated, session.household_id, left[SAME], "its fact was retracted")
+    async with migrated.connect() as conn:
+        state = (
+            await conn.execute(text("SELECT counts FROM dream_run WHERE id = :r"), {"r": run_id})
+        ).scalar_one()["memories"]
+    assert sorted(m["state"] for m in state) == ["deleted", "deleted", "deleted"]
+    assert await _check(settings, migrated) == []
 
     # A memory Meko extracted after the run is found by the check.
     async with open_meko(settings, DbCallLog(migrated), max_calls=1) as meko:

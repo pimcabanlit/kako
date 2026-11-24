@@ -18,14 +18,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kako.agents.recorded import RecordingBackend, RecordingError
+from kako.db.meko_log import DbCallLog
 from kako.demo.files import read_demo
 from kako.demo.load import load_demo
 from kako.demo.mode import DemoModeError, replay_session, written
 from kako.demo.sessions import check_writes, read_sessions
 from kako.evals.questions import TEST_SET
+from kako.meko.mcp import open_meko
 from kako.settings import get_settings
 from tests.conftest import MakeSettings
 from tests.integration import test_replan as replan_turns
+from tests.integration.test_meko_adapter import throwaway_datapack
 from tests.support.models import ScriptedBackend, calls
 
 pytestmark = pytest.mark.integration
@@ -51,8 +54,21 @@ def demo_env(test_database_url: str, test_meko_url: str, monkeypatch: pytest.Mon
 
 
 async def test_demo_run_replays_session_2_and_the_test_set(
-    migrated: AsyncEngine, demo_env: None, capsys: pytest.CaptureFixture[str]
+    migrated: AsyncEngine,
+    demo_env: None,
+    test_meko_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    async with throwaway_datapack(test_meko_url) as datapack_id:
+        # A datapack of its own: Kako's memories of the story don't pile up in the default one.
+        monkeypatch.setenv("KAKO_MEKO_DATAPACK_ID", datapack_id)
+        get_settings.cache_clear()
+        await _demo_run_twice(migrated, capsys)
+    get_settings.cache_clear()
+
+
+async def _demo_run_twice(migrated: AsyncEngine, capsys: pytest.CaptureFixture[str]) -> None:
     assert await asyncio.to_thread(_main, ["demo", "run", "--test-set"]) == 0
     out = capsys.readouterr().out
     assert "Villanueva household: loaded with its whole story; 15 documents" in out
@@ -89,7 +105,32 @@ async def test_demo_run_replays_session_2_and_the_test_set(
 
     async with migrated.connect() as conn:
         events = (await conn.execute(text("SELECT count(*) FROM life_event"))).scalar_one()
+        facts = (
+            await conn.execute(text("SELECT count(*) FROM fact WHERE status <> 'retracted'"))
+        ).scalar_one()
     assert events == 1  # written by session 4's approval, not by loading
+
+    # After the sessions, Meko upkeep keeps every fact; a memory search for Mara's salary finds
+    # the new one and the old one in the past tense (Phase 4, task 5), and V-13 passes.
+    assert f"Meko upkeep: {facts} memories added, 0 rewritten, 0 deleted." in out
+    async with open_meko(get_settings(), DbCallLog(migrated), max_calls=2) as meko:
+        conversation_id = await meko.create_conversation(agent_id="kako:test", title="check")
+        found = [
+            m.text
+            for m in await meko.find_memories(
+                conversation_id, "Mara's salary", agent_id="kako:test", limit=10
+            )
+        ]
+    assert (
+        "In the Villanueva household, from Dec 1, 2026, Mara's salary (take-home pay a month) "
+        "is ₱68,000.00." in found
+    )
+    assert (
+        "In the Villanueva household, from Mar 1, 2026 until Nov 30, 2026, Mara's salary "
+        "(take-home pay a month) was ₱52,000.00." in found
+    )
+    assert await asyncio.to_thread(_main, ["meko", "check"]) == 0
+    assert "V-13 passes" in capsys.readouterr().out
 
     # A second run keeps the household and the documents, and replays session 2 again; session 4
     # wrote its changes in the first run, so it isn't replayed.
@@ -102,6 +143,7 @@ async def test_demo_run_replays_session_2_and_the_test_set(
     assert any(x.startswith("Session 2: ") for x in out.splitlines())  # matched, or reported
     assert "Session 4: the changes it approves are in this database already" in out
     assert "== Session 4" not in out
+    assert "Meko upkeep: 0 memories added, 0 rewritten, 0 deleted." in out
 
 
 async def test_a_request_that_differs_is_reported_or_refused(

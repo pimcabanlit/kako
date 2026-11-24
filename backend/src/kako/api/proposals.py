@@ -6,7 +6,8 @@
   what a "What Kako knows about you" view reads.
 - `POST /api/v1/proposals/approve` approves one or more proposals in one transaction and writes
   what each names (`db.proposal_store.approve`). Approving an approved proposal again changes
-  nothing and says so (`already`).
+  nothing and says so (`already`). After the answer, Meko upkeep brings Meko in line with what
+  was written (`kako.upkeep`): a failure there never undoes the approval.
 - `POST /api/v1/proposals/reject` rejects pending proposals; nothing is written.
 
 Kako has no sign-in yet, so the person deciding is named in the request, and must be an adult of
@@ -15,13 +16,14 @@ the household. The app answers only on loopback (see `api.app`), and these route
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal, cast
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Table, select
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -42,8 +44,10 @@ from kako.db.proposal_store import (
 from kako.facts.attributes import attribute
 from kako.facts.model import EntityRow, FactRow
 from kako.facts.proposals import FACT_KINDS, PayloadError, decode_value, parse_fact
+from kako.health import safe_error
 
 PERSON = cast(Table, Person.__table__)
+log = logging.getLogger(__name__)
 JSON_ONLY = "application/json"
 
 router = APIRouter(prefix="/api/v1/proposals", tags=["proposals"])
@@ -199,8 +203,26 @@ async def read_proposals(
         return await _views(conn, household, views)
 
 
+async def _upkeep(services: Services, household_id: uuid.UUID) -> None:
+    """After an approval: Meko upkeep for the household (`kako.upkeep`). It never undoes or
+    fails the approval: what it can't do now, `kako meko sync` does later."""
+    from kako.db.meko_log import DbCallLog
+    from kako.meko.client import MekoError
+    from kako.upkeep.sync import MAX_STEPS, UpkeepError, keep_up
+
+    try:
+        async with services.open_meko(DbCallLog(services.engine), 1 + MAX_STEPS) as meko:
+            if meko is not None:
+                await keep_up(services.engine, meko, household_id, now=datetime.now(UTC))
+    except (MekoError, UpkeepError) as exc:
+        log.warning("Meko upkeep after an approval didn't run: %s", safe_error(exc))
+
+
 async def _decide(
-    request: Request, body: Decide, action: Literal["approve", "reject"]
+    request: Request,
+    body: Decide,
+    action: Literal["approve", "reject"],
+    tasks: BackgroundTasks | None = None,
 ) -> list[DecidedOut]:
     _json_only(request)
     services: Services = _services(request)
@@ -218,6 +240,8 @@ async def _decide(
             )
         except ProposalError as exc:
             raise HTTPException(409, str(exc)) from None
+    if tasks is not None and any(not d.already for d in decided):
+        tasks.add_task(_upkeep, services, household)
     return [
         DecidedOut(
             id=d.proposal_id, kind=d.kind, status=d.status, already=d.already, written=_written(d)
@@ -227,10 +251,12 @@ async def _decide(
 
 
 @router.post("/approve", response_model=list[DecidedOut])
-async def approve_proposals(body: Decide, request: Request) -> list[DecidedOut]:
+async def approve_proposals(
+    body: Decide, request: Request, tasks: BackgroundTasks
+) -> list[DecidedOut]:
     """Approve the proposals together and write what each names. If any write is refused, none
-    is made (409, with the reason)."""
-    return await _decide(request, body, "approve")
+    is made (409, with the reason). Then, after the answer, Meko upkeep for the household."""
+    return await _decide(request, body, "approve", tasks)
 
 
 @router.post("/reject", response_model=list[DecidedOut])
