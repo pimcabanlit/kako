@@ -113,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         help="the turn's seed, which keys recorded responses (default: ask:t1)",
     )
     ask.add_argument("--no-meko", action="store_true", help="no Meko search for this turn")
+    ask.add_argument("--by", help="who says it, by name: named on any change it proposes")
 
     test_set = commands.add_parser(
         "test-set",
@@ -195,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
                 title=args.title,
                 seed=args.seed,
                 use_meko=not args.no_meko,
+                by=args.by,
             )
         )
     if args.command == "test-set":
@@ -584,6 +586,7 @@ async def _ask(
     title: str,
     seed: str,
     use_meko: bool,
+    by: str | None = None,
 ) -> int:
     from contextlib import AsyncExitStack
 
@@ -594,6 +597,7 @@ async def _ask(
     from kako.agents.chat import ModelError
     from kako.agents.model_manager import chat_backend
     from kako.agents.orchestrator import OrchestratorError
+    from kako.api.proposals import people
     from kako.db.engine import make_engine
     from kako.db.meko_log import DbCallLog
     from kako.db.models import Household
@@ -617,6 +621,12 @@ async def _ask(
             as_of = (
                 await conn.execute(select(table.c.as_of_date).where(table.c.id == chosen))
             ).scalar_one()
+            speaker = None
+            if by is not None:
+                speaker = (await people(conn, chosen)).get(by.strip().lower())
+                if speaker is None:
+                    print(f"No one called {by} in the household.", file=sys.stderr)
+                    return 1
         async with AsyncExitStack() as stack:
             calls = DbCallLog(engine)
             meko = (
@@ -636,6 +646,7 @@ async def _ask(
                 title=title,
                 seed=seed,
                 call_log=calls,
+                speaker=speaker,
             )
         print(render_answer(asked, settings))
         return 0
