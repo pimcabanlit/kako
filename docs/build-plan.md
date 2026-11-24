@@ -180,10 +180,21 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    Done when: after sessions 1 to 3 (Mara in some, Jun in others) dreaming proposes the flexibility
    preference; after approval and promotion the debt specialist cites it in session 4 without being
    told.
+   Built Nov 24 (all but the done-when, which needs the demo story's sessions 1 and 3 and recorded
+   sessions): `dreaming/patterns.py` counts the household's decisions by the tags of the option
+   chosen, and each dreaming run (steps 4 and 5, `dreaming/promotion.py`) proposes a new pattern as a
+   `preference_pattern`, citing each decision in the household's words, once for the decisions
+   behind it. An approved preference from a pattern, and a decision two sessions have held, are
+   offered for sharing once ever, also right after an approval. A `promote` proposal names its row by
+   id; approving it needs its second confirmation (`confirm_promotion`, `--confirm-promotion`). Meko
+   upkeep then promotes the preference's sentence to collective memory, or uploads the decision
+   record, linked in `meko_link`, and V-13 checks both. The brief marks a preference promoted once
+   its sharing was approved by the brief's `known_at`. Tested on Postgres with the demo household's
+   three decisions (`tests/integration/test_promotion.py`), and on local Meko in a datapack of its own.
 5. **Meko upkeep.** Add, rewrite in the past tense, delete on retraction, promote, and `meko_link`.
    Done when: after the four sessions, memory search for "Mara's salary" returns the current value and
    the old one in the past tense, and the validation suite's link check passes.
-   Built Nov 24 (all but promotion, which comes with task 4): Meko upkeep (`kako/upkeep/`) keeps one
+   Built Nov 24 (promotion with task 4): Meko upkeep (`kako/upkeep/`) keeps one
    memory in Kako's words for every fact, seed facts included, as `kako:upkeep`; a replaced fact's
    memory is rewritten in the past tense (and a memory Meko extracted for it deleted), a retracted
    one's deleted, each linked in `meko_link` with who wrote it and the text written (migration

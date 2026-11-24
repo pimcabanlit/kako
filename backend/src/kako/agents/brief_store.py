@@ -3,11 +3,11 @@
 
 Reads only, and only this household's rows. The approved preferences come from the fact store, the
 record (Pim, Nov 24): a preference fact shows who approved it and when, and is marked promoted once
-`meko_link` holds its promoted memory (Phase 4). A memory found by the search is marked approved
-only when `meko_link` ties it to one of this household's facts or decisions; Meko's own metadata
-can be written by any client of the datapack, so it never decides that. The search runs only in a
-conversation of this household's sessions, on the household's datapack. Figures never come from
-Meko.
+`meko_link` holds its promoted memory and its sharing was approved by the brief's `known_at`. A
+memory found by the search is marked approved only when `meko_link` ties it to one of this
+household's facts or decisions; Meko's own metadata can be written by any client of the datapack,
+so it never decides that. The search runs only in a conversation of this household's sessions, on
+the household's datapack. Figures never come from Meko.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from datetime import date, datetime
 from typing import cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Table, and_, or_, select
+from sqlalchemy import Table, Text, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from kako.agents.brief import (
@@ -72,6 +72,7 @@ async def _approvals(
     facts: dict[uuid.UUID, uuid.UUID],
     dreamed: set[uuid.UUID],
     zone: ZoneInfo,
+    known_at: datetime | None,
 ) -> dict[uuid.UUID, Approval]:
     """For each preference fact (by id) with a proposal: who approved it, when, and why."""
     if not facts:
@@ -92,17 +93,7 @@ async def _approvals(
         )
     )
     by_proposal = {r.id: r for r in rows}
-    promoted = set(
-        (
-            await conn.execute(
-                select(MEKO_LINK.c.kako_id).where(
-                    MEKO_LINK.c.kako_table == "fact",
-                    MEKO_LINK.c.kako_id.in_(list(facts)),
-                    MEKO_LINK.c.meko_kind == "promoted_memory",
-                )
-            )
-        ).scalars()
-    )
+    promoted = await _promoted(conn, household_id, list(facts), known_at)
     approvals: dict[uuid.UUID, Approval] = {}
     for fact_id, proposal_id in facts.items():
         row = by_proposal.get(proposal_id)
@@ -116,6 +107,39 @@ async def _approvals(
             promoted=fact_id in promoted,
         )
     return approvals
+
+
+async def _promoted(
+    conn: AsyncConnection,
+    household_id: uuid.UUID,
+    fact_ids: list[uuid.UUID],
+    known_at: datetime | None,
+) -> set[uuid.UUID]:
+    """The facts Meko holds in collective memory (a `promoted_memory` link), as known at
+    `known_at`: their sharing was approved by then. Upkeep shares later, at its own time, so the
+    approval's time is the one in the household's story."""
+    if not fact_ids:
+        return set()
+    query = (
+        select(MEKO_LINK.c.kako_id)
+        .join(
+            PROPOSAL,
+            and_(
+                PROPOSAL.c.kind == "promote",
+                PROPOSAL.c.status == "approved",
+                PROPOSAL.c.payload["fact_id"].astext == MEKO_LINK.c.kako_id.cast(Text),
+            ),
+        )
+        .where(
+            PROPOSAL.c.household_id == household_id,
+            MEKO_LINK.c.kako_table == "fact",
+            MEKO_LINK.c.kako_id.in_(fact_ids),
+            MEKO_LINK.c.meko_kind == "promoted_memory",
+        )
+    )
+    if known_at is not None:
+        query = query.where(PROPOSAL.c.decided_at <= known_at)
+    return set((await conn.execute(query)).scalars())
 
 
 async def _approved_memories(
@@ -349,7 +373,7 @@ async def gather_brief(
         snapshot=snap,
         run=run,
         approvals=await _approvals(
-            conn, household_id, preferences, dreamed, ZoneInfo(household.timezone)
+            conn, household_id, preferences, dreamed, ZoneInfo(household.timezone), known_at
         ),
         decisions=decisions,
         proposals=await _pending(conn, household_id, known_at),

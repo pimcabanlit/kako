@@ -54,6 +54,20 @@ class Memory:
 
 
 @dataclass(frozen=True)
+class Promoted:
+    """`memory_get_all` with `promoted`: the datapack's newest promoted memories (Meko lists at
+    most 20) and how many it holds in all."""
+
+    memories: tuple[Memory, ...]
+    total: int
+
+    @property
+    def complete(self) -> bool:
+        """Every promoted memory is listed, so one not listed isn't in collective memory."""
+        return len(self.memories) >= self.total
+
+
+@dataclass(frozen=True)
 class KnowledgeHit:
     document_id: str | None
     text: str
@@ -153,6 +167,18 @@ class Meko(Protocol):
     ) -> Memory | None:
         """One memory by its id, None when Meko holds no such memory (a promoted one is no longer
         a memory: see `promoted_memories`)."""
+        ...
+
+    async def promote_memories(
+        self, conversation_id: str, memory_ids: list[str], *, agent_id: str
+    ) -> tuple[str, ...]:
+        """Move memories into the datapack's collective memory, which every agent relies on; returns
+        the ids promoted now. It can't be undone: a promoted memory can't be changed or deleted, and
+        memory search no longer finds it (`promoted_memories` lists it)."""
+        ...
+
+    async def promoted_memories(self, conversation_id: str, *, agent_id: str) -> Promoted:
+        """The datapack's newest promoted memories, each with the agent that wrote it."""
         ...
 
     async def search_context(

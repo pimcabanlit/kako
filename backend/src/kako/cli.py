@@ -219,6 +219,12 @@ def main(argv: list[str] | None = None) -> int:
                 action="store_true",
                 help="skip Meko upkeep afterwards (run `kako meko sync` later)",
             )
+            decide.add_argument(
+                "--confirm-promotion",
+                action="store_true",
+                help="the second confirmation a promotion needs: it shares with every agent in "
+                "Meko and can't be undone",
+            )
 
     meko = commands.add_parser(
         "meko", help="what Kako keeps in Meko: one memory per fact, kept in step with Postgres"
@@ -251,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
                 by=args.by,
                 household_id=args.household,
                 use_meko=not getattr(args, "no_meko", True),
+                confirm_promotion=getattr(args, "confirm_promotion", False),
             )
         )
     if args.command == "meko":
@@ -547,6 +554,7 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
         print(
             f"\nMeko upkeep: {kept.added} memories added, {kept.rewritten} rewritten, "
             f"{kept.deleted} deleted"
+            + (f", {kept.shared} shared" if kept.shared else "")
             + (f", {kept.waiting} left for `kako meko sync`." if kept.waiting else ".")
         )
         for problem in kept.problems:
@@ -645,9 +653,12 @@ async def _decide(
     by: str,
     household_id: uuid.UUID | None,
     use_meko: bool = False,
+    confirm_promotion: bool = False,
 ) -> int:
     from kako.api.proposals import people
     from kako.db.proposal_store import ProposalError, approve, list_proposals, reject
+    from kako.dreaming.promotion import propose_promotions
+    from kako.facts.proposals import PayloadError
 
     async def work(conn: AsyncConnection) -> int:
         chosen = await _household(conn, household_id)
@@ -661,9 +672,14 @@ async def _decide(
         if len(mine) != len(set(ids)):
             print("Not every id is a proposal of this household.", file=sys.stderr)
             return 1
-        decide = approve if action == "approve" else reject
+        now = datetime.now(UTC)
         try:
-            decided = await decide(conn, ids, person_id=person, decided_at=datetime.now(UTC))
+            if action == "approve":
+                decided = await approve(
+                    conn, ids, person_id=person, decided_at=now, confirm_promotion=confirm_promotion
+                )
+            else:
+                decided = await reject(conn, ids, person_id=person, decided_at=now)
             await conn.commit()
         except ProposalError as exc:
             await conn.rollback()
@@ -673,6 +689,21 @@ async def _decide(
             wrote = ", ".join(f"{w.table} {w.row_id}" for w in d.written)
             state = f"already {d.status}; nothing changed" if d.already else d.status
             print(f"{d.proposal_id} {d.kind}: {state}" + (f" ({wrote})" if wrote else ""))
+        if action == "approve" and any(not d.already for d in decided):
+            # What now holds may be ready to share: offered at once, not at the next dreaming run.
+            # The approval is committed already; a refusal here only skips the offer.
+            try:
+                offered = await propose_promotions(conn, chosen, now=now)
+                await conn.commit()
+            except (ProposalError, PayloadError) as exc:
+                await conn.rollback()
+                print(f"Nothing was offered for sharing: {exc}", file=sys.stderr)
+                offered = []
+            if offered:
+                print(
+                    f"{len(offered)} promotion(s) offered for sharing, waiting for a yes "
+                    "(kako proposals list)."
+                )
         if use_meko and any(not d.already for d in decided):
             await _upkeep(chosen, datetime.now(UTC))
         return 0
@@ -708,7 +739,8 @@ async def _upkeep(household_id: uuid.UUID, at: datetime) -> int:
         return 0
     print(
         f"Meko upkeep: {report.added} added, {report.rewritten} rewritten, "
-        f"{report.deleted} deleted, {report.waiting} left for the next run."
+        f"{report.deleted} deleted, {report.shared} shared, {report.waiting} left for the next "
+        "run."
     )
     for problem in report.problems:
         print(f"- {problem}", file=sys.stderr)
@@ -766,7 +798,7 @@ async def _meko_check(household_id: uuid.UUID | None) -> int:
     finally:
         await engine.dispose()
     if not problems:
-        print(f"V-13 passes: {len(links)} link(s) to memories Meko holds; no upkeep owed.")
+        print(f"V-13 passes: {len(links)} link(s) to what Meko holds; no upkeep owed.")
         return 0
     for problem in problems:
         print(f"V-13: {problem}")
@@ -1154,6 +1186,16 @@ async def _dream_run(session_id: uuid.UUID | None, at: datetime | None) -> int:
             for o in report.outcomes:
                 why = f": {o.reason}" if o.reason else ""
                 print(f"- {o.outcome}: {o.finding.shown}{why}")
+            for p in report.patterns:
+                print(
+                    f"- pattern {p.status}: {p.pattern.attribute} = {p.pattern.value} "
+                    f"({len(p.pattern.choices)} decisions)"
+                )
+            if report.promotions:
+                print(
+                    f"- {len(report.promotions)} promotion(s) offered for sharing: each can't be "
+                    "undone, so approving one asks again (--confirm-promotion)"
+                )
             if report.candidates:
                 print(
                     f"Memories Meko extracted: {len(report.candidates)}; {settled.linked} linked, "

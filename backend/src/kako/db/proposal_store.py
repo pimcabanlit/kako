@@ -58,6 +58,7 @@ from kako.facts.proposals import (
     parse_decision,
     parse_fact,
     parse_life_event,
+    parse_promote,
     parse_retract,
 )
 
@@ -81,6 +82,7 @@ NOT_QUOTED: Final = frozenset({"extracted_memory", "learning"})
 MAX_QUOTE: Final = 4_000
 MAX_EVIDENCE: Final = 10
 MAX_BATCH: Final = 20
+PROMOTABLE: Final = ("preference.",)  # the facts shared as collective memory: durable preferences
 # The order a batch is written in: a life event before the facts that name it, a retraction before
 # a fact that takes its place, the facts before the decision that rests on them.
 PHASE: Final = {
@@ -157,7 +159,7 @@ def _check_payload(kind: str, payload: Any) -> None:
     elif kind == "decision":
         parse_decision(payload, DECISION_TAGS)
     elif kind == "promote":
-        raise PayloadError("promotion comes with its second confirmation (Phase 4, task 4)")
+        parse_promote(payload)
     else:
         raise PayloadError(f"{kind!r} isn't a kind of proposal")
 
@@ -198,6 +200,29 @@ async def _check_rows(
             raise ProposalError(f"fact {fact_id} isn't active, so it can't be retracted")
     elif kind == "decision":
         await _check_decision_rows(conn, household_id, parse_decision(payload, DECISION_TAGS))
+    elif kind == "promote":
+        await _check_promotable(conn, household_id, *parse_promote(payload))
+
+
+async def _check_promotable(
+    conn: AsyncConnection, household_id: uuid.UUID, target: str, row_id: uuid.UUID
+) -> None:
+    """What a promotion shares is the household's, and still holds: an active preference fact,
+    or an active decision. Checked when proposed and again when approved."""
+    if target == "fact":
+        row = await _one(conn, select(FACT).where(FACT.c.id == row_id))
+        if row is None or row["household_id"] != household_id:
+            raise ProposalError(f"fact {row_id} isn't this household's")
+        if not str(row["attribute"]).startswith(PROMOTABLE):
+            raise ProposalError("only a preference is promoted to collective memory")
+        if row["status"] != "active" or row["valid_to"] is not None:
+            raise ProposalError(f"fact {row_id} no longer holds, so it isn't promoted")
+        return
+    row = await _one(conn, select(DECISION).where(DECISION.c.id == row_id))
+    if row is None or row["household_id"] != household_id:
+        raise ProposalError(f"decision {row_id} isn't this household's")
+    if row["status"] != "active":
+        raise ProposalError(f"decision {row_id} is {row['status']}, so it isn't shared")
 
 
 async def _check_life_event_named(
@@ -600,9 +625,12 @@ async def approve(
     *,
     person_id: uuid.UUID,
     decided_at: datetime,
+    confirm_promotion: bool = False,
 ) -> list[Decided]:
     """Approve the proposals and write what each names, all in one transaction: if any write is
-    refused, none is made. A proposal that is already approved is left as it is."""
+    refused, none is made. A proposal that is already approved is left as it is. A promotion can't
+    be undone, so it needs its second confirmation (`confirm_promotion`); it writes nothing here,
+    and Meko upkeep shares it."""
     if decided_at.tzinfo is None:
         raise ProposalError("decided_at must carry its time zone (UTC)")
     results: list[Decided] = []
@@ -622,14 +650,20 @@ async def approve(
                     f"proposal {row['id']} is {row['status']}; it can't be approved"
                 )
             if row["kind"] == "promote":
-                raise ProposalError(
-                    "promotion comes with its second confirmation (Phase 4, task 4)"
-                )
+                if not confirm_promotion:
+                    raise ProposalError(
+                        f"proposal {row['id']} shares with every agent and can't be undone: "
+                        "approve it again with its second confirmation"
+                    )
+                await _check_promotable(conn, household_id, *parse_promote(row["payload"]))
             await conn.execute(
                 update(PROPOSAL)
                 .where(PROPOSAL.c.id == row["id"], PROPOSAL.c.status == "pending")
                 .values(status="approved", decided_by_person_id=person_id, decided_at=decided_at)
             )
+            if row["kind"] == "promote":  # Meko upkeep shares it (kako/upkeep/)
+                results.append(Decided(row["id"], row["kind"], "approved", False))
+                continue
             try:
                 if row["kind"] in FACT_KINDS:
                     written = await _write_fact(conn, row, decided_at)

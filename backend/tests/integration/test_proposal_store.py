@@ -32,6 +32,7 @@ from kako.facts.proposals import (
     fact_target,
     idempotency_key,
     life_event_payload,
+    promote_payload,
     retract_payload,
 )
 
@@ -121,6 +122,22 @@ class House:
                 source_ref="facts.csv",
             ),
             recorded_at=at(date(2026, 3, 1), 0),
+        )
+        return row.id
+
+    async def seed_preference(self) -> uuid.UUID:
+        row = await record_seed_fact(
+            self.conn,
+            NewFact(
+                household_id=self.id,
+                entity_id=None,
+                attribute="preference.debt_vs_flexibility",
+                value="flexibility",
+                valid_from=date(2026, 10, 20),
+                source_kind="seed",
+                source_ref="facts.csv",
+            ),
+            recorded_at=at(date(2026, 10, 20), 0),
         )
         return row.id
 
@@ -273,8 +290,70 @@ async def test_a_payload_names_only_the_households_rows(
 
 
 async def test_promotion_waits_for_its_second_confirmation(house: House) -> None:
-    with pytest.raises(ProposalError, match="second confirmation"):
-        await house.propose("promote", {"fact_id": str(house.old_salary)}, "promote")
+    h = house
+    # Only a preference of this household, still in force, is shared.
+    with pytest.raises(ProposalError, match="only a preference"):
+        await h.propose("promote", promote_payload("fact", h.old_salary), "promote/salary")
+    await h.conn.rollback()
+    with pytest.raises(ProposalError, match="isn't this household's"):
+        await h.propose("promote", promote_payload("fact", uuid.uuid4()), "promote/other")
+    await h.conn.rollback()
+    with pytest.raises(ProposalError, match="names one fact_id or one decision_id"):
+        await h.propose("promote", {"fact_id": str(h.old_salary), "x": 1}, "promote/two")
+    await h.conn.rollback()
+    with pytest.raises(ProposalError, match="names one fact_id or one decision_id"):
+        await h.propose("promote", {"plan_id": str(uuid.uuid4())}, "promote/plan")
+    await h.conn.rollback()
+
+    flexibility = await h.seed_preference()
+    proposal_id = await h.propose(
+        "promote", promote_payload("fact", flexibility), "promote/flexibility", quote="Share it."
+    )
+    await h.conn.commit()
+    before = await h.counts()
+    # The first yes isn't enough: it can't be undone.
+    with pytest.raises(ProposalError, match="can't be undone: approve it again"):
+        await approve(h.conn, [proposal_id], person_id=h.mara, decided_at=at(NOV_20))
+    await h.conn.rollback()
+    assert (await h.proposal_row(proposal_id))["status"] == "pending"
+    # With its second confirmation it is approved; nothing is written here (Meko upkeep shares it).
+    (done,) = await approve(
+        h.conn, [proposal_id], person_id=h.mara, decided_at=at(NOV_20), confirm_promotion=True
+    )
+    await h.conn.commit()
+    assert (done.kind, done.status, done.already, done.written) == (
+        "promote",
+        "approved",
+        False,
+        (),
+    )
+    assert await h.counts() == before
+    (again,) = await approve(
+        h.conn, [proposal_id], person_id=h.jun, decided_at=at(NOV_20, 14), confirm_promotion=True
+    )
+    assert again.already
+    row = await h.proposal_row(proposal_id)
+    assert (row["status"], row["decided_by_person_id"]) == ("approved", h.mara)
+
+
+async def test_a_promotion_of_what_no_longer_holds_is_refused_at_approval(house: House) -> None:
+    h = house
+    flexibility = await h.seed_preference()
+    proposal_id = await h.propose(
+        "promote", promote_payload("fact", flexibility), "promote/flexibility", quote="Share it."
+    )
+    retracted = await h.propose(
+        "retract_fact", retract_payload(flexibility, "we never said that"), "retract/flex",
+        quote="We never said that.",
+    )  # fmt: skip
+    await approve(h.conn, [retracted], person_id=h.mara, decided_at=at(NOV_20))
+    await h.conn.commit()
+    with pytest.raises(ProposalError, match="no longer holds"):
+        await approve(
+            h.conn, [proposal_id], person_id=h.mara, decided_at=at(NOV_20), confirm_promotion=True
+        )
+    await h.conn.rollback()
+    assert (await h.proposal_row(proposal_id))["status"] == "pending"
 
 
 # --- Who decides, and how ---------------------------------------------------------------------

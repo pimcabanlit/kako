@@ -214,7 +214,7 @@ async def test_dreaming_proposes_what_is_new_once_with_its_quote_and_speaker(
                     "SELECT p.kind, p.status, p.dream_run_id, p.idempotency_key, p.created_at, "
                     "e.kind AS ekind, e.ref, e.person_id, e.quote FROM proposal p "
                     "JOIN proposal_evidence e ON e.proposal_id = p.id WHERE p.dream_run_id = :r "
-                    "ORDER BY p.created_at, p.kind"
+                    "AND p.kind <> 'promote' ORDER BY p.created_at, p.kind"
                 ),
                 {"r": run_id},
             )
@@ -240,6 +240,27 @@ async def test_dreaming_proposes_what_is_new_once_with_its_quote_and_speaker(
     assert run.counts["proposals"] == {"life_event": 1, "replace_fact": 2}
     assert run.counts["outcomes"] == {"new": 1, "refused": 1, "replace": 2}
     assert run.counts["claims"] == 3
+    # Steps 4 and 5: no new pattern (the household holds its preference for flexibility), and
+    # that preference, approved from a pattern, is offered for sharing once (task 4).
+    assert [p.status for p in report.patterns] == []
+    (offer,) = report.promotions
+    assert run.counts["promotions"] == [str(offer)]
+    async with migrated.connect() as conn:
+        shared = (
+            await conn.execute(
+                text(
+                    "SELECT p.status, p.payload, f.attribute, e.kind FROM proposal p "
+                    "JOIN fact f ON f.id = (p.payload->>'fact_id')::uuid "
+                    "JOIN proposal_evidence e ON e.proposal_id = p.id WHERE p.id = :p"
+                ),
+                {"p": offer},
+            )
+        ).one()
+    assert (shared.status, shared.attribute, shared.kind) == (
+        "pending",
+        "preference.debt_vs_flexibility",
+        "fact",
+    )
 
     # A rerun does nothing: the run is done.
     again = await _dream(migrated, settings, run_id, ScriptedBackend({}))
@@ -249,7 +270,10 @@ async def test_dreaming_proposes_what_is_new_once_with_its_quote_and_speaker(
     async with migrated.connect() as conn:
         ids = list(
             await conn.execute(
-                text("SELECT id FROM proposal WHERE dream_run_id = :r ORDER BY kind"),
+                text(
+                    "SELECT id FROM proposal WHERE dream_run_id = :r AND kind <> 'promote' "
+                    "ORDER BY kind"
+                ),
                 {"r": run_id},
             )
         )
@@ -316,7 +340,7 @@ async def test_what_the_session_already_proposed_is_never_proposed_twice(
     run_id = await end_session(migrated, session.session_id, ENDED)
     report = await _dream(migrated, settings, run_id, ScriptedBackend(script()))
     assert [o.outcome for o in report.outcomes] == ["new", "replace", "already", "refused"]
-    assert len(report.proposed) == 2
+    assert len(report.proposed) == 2 + len(report.promotions)  # and the preference to share
 
 
 async def test_a_failed_run_says_why_and_runs_again(
@@ -341,7 +365,8 @@ async def test_a_failed_run_says_why_and_runs_again(
     assert "ModelError" in run.counts["error"]
     report = await _dream(migrated, settings, run_id, ScriptedBackend(script()))
     assert report.status == "done"
-    assert len(report.proposed) == 3
+    assert len(report.proposed) == 3 + 1  # and the preference offered for sharing
+    assert len(report.promotions) == 1
 
 
 async def test_the_labelled_set_scores_full_marks_with_a_careful_extraction(
@@ -407,8 +432,10 @@ async def test_the_commands_end_a_session_and_dream_from_a_recording(
         assert await asyncio.to_thread(_main, ["dream", "run", "--at", ENDED.isoformat()]) == 0
         out = capsys.readouterr().out
         # The other session's new job waits for a yes already: the salary names it, and only the
-        # two facts are proposed.
-        assert "2 proposal(s) waiting for a yes" in out
+        # two facts are proposed. The preference was offered for sharing by the first run; two
+        # sessions have now ended since the September decision, so it is offered now.
+        assert "3 proposal(s) waiting for a yes" in out
+        assert "- 1 promotion(s) offered for sharing" in out
         assert "- same: Life event (new_job) on Dec 1, 2026: Kako has it already" in out
         assert "- refused: expense:eating-out: expense.monthly_amount: not in the quote" in out
         assert await asyncio.to_thread(_main, ["dream", "run"]) == 0

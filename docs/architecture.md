@@ -240,12 +240,19 @@ queues the run; `kako dream run` runs what is queued, one at a time. The code is
 4. **Patterns.** Code counts the household's decisions by the tags of the option they chose (such as
    `favours_flexibility`, from a fixed list in `decision_option.tags`; the orchestrator tags options when
    it proposes them, and code rejects a tag that is not on the list). Three choices the same way across at least two sessions, with none the other
-   way, produce a `preference_pattern` proposal, citing each decision and session. (Phase 4, task 4.)
-5. **Promotion candidates.** An approved preference or decision that has held for two sessions is
-   proposed for promotion, with the plain warning that promotion can't be undone. A preference goes to
-   **collective memory** (a short fact every agent retrieves). A decision goes to **shared knowledge** as
-   a decision-record document: the question, the option chosen, the options rejected with their reasons,
-   and the assumptions. (Phase 4, task 4.)
+   way, produce a `preference_pattern` proposal, citing each decision in the household's words and
+   naming each session (`dreaming/patterns.py`, pure; `dreaming/promotion.py`). A pattern the household
+   already holds proposes nothing; the same decisions never propose it again, even after a no; and
+   nothing is proposed while another proposal for the same preference waits. A session with no Meko
+   conversation (a decision of the demo's story) is dreamed over for this step and the next alone.
+5. **Promotion candidates.** A preference approved from a pattern (its decisions already span two
+   sessions), and an active decision once two sessions have ended after it without revising it, are
+   proposed for promotion, once ever (a no is final), with the plain warning that promotion can't be
+   undone. The same runs right after each approval, so a preference approved between sessions is offered
+   at once. Approving one needs a second confirmation. A preference goes to **collective memory** (its
+   sentence, which every agent retrieves). A decision goes to the **knowledge base** as a decision
+   record: the question, the option chosen, the options rejected with their reasons, and what it rests
+   on. Meko upkeep carries both out (step 8).
 6. **Propose.** Everything lands in the approvals inbox with an explanation and its evidence: the quote,
    the turn it was said in (`<conversation id>:<seed>`) and who said it, with the run's id. A claim's
    proposals are stored together (a life event with its facts, a retraction with the value that takes
@@ -268,8 +275,10 @@ queues the run; `kako dream run` runs what is queued, one at a time. The code is
    words about it), and deletes a retracted one's memories, each as the agent that wrote it. It
    compares each fact's sentence with what it last wrote (`meko_link.text`), so it does only what
    is owed, and what it can't do now (Meko unreachable, its step bound) waits for the next run or
-   `kako meko sync`; an approval never fails because of it. Promotion of what was approved for
-   sharing comes with Phase 4, task 4.
+   `kako meko sync`; an approval never fails because of it. It also shares what was approved for
+   sharing (`upkeep/promote.py`): it adds the preference's sentence and promotes it, after checking
+   Meko's promoted memories so a stopped run never promotes twice, or uploads the decision record
+   (`upkeep/records.py`), and links each in `meko_link`.
 
 Dreaming is a fixed workflow with one model step (extraction); the orchestrator and specialists are the
 agentic part. The docs and the video say so.
@@ -310,7 +319,7 @@ current, what it replaced and which plans and decisions depended on it.
 | Decisions | `backend/src/kako/decisions/` (pure) and `backend/src/kako/db/proposal_store.py` (the writes) | The fixed list of option tags, the facts a decision rests on (`assumptions.py`), and decision records written on approval with their options and assumptions; "to revisit" is F-DIFF-1 |
 | Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), the tool loop with its bounds and the step log, recorded responses, orchestrator, the four specialists, brief builder, tools, number check, prompts |
 | Dreaming | `backend/src/kako/dreaming/` | The job (`job.py`), extraction (`extract.py`), the claims and the checks and classification in code (`claims.py`, `classify.py`, pure), proposals; patterns with task 4 |
-| Meko upkeep | `backend/src/kako/upkeep/` | Kako's own memory of each fact: the sentence (`sentences.py`) and the steps owed (`plan.py`), both pure; carrying them out as `kako:upkeep` (`sync.py`: after every approval, at the end of demo mode, `kako meko sync`); V-13 (`check.py`, `kako meko check`) |
+| Meko upkeep | `backend/src/kako/upkeep/` | Kako's own memory of each fact: the sentence (`sentences.py`) and the steps owed (`plan.py`), both pure; carrying them out as `kako:upkeep` (`sync.py`: after every approval, at the end of demo mode, `kako meko sync`); sharing what was approved for it, a promoted preference or a decision record (`promote.py`, `records.py`); V-13 (`check.py`, `kako meko check`) |
 | Meko adapter | `backend/src/kako/meko/` | One interface for every Meko call, an MCP client implementation, an in-memory fake for unit tests, the call counter and quota guard |
 | Database | `backend/src/kako/db/` | SQLAlchemy 2 async models, repositories, Alembic migrations |
 | Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, the Foundry endpoint, deployment names and their prices, budgets, demo mode |

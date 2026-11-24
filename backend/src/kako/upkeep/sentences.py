@@ -45,17 +45,23 @@ PHRASES: Final[dict[str, str]] = {
 }
 
 
+def subject(fact: FactRow, entity: EntityRow | None) -> str:
+    """What the fact is about, in words: "Mara's salary (take-home pay a month)"."""
+    phrase = PHRASES.get(fact.attribute, fact.attribute)
+    return f"{entity.name} ({phrase})" if entity is not None else f"the household's {phrase}"
+
+
 def fact_sentence(fact: FactRow, household: str, entity: EntityRow | None) -> str | None:
-    """The fact as one sentence, or None for a retracted fact (Meko must not find it again)."""
+    """The fact as one sentence, or None for a retracted fact (Meko must not find it again).
+    A preference shared in collective memory is its sentence while in force, kept as it was."""
     if fact.status == "retracted":
         return None
-    phrase = PHRASES.get(fact.attribute, fact.attribute)
-    subject = f"{entity.name} ({phrase})" if entity is not None else f"the household's {phrase}"
+    subject_ = subject(fact, entity)
     value = fact_value(fact)
     if fact.status == "replaced" and fact.valid_to is not None:
         until = fact.valid_to - timedelta(days=1)  # valid_to is the replacement's first day
         return (
             f"In the {household}, from {day(fact.valid_from)} until {day(until)}, "
-            f"{subject} was {value}."
+            f"{subject_} was {value}."
         )
-    return f"In the {household}, from {day(fact.valid_from)}, {subject} is {value}."
+    return f"In the {household}, from {day(fact.valid_from)}, {subject_} is {value}."
