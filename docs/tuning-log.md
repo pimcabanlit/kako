@@ -316,3 +316,29 @@ it led to.
   agent's 40. A judge's machine can do the same, so `kako demo run` replays each reply by its call
   key and reports the requests that differed (`--strict` refuses them). On CI both test-set scores
   still come out exactly as saved.
+
+### 9. Session 4, the life event and the replan, first real run; session 2 again (Nov 24, 2026)
+
+- **Change tested:** Phase 4, task 2. The orchestrator (and the single agent) now has
+  `propose_change` and two prompt sections ("When the household tells you something changed", "A
+  replan"); `submit_answer` has `why`, required in a replan; the brief has the household's life events
+  and, in a replan, a section with what changed (F-DIFF-1), the facts behind it and the decisions to
+  revisit. Session 4 is new (`data/demo-household/sessions/session-4.toml`); session 2 is recorded
+  again because its requests now differ from its recording (the new tool and prompt sections).
+- **Prediction (written before the runs):**
+  - **Session 4, turn 1** (Mara's news): the orchestrator calls `propose_change` once, with the
+    `new_job` life event on Dec 1 and Mara's salary at ₱68,000 from Dec 1, quoting her words, and asks
+    no specialist; it answers without options, saying what waits for a yes. 2 or 3 strong calls. The
+    likeliest miss: it also asks a specialist "to see the impact" before the yes (the prompt says not
+    to), or writes a worked-out number such as "₱16,000 more a month", sent back once by the check.
+  - **Mara's approval** writes changes.csv rows 10 and 11 exactly (demo mode checks it).
+  - **Turn 2** (Jun asks what it changes): a replan as of Dec 1 against the decision of Sep 15. The
+    orchestrator asks debt and savings (budget maybe); options all on the card (3 months, ₱4,620.01
+    of interest) and Jun's ₱10,000 with the rest to the fund (card in 7 months, ₱9,358.80; the fund's
+    target in 4 months). `why` names the replaced salary, the Session 2 decision to revisit and the
+    preference for flexibility. Whether the specialists conflict is a coin flip, as in session 2. The
+    likeliest miss: a `why` with a worked-out number (the +₱16,000), sent back once, then passing.
+  - Session 4 in all: 8 to 13 model calls, **US$0.04 to US$0.10**.
+  - **Session 2:** the same answer as entry 7 (options A and B with the worked example's figures),
+    no `propose_change` call (nothing in the message is a change), `why` empty. 6 to 9 calls,
+    US$0.02 to US$0.04.
