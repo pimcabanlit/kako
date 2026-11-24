@@ -222,3 +222,10 @@ def unquoted(
         for w in payload_numbers(kind, payload)
         if not _found(w, pool, today)
     ]
+
+
+def text_unquoted(text: str, quotes: Sequence[str], *, today: date | None) -> list[str]:
+    """The numbers in a text (a memory Meko worded) that its quotes don't hold, described; empty
+    when every one is quoted. The same reading as V-09."""
+    pool = quote_pool(quotes)
+    return [_shown(w) for w in _text_numbers("a number", text) if not _found(w, pool, today)]

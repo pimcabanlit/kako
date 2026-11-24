@@ -76,6 +76,8 @@ PLAN = cast(Table, Plan.__table__)
 CALC_RUN = cast(Table, CalcRun.__table__)
 
 EVIDENCE_KINDS: Final = ("turn", "memory", "extracted_memory", "learning", "fact", "decision")
+# Meko's own words: shown with a proposal, never a quote that holds one of its numbers (V-09).
+NOT_QUOTED: Final = frozenset({"extracted_memory", "learning"})
 MAX_QUOTE: Final = 4_000
 MAX_EVIDENCE: Final = 10
 MAX_BATCH: Final = 20
@@ -319,7 +321,8 @@ async def propose(
             raise ProposalError(f"each piece of evidence has a ref and a quote of 1 to {MAX_QUOTE}")
     try:
         _check_payload(kind, payload)
-        missing = unquoted(kind, payload, [e.quote for e in evidence], today=today)
+        quotes = [e.quote for e in evidence if e.kind not in NOT_QUOTED]
+        missing = unquoted(kind, payload, quotes, today=today)
     except PayloadError as exc:
         raise ProposalError(f"the payload doesn't fit a {kind} proposal: {exc}") from exc
     if missing:
