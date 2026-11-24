@@ -8,7 +8,9 @@ go back, and so on. The loop is where the architecture's bounds are kept in code
 - at most `max_tool_calls + 2` model calls, so a model that keeps talking still stops;
 - the final tool only on its own in a reply, so an answer rests on results the model has read;
 - every tool call is an `agent_step` (the agent, the tool, a short input and result, the what-if
-  run if any, the outcome), written as it happens.
+  run if any, the outcome), written as it happens;
+- after each round of tool calls, code may add a note of its own (`between_rounds`): the
+  orchestrator's reconciliation rules report conflicts this way.
 
 Tool arguments are model output: each tool parses and checks them in code and refuses what it
 can't use (`ToolInputError`), and the model is told why. A final tool's checked value is the agent's
@@ -93,6 +95,7 @@ async def run_agent(
     tools: Sequence[Tool],
     max_output_tokens: int,
     max_tool_calls: int = 4,
+    between_rounds: Callable[[], str | None] | None = None,
 ) -> AgentRun:
     """Run one agent to its answer. `path` names it within the turn (such as `debt#1`), so each
     of its model calls has a stable key: `<turn seed>/<path>/<n>`."""
@@ -175,4 +178,9 @@ async def run_agent(
                 answer, answered = result.value, True
         if answered:
             return AgentRun(answer, text, counted, model_calls)
+        note = between_rounds() if between_rounds is not None else None
+        if note:
+            # Written by code: engine figures, amounts and refs. A ref is a slug of a name
+            # ([a-z0-9-] only), so no household text reaches the note as words of its own.
+            messages.append(Message("user", note))
     return AgentRun(None, text, counted, model_calls)

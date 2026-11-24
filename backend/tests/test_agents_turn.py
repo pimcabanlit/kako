@@ -155,6 +155,12 @@ def _session_2_script() -> dict[str, Any]:
                         },
                     ],
                     "recommended": "",
+                    "resolution": {
+                        "what_if": "",
+                        "rejected": "",
+                        "reason": "Mara wants the card cleared fast and Jun wants cash on hand. "
+                        "A and B each fit the surplus on its own, so the choice is yours.",
+                    },
                 },
             )
         ),
@@ -228,7 +234,25 @@ async def test_session_2_gives_options_a_and_b_with_the_worked_examples_figures(
     # Every specialist's proposal is kept, in the order asked.
     assert [p.specialist for p in answer.proposals] == ["debt", "savings"]
     assert answer.proposals[0].what_if == "debt1-W1"
-    assert len(state.what_ifs) == 3  # debt1-W1, debt1-W2, savings1-W1
+    # debt1-W1, debt1-W2, savings1-W1, and the two proposals together (rec-W1)
+    assert list(state.what_ifs) == ["debt1-W1", "debt1-W2", "savings1-W1", "rec-W1"]
+
+    # Together, A's ₱9,050 on the card and B's ₱5,050 to the fund are over the ₱9,050 surplus:
+    # code found it, and the orchestrator left the choice to the household (Mara and Jun differ).
+    resolution = answer.resolution
+    assert resolution is not None
+    assert [c.kind for c in resolution.conflicts] == ["over_allocation"]
+    assert resolution.described == (
+        "over-allocation (debt, savings): together they allocate ₱5,050.00 a month more than the "
+        "surplus (figure:cashflow.monthly_surplus = ₱9,050.00; "
+        "figure:rec-W1:plan.unallocated = -₱5,050.00 (negative))",
+    )
+    assert {(a.entity_id, a.centavos, a.spec) for a in resolution.together_allocations} == {
+        (card, 905_000, "ask:debt1-W1"),
+        (fund, 505_000, "ask:savings1-W1"),
+    }
+    assert (resolution.chosen, resolution.rejected, resolution.attempts) == (None, None, 0)
+    assert resolution.reason.startswith("Mara wants the card cleared fast")
 
     # Every tool call is an agent step: the specialists' own, then the orchestrator's asks.
     assert [(s.agent, s.tool, s.outcome) for s in steps.steps] == [

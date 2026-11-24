@@ -372,12 +372,12 @@ A conflict between specialists, found in code, and how the orchestrator resolved
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `plan_id` | UUID FK | |
-| `kind` | TEXT | `over_allocation` (asks add up to more than the surplus), `opposite_moves` (one adds to an account another draws from), `target_missed` (a goal's date can't be met) |
+| `kind` | TEXT | `over_allocation` (together the asks leave `plan.unallocated` below zero), `opposite_moves` (one specialist raises an entity's monthly allocation above what it is now and another lowers it), `target_missed` (a goal on track in the turn's run is off track together, or a goal an ask raises is still off track). Together, each entity takes the amount from the specialist whose area it is (debt, savings for an account, goals), else the last ask that named it, else its current allocation |
 | `specialists` | TEXT[] | |
-| `figure_ids` | UUID[] | The figures that show the conflict |
-| `resolution` | TEXT | The orchestrator's choice and reason, checked like any other text |
-| `rejected` | TEXT, null | The option it did not take; null when no split fitted and the household was shown the conflict |
-| `attempts` | INT | Splits the orchestrator tried through the engine (0 to 3); each is an `agent_step` with its what-if run |
+| `figure_ids` | UUID[] | The figures that show the conflict: the turn's surplus and the asks-together run's `plan.unallocated`, each side's what-if figure for an opposite move, a missed goal's `goal.on_track`, `goal.projected_date` and `goal.required_monthly` |
+| `resolution` | TEXT | The orchestrator's choice and reason, checked like any other text. A choice is a split the rules pass, offered as an option and recommended |
+| `rejected` | TEXT, null | The option it did not take: another what-if of the turn, with its allocations. Null when the orchestrator left the choice to the household (nothing supports one split, or no split fitted) and the household was shown the conflict |
+| `attempts` | INT | Splits the orchestrator tried through the engine (0 to 3 a turn) once the conflict was found; each is an `agent_step` with its what-if run, `rejected` when the rules refuse it |
 
 ### `scenario`
 

@@ -34,14 +34,8 @@ from kako.agents.tools import (
     what_if_tool,
 )
 from kako.agents.turn import TurnContext, short
+from kako.planning.reconcile import SCOPE
 
-# The entity kind each specialist's what-if must move money to; the budget specialist moves none.
-SCOPE: Final[dict[Specialist, str | None]] = {
-    "budget": None,
-    "debt": "debt",
-    "savings": "account",
-    "goals": "goal",
-}
 MAX_TOOL_CALLS: Final = 4
 MAX_SUMMARY: Final = 1_500
 

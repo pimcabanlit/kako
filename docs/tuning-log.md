@@ -80,3 +80,63 @@ it led to.
   at 1,500 characters.
 - **Change made:** none. Spend so far: US$0.071 of the US$1 Pim approved. Next real runs come with
   task 4 (reconciliation) and the agent test set.
+
+### 3. Session 2 with the reconciliation rules (Nov 24, 2026)
+
+- **Change tested:** Phase 3, task 4. Once two or more specialists propose a move, code puts their
+  proposals together (`rec-W1`) and tells the orchestrator what the rules found, in a note between
+  its rounds; while a conflict is open its `run_what_if` calls are splits (at most 3), and
+  `submit_answer` needs a `resolution`. The orchestrator's prompt has a new "Conflicts" section.
+  Same question, date and command as entries 1 and 2.
+- **Prediction (written before the run):**
+  - Debt and savings are asked together, as in run 2. If debt proposes all on the card and savings
+    the split, the rules find an over-allocation: ₱9,050 on the card and ₱5,050 to the fund,
+    ₱5,050 a month over the surplus. If both propose the split, they fit together and no conflict
+    is reported.
+  - With the conflict, the orchestrator tries no split or one (the split already exists as a
+    specialist's what-if), and resolves with `what_if` and `rejected` both "", because Mara and Jun
+    disagree; `recommended` stays empty. Options A and B carry the same figures as run 2.
+  - Most likely miss: one refused `submit_answer` (a missing or inconsistent resolution, such as a
+    chosen split without recommending it), then fixed on the next call.
+  - Cost: US$0.04 to US$0.06 (one or two more orchestrator calls than run 2).
+- **Run:** the same command, recorded to `data/recorded/session-2-run3.json`. 6 model calls, 27,520
+  tokens in (22,680 cached), 2,538 out, **US$0.0244**. 8 agent steps, no refusals.
+- **Result:**
+  - As predicted: debt proposed all on the card (its second what-if, `debt1-W2`) and savings the
+    split, so the rules found the over-allocation (₱9,050 and ₱5,050 together, ₱5,050 a month over),
+    and the orchestrator left the choice to the household: no split tried, `what_if` and
+    `rejected` both "", `recommended` empty. The two options carry run 2's figures (17 months and
+    12 months to the fund's target; 9 months and ₱12,460.10).
+  - No refused call, so the predicted miss didn't happen. Cost was below the range: one fewer
+    model call than run 2 (each specialist called once fewer) and more of the prefix cached.
+  - Off the prediction: the resolution's reason ends with "Sources: figure:cashflow.monthly_surplus,
+    said, fact:preference.debt_strategy". The household reads that text, and refs mean nothing to it.
+- **Root cause:** the new "Conflicts" section says what the reason must name, not how it is written;
+  the rule against refs in text was only in the specialists' prompts.
+- **Change made:** the orchestrator's prompt says the household reads the reason: plain words,
+  figures as the tools write them, no refs. See entry 4.
+
+### 4. Session 2, the resolution's reason in plain words (Nov 24, 2026)
+
+- **Change tested:** the sentence on the reason above; nothing else changed.
+- **Prediction (written before the run):** the same conflict and the same resolution (left to the
+  household, `recommended` empty, 0 or 1 splits); the reason has no `figure:`, `fact:` or `said`
+  ref in it. Cost US$0.02 to US$0.04.
+- **Run:** the same command, recorded to `data/recorded/session-2.json` (it replaces run 2's
+  recording, which the new note no longer replays; run 2's is in the git history). 8 model calls,
+  36,857 tokens in (30,720 cached), 3,292 out, **US$0.0308**. 9 agent steps. Replayed strictly
+  afterwards with `KAKO_MODEL_MODE=replay`: the same answer, US$0.
+- **Result:**
+  - As predicted: the same over-allocation, left to the household with `recommended` empty and no
+    split tried; the reason is plain words with no refs ("Both split choices fit the ₱9,050.00
+    monthly surplus. Mara asked to clear the credit card fast, while Jun wants ₱4,000.00 extra on
+    the card and the rest to the emergency fund, so the choice is yours."). The reply now says which
+    option suits whose priority.
+  - Off the prediction: the debt specialist's `submit_proposal` was refused twice before it passed,
+    once for citing `said:` with the whole message after it and once for `memory:K4` (a document,
+    `doc:K4`). Code's refusals named the fix each time. This is the fast model's variance, not the
+    orchestrator change; it cost two small calls (US$0.002).
+- **Root cause of the miss:** the shared rules list `said` among the citations without saying it
+  stands alone; nothing in this change touched it.
+- **Change made:** none now. The agent test set (task 7) will show whether the citation refusals
+  are frequent enough to tune. Spend so far: US$0.126 of the US$1 Pim approved.

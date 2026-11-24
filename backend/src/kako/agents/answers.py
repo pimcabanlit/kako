@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from kako.engine.figures import Figure
+from kako.planning.reconcile import Conflict
 
 SourceKind = Literal["figure", "fact", "decision", "memory", "knowledge", "conversation"]
 Specialist = Literal["budget", "debt", "savings", "goals"]
@@ -68,8 +69,38 @@ class Option:
 
 
 @dataclass(frozen=True)
+class Split:
+    """A split the orchestrator tried while a conflict was open, and what the rules found in it."""
+
+    what_if: str
+    fits: bool
+    conflicts: tuple[Conflict, ...]
+
+
+@dataclass(frozen=True)
+class Resolution:
+    """How a turn's conflicts ended (`reconciliation`): found in code, resolved by the
+    orchestrator with a split that fits and the option it rejected, or left to the household."""
+
+    conflicts: tuple[Conflict, ...]
+    described: tuple[str, ...]  # each conflict in words, with its figures
+    together: str  # the what-if of the asks together
+    together_allocations: tuple[Allocation, ...]
+    splits: tuple[Split, ...]  # in the order tried, at most 3
+    chosen: str | None  # the what-if of the option that resolves it; None: left to the household
+    rejected: str | None  # the what-if it did not take
+    rejected_allocations: tuple[Allocation, ...]
+    reason: str  # checked by the number check like any other text (task 5)
+
+    @property
+    def attempts(self) -> int:
+        return len(self.splits)
+
+
+@dataclass(frozen=True)
 class TurnAnswer:
     reply: str
     options: tuple[Option, ...]
     recommended: str | None  # an option's label, or None when the choice is the household's
     proposals: tuple[SpecialistProposal, ...]  # every specialist's answer, in the order asked
+    resolution: Resolution | None = None  # None when the rules found no conflict
