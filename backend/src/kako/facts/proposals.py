@@ -442,3 +442,28 @@ def parse_retract(payload: Any) -> tuple[uuid.UUID, str]:
         raise PayloadError("a retraction's payload is an object")
     _keys(payload, {"fact_id", "reason"}, "a retract_fact payload")
     return _uuid(payload["fact_id"], "fact_id"), _words(payload["reason"], "reason")
+
+
+# A promotion: what it shares, by id. Nothing in it is a number; the words shared are written by
+# code from the row (a preference fact, or a decision with its options and assumptions), which never
+# changes once written, so what a person approves is what is shared.
+PROMOTE_TARGETS: Final = ("fact", "decision")
+
+
+def promote_payload(target: str, row_id: uuid.UUID) -> dict[str, Any]:
+    """The payload of a proposal that shares a preference fact (collective memory) or a decision
+    (a decision record in shared knowledge)."""
+    if target not in PROMOTE_TARGETS:
+        raise PayloadError(f"only a {' or a '.join(PROMOTE_TARGETS)} is promoted")
+    return {f"{target}_id": str(row_id)}
+
+
+def parse_promote(payload: Any) -> tuple[str, uuid.UUID]:
+    """(`fact` or `decision`, its id)."""
+    if not isinstance(payload, Mapping) or len(payload) != 1:
+        raise PayloadError("a promote payload names one fact_id or one decision_id")
+    (key,) = payload
+    target = str(key).removesuffix("_id")
+    if key != f"{target}_id" or target not in PROMOTE_TARGETS:
+        raise PayloadError("a promote payload names one fact_id or one decision_id")
+    return target, _uuid(payload[key], key)

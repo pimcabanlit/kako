@@ -27,6 +27,7 @@ from kako.meko.adapter import (
     DocumentState,
     KnowledgeHit,
     Memory,
+    Promoted,
     Turn,
     check_agent_id,
     check_document,
@@ -191,6 +192,37 @@ class McpMeko:
                 return None
             raise
         return _memory(answer)
+
+    async def promote_memories(
+        self, conversation_id: str, memory_ids: list[str], *, agent_id: str
+    ) -> tuple[str, ...]:
+        if not memory_ids:
+            return ()
+        answer = await self._call(
+            "memory_promote",
+            agent_id,
+            {"conversation_id": conversation_id, "memory_ids": list(memory_ids)},
+        )
+        if not isinstance(answer, dict):
+            raise MekoProtocolError("memory_promote answered without an object")
+        done: list[str] = []
+        for key in ("inserted_ids", "updated_ids"):
+            ids = answer.get(key) or []
+            if not isinstance(ids, list):
+                raise MekoProtocolError(f"memory_promote's {key} isn't a list")
+            done += [str(i) for i in ids]
+        return tuple(done)
+
+    async def promoted_memories(self, conversation_id: str, *, agent_id: str) -> Promoted:
+        answer = await self._call(
+            "memory_get_all", agent_id, {"conversation_id": conversation_id, "promoted": True}
+        )
+        items = answer.get("promoted_memories") if isinstance(answer, dict) else None
+        if not isinstance(items, list):
+            raise MekoProtocolError("memory_get_all answered without the promoted memories")
+        memories = tuple(_promoted(m) for m in items)
+        total = answer.get("total")
+        return Promoted(memories, total if isinstance(total, int) else len(memories))
 
     async def search_context(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5
@@ -374,6 +406,20 @@ def _memory(item: Any) -> Memory:
         score=_score(item.get("score")),
         agent_id=_optional(item.get("agent_id")),
         conversation_id=_optional(item.get("run_id")),
+    )
+
+
+def _promoted(item: Any) -> Memory:
+    """A promoted memory as `memory_get_all` lists it: its words are under `data`, and promotion
+    dropped its metadata."""
+    if not isinstance(item, dict):
+        raise MekoProtocolError("a promoted memory in Meko's answer isn't an object")
+    return Memory(
+        id=_text(item, "id"),
+        text=str(item.get("data") or ""),
+        metadata={},
+        agent_id=_optional(item.get("agent_id")),
+        conversation_id=_optional(item.get("conversation_id")),
     )
 
 

@@ -33,6 +33,7 @@ from kako.meko.client import MekoCallLimitError, MekoError, MekoToolError, is_no
 from kako.meko.quota import MekoQuotaError
 from kako.settings import Settings
 from kako.upkeep.plan import Link, Step, plan_upkeep
+from kako.upkeep.promote import SHARE_CALLS, Share, share, shares_owed
 
 HOUSEHOLD = cast(Table, Household.__table__)
 FACT = cast(Table, Fact.__table__)
@@ -51,13 +52,14 @@ class UpkeepReport:
     added: int = 0
     rewritten: int = 0
     deleted: int = 0
+    shared: int = 0  # promoted to collective memory, or a decision record uploaded
     waiting: int = 0  # steps left for the next run
     busy: bool = False  # another run held the household
     problems: list[str] = field(default_factory=list)
 
     @property
     def steps(self) -> int:
-        return self.added + self.rewritten + self.deleted
+        return self.added + self.rewritten + self.deleted + self.shared
 
 
 def session_key(household_id: uuid.UUID) -> str:
@@ -146,7 +148,8 @@ async def _run(
     async with engine.connect() as conn:
         household = await _household(conn, household_id)
         steps = await plan_for(conn, household_id)
-    if not steps:
+        shares = await shares_owed(conn, household_id)
+    if not steps and not shares:
         return
     if household.meko_datapack_id is not None and meko.datapack_id != household.meko_datapack_id:
         raise UpkeepError("Meko isn't on this household's datapack")
@@ -157,19 +160,51 @@ async def _run(
             session_key=session_key(household_id),
         )
     except (MekoQuotaError, MekoCallLimitError):
-        report.waiting = len(steps)
+        report.waiting = len(steps) + len(shares)
         return
     for n, step in enumerate(steps):
         if n >= max_steps:
-            report.waiting = len(steps) - n
+            report.waiting = len(steps) - n + len(shares)
             return
         try:
             await _step(engine, meko, household_id, conversation_id, step, now, report)
         except (MekoQuotaError, MekoCallLimitError):
-            report.waiting = len(steps) - n
+            report.waiting = len(steps) - n + len(shares)
             return
         except MekoError as exc:
             report.problems.append(f"fact {step.fact.id}: {step.kind}: {safe_error(exc)}")
+    await _share_all(
+        engine, meko, household_id, conversation_id, shares, now, max_steps - len(steps), report
+    )
+
+
+async def _share_all(
+    engine: AsyncEngine,
+    meko: Meko,
+    household_id: uuid.UUID,
+    conversation_id: str,
+    shares: list[Share],
+    now: datetime,
+    calls_left: int,
+    report: UpkeepReport,
+) -> None:
+    """The approved promotions, after the facts' steps, within the calls the run has left. A share
+    starts only with room for every call it may make, so none stops halfway for want of calls."""
+    for n, item in enumerate(shares):
+        cost = SHARE_CALLS[item.target]
+        if cost > calls_left:
+            report.waiting += len(shares) - n
+            return
+        calls_left -= cost
+        try:
+            await share(engine, meko, household_id, conversation_id, item, agent=AGENT, now=now)
+        except (MekoQuotaError, MekoCallLimitError):
+            report.waiting += len(shares) - n
+            return
+        except MekoError as exc:
+            report.problems.append(f"{item.target} {item.row_id}: share: {safe_error(exc)}")
+            continue
+        report.shared += 1
 
 
 async def _step(

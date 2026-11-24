@@ -20,6 +20,7 @@ from kako.meko.adapter import (
     Document,
     KnowledgeHit,
     Memory,
+    Promoted,
     Turn,
     check_agent_id,
     check_document,
@@ -69,6 +70,7 @@ class FakeMeko:
         self.sessions: dict[str, str] = {}
         self.memories: dict[str, _Memory] = {}
         self.documents: dict[str, _Document] = {}  # by upload key
+        self.promoted: dict[str, _Memory] = {}  # collective memory: out of `memories` for good
         self.calls: list[str] = []
 
     @asynccontextmanager
@@ -146,6 +148,9 @@ class FakeMeko:
             KnowledgeHit(d.document_id, d.text, _score(query, d.text))
             for d in self.documents.values()
         ]
+        hits += [  # like Meko: a promoted memory is found in the knowledge base, by no document
+            KnowledgeHit(None, m.text, _score(query, m.text)) for m in self.promoted.values()
+        ]
         hits = [h for h in hits if h.score]
         return tuple(sorted(hits, key=lambda h: -(h.score or 0))[:limit])
 
@@ -185,6 +190,30 @@ class FakeMeko:
             if m is None:
                 return None
             return Memory(memory_id, m.text, dict(m.metadata), None, m.agent_id, m.conversation_id)
+
+    async def promote_memories(
+        self, conversation_id: str, memory_ids: list[str], *, agent_id: str
+    ) -> tuple[str, ...]:
+        if not memory_ids:
+            return ()
+        async with self._call("memory_promote", agent_id, conversation_id):
+            done = []
+            for memory_id in memory_ids:
+                memory = self.memories.pop(memory_id, None)
+                if memory is not None:  # like Meko: one not found is skipped and named
+                    self.promoted[memory_id] = memory
+                    done.append(memory_id)
+            return tuple(done)
+
+    async def promoted_memories(self, conversation_id: str, *, agent_id: str) -> Promoted:
+        async with self._call("memory_get_all", agent_id, conversation_id):
+            newest = list(self.promoted.items())[::-1][:20]
+            return Promoted(
+                tuple(
+                    Memory(i, m.text, {}, None, m.agent_id, m.conversation_id) for i, m in newest
+                ),
+                len(self.promoted),
+            )
 
     async def search_context(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5

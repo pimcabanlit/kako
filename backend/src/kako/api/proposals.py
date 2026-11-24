@@ -6,8 +6,12 @@
   what a "What Kako knows about you" view reads.
 - `POST /api/v1/proposals/approve` approves one or more proposals in one transaction and writes
   what each names (`db.proposal_store.approve`). Approving an approved proposal again changes
-  nothing and says so (`already`). After the answer, Meko upkeep brings Meko in line with what
-  was written (`kako.upkeep`): a failure there never undoes the approval.
+  nothing and says so (`already`). A promotion shares with every agent and can't be undone, so it
+  is approved only with its second confirmation (`confirm_promotion`); without it, 409 says so.
+  An approval then offers what is now ready to share as pending promotions
+  (`dreaming.promotion`). After the answer, Meko upkeep brings Meko in line with what was
+  written and shares what was approved for sharing (`kako.upkeep`): a failure there never undoes
+  the approval.
 - `POST /api/v1/proposals/reject` rejects pending proposals; nothing is written.
 
 Kako has no sign-in yet, so the person deciding is named in the request, and must be an adult of
@@ -41,9 +45,16 @@ from kako.db.proposal_store import (
     list_proposals,
     reject,
 )
+from kako.dreaming.promotion import propose_promotions
 from kako.facts.attributes import attribute
 from kako.facts.model import EntityRow, FactRow
-from kako.facts.proposals import FACT_KINDS, PayloadError, decode_value, parse_fact
+from kako.facts.proposals import (
+    FACT_KINDS,
+    PayloadError,
+    decode_value,
+    parse_fact,
+    parse_promote,
+)
 from kako.health import safe_error
 
 PERSON = cast(Table, Person.__table__)
@@ -61,6 +72,7 @@ class Decide(_In):
     proposal_ids: Annotated[list[uuid.UUID], Field(min_length=1, max_length=MAX_BATCH)]
     person_id: uuid.UUID  # the adult who decides (no sign-in yet)
     household_id: uuid.UUID | None = None  # unset: the only household
+    confirm_promotion: bool = False  # the second yes a promotion needs: it can't be undone
 
 
 class EvidenceOut(BaseModel):
@@ -146,6 +158,19 @@ def describe(view: ProposalView, entities: Sequence[EntityRow], facts: Sequence[
             return f"Life event ({payload['kind']}) on {day(occurs_on)}: {payload['description']}"
         if view.kind == "decision":
             return f"Decision: {payload['question']} Chosen: {payload['chosen']}"
+        if view.kind == "promote":
+            target, row_id = parse_promote(payload)
+            if target == "fact":
+                fact = by_id.get(row_id)
+                what = f"{fact.attribute} = {fact_value(fact)}" if fact else "a preference"
+                return (
+                    f"Share the preference {what} with every agent in Meko's collective memory "
+                    "(can't be undone)"
+                )
+            return (
+                "Share the decision as a record in the household's shared knowledge "
+                "(can't be undone)"
+            )
     except (KeyError, ValueError, PayloadError):
         pass  # shown as its kind below; the payload itself is in the response
     return view.kind.replace("_", " ")
@@ -227,7 +252,7 @@ async def _decide(
     _json_only(request)
     services: Services = _services(request)
     household, _ = await _household(services.engine, body.household_id)
-    decide = approve if action == "approve" else reject
+    now = datetime.now(UTC)
     async with services.engine.begin() as conn:
         mine = await list_proposals(
             conn, household, proposal_ids=body.proposal_ids, limit=MAX_BATCH
@@ -235,11 +260,23 @@ async def _decide(
         if len(mine) != len(set(body.proposal_ids)):
             raise HTTPException(404, "no such proposal in this household")
         try:
-            decided = await decide(
-                conn, body.proposal_ids, person_id=body.person_id, decided_at=datetime.now(UTC)
-            )
+            if action == "approve":
+                decided = await approve(
+                    conn,
+                    body.proposal_ids,
+                    person_id=body.person_id,
+                    decided_at=now,
+                    confirm_promotion=body.confirm_promotion,
+                )
+            else:
+                decided = await reject(
+                    conn, body.proposal_ids, person_id=body.person_id, decided_at=now
+                )
         except ProposalError as exc:
             raise HTTPException(409, str(exc)) from None
+        if action == "approve" and any(not d.already for d in decided):
+            # What now holds may be ready to share: offered at once (pending, for a yes).
+            await propose_promotions(conn, household, now=now)
     if tasks is not None and any(not d.already for d in decided):
         tasks.add_task(_upkeep, services, household)
     return [

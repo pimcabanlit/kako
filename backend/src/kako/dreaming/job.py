@@ -46,6 +46,7 @@ from kako.dreaming.candidates import MAX_NOTED, Candidate, Noted, Settled, noted
 from kako.dreaming.claims import SaidTurn
 from kako.dreaming.classify import PROPOSING, Finding, Known, classify
 from kako.dreaming.extract import DreamInputs, Extraction, extract, said_turns
+from kako.dreaming.promotion import PatternOutcome, propose_patterns, propose_promotions
 from kako.facts.evidence import text_unquoted
 from kako.facts.proposals import PayloadError, idempotency_key, parse_life_event
 from kako.facts.snapshot import take_snapshot
@@ -90,10 +91,14 @@ class DreamReport:
     model_calls: int = 0
     error: str | None = None
     candidates: tuple[Candidate, ...] = ()
+    patterns: tuple[PatternOutcome, ...] = ()
+    promotions: tuple[uuid.UUID, ...] = ()  # promote proposals made
 
     @property
     def proposed(self) -> tuple[uuid.UUID, ...]:
-        return tuple(i for o in self.outcomes for i in o.proposal_ids)
+        """Every proposal the run made: from the session's words, its patterns and promotions."""
+        patterns = tuple(p.proposal_id for p in self.patterns if p.proposal_id is not None)
+        return tuple(i for o in self.outcomes for i in o.proposal_ids) + patterns + self.promotions
 
 
 async def end_session(engine: AsyncEngine, session_id: uuid.UUID, at: datetime) -> uuid.UUID:
@@ -517,7 +522,10 @@ async def run_dream(
             household = await people(conn, session.household_id)
             known, events = await household_known(conn, session.household_id, now)
         names = {p.id: p.display_name for p in household}
-        turns = said_turns(await session_turns(meko, session, names))
+        # A session with no Meko conversation (one written outside a planning turn, such as a
+        # decision of the demo's story) has no turns to read: its run is steps 4 and 5 alone.
+        local = session.conversation_id.startswith(LOCAL_PREFIX)
+        turns = () if local else said_turns(await session_turns(meko, session, names))
         noted = await session_noted(meko, session.conversation_id, turns)
         inputs = DreamInputs(
             session.household_name,
@@ -542,11 +550,21 @@ async def run_dream(
         named = _named(noted, extraction)
         outcomes = await _propose(engine, session, run_id, findings, now, named)
         candidates = _fates(noted, named, extraction, outcomes, session.on)
+        async with engine.begin() as conn:
+            patterns = await propose_patterns(
+                conn, session.household_id, on=session.on, now=now, dream_run_id=run_id
+            )
+            promotions = await propose_promotions(
+                conn, session.household_id, now=now, dream_run_id=run_id
+            )
     except Exception as exc:
         error = safe_error(exc)
         await _finish(engine, run_id, "failed", now, {"error": error})
         raise
-    await _finish(engine, run_id, "done", now, _counts(outcomes, extraction, candidates))
+    counts = _counts(outcomes, extraction, candidates)
+    counts["patterns"] = [pattern_json(p) for p in patterns]
+    counts["promotions"] = [str(i) for i in promotions]
+    await _finish(engine, run_id, "done", now, counts)
     return DreamReport(
         run_id,
         session_id,
@@ -555,4 +573,16 @@ async def run_dream(
         tuple(outcomes),
         extraction.model_calls,
         candidates=tuple(candidates),
+        patterns=tuple(patterns),
+        promotions=tuple(promotions),
     )
+
+
+def pattern_json(outcome: PatternOutcome) -> dict[str, Any]:
+    return {
+        "attribute": outcome.pattern.attribute,
+        "value": outcome.pattern.value,
+        "status": outcome.status,
+        "proposal_id": str(outcome.proposal_id) if outcome.proposal_id else None,
+        "decisions": [str(c.decision_id) for c in outcome.pattern.choices],
+    }
