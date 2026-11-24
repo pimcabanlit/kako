@@ -235,6 +235,12 @@ async def test_proposing_the_same_thing_twice_makes_one_proposal(house: House) -
             "replace_fact", h.new_salary(6_850_000), _target(h), quote="₱68,500 from Dec 1"
         )
     assert (await h.counts())["proposal"] == 1
+    # The same key from another household is refused without naming this household's proposal.
+    other = await House(h.conn).build()
+    other.session = h.session  # the key's source
+    with pytest.raises(ProposalConflict) as refused:
+        await other.propose("replace_fact", other.new_salary(), _target(h))
+    assert str(first) not in str(refused.value)
 
 
 # --- What a proposal must be ------------------------------------------------------------------
@@ -341,6 +347,44 @@ async def test_a_life_event_and_its_fact_are_approved_together(house: House) -> 
     )
     assert new_fact.life_event_id == event_id
     assert await validate_household(h.conn, h.id) == []
+
+
+def _new_job(event_id: uuid.UUID) -> dict[str, Any]:
+    return life_event_payload(
+        event_id=event_id,
+        kind="new_job",
+        description="Mara starts a new job on Dec 1 at ₱68,000 take-home",
+        occurs_on=DEC_1,
+        source_ref="conv-4:s4:t1",
+    )
+
+
+async def test_an_id_already_used_is_refused_not_a_crash(house: House) -> None:
+    h = house
+    event_id = uuid.uuid4()
+    first = await h.propose("life_event", _new_job(event_id), "new_job/2026-12-01")
+    again = await h.propose("life_event", _new_job(event_id), "new_job/2026-12-01", source="s4:t2")
+    await approve(h.conn, [first], person_id=h.mara, decided_at=at(NOV_20))
+    await h.conn.commit()
+    with pytest.raises(ProposalError, match="an id it names is already used"):
+        await approve(h.conn, [again], person_id=h.mara, decided_at=at(NOV_20))
+    await h.conn.rollback()
+    assert (await h.proposal_row(again))["status"] == "pending"
+
+
+async def test_a_fact_never_joins_another_households_life_event(house: House) -> None:
+    h = house
+    event_id = uuid.uuid4()
+    await h.propose("life_event", _new_job(event_id), "new_job/2026-12-01")
+    fact = await h.propose("replace_fact", h.new_salary(life_event_id=event_id), _target(h))
+    # Another household's event, approved first with the same id.
+    other = await House(h.conn).build()
+    theirs = await other.propose("life_event", _new_job(event_id), "new_job/2026-12-01")
+    await approve(h.conn, [theirs], person_id=other.mara, decided_at=at(NOV_20))
+    await h.conn.commit()
+    with pytest.raises(ProposalError, match="life event of this household"):
+        await approve(h.conn, [fact], person_id=h.mara, decided_at=at(NOV_20))
+    await h.conn.rollback()
 
 
 async def test_one_refused_write_leaves_the_whole_approval_undone(house: House) -> None:

@@ -26,6 +26,7 @@ from typing import Any, Final, Literal, cast
 
 from sqlalchemy import Table, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from kako.db.fact_store import FactStoreError, NewFact, record_fact, replace_fact, retract_fact
@@ -343,6 +344,8 @@ async def propose(
                 and _same(kind, existing["payload"], payload)
             ):
                 return Proposed(existing["id"], created=False)
+            if existing["household_id"] != household_id:
+                raise ProposalConflict("that idempotency key is already used")
             raise ProposalConflict(
                 "something else was already proposed from the same words "
                 f"(proposal {existing['id']}, {existing['status']})"
@@ -466,12 +469,16 @@ async def _write_fact(conn: AsyncConnection, proposal: Any, decided_at: datetime
     write = parse_fact(proposal["kind"], proposal["payload"])
     if write.life_event_id is not None:
         event = await _one(
-            conn, select(LIFE_EVENT.c.id).where(LIFE_EVENT.c.id == write.life_event_id)
+            conn,
+            select(LIFE_EVENT.c.id).where(
+                LIFE_EVENT.c.id == write.life_event_id,
+                LIFE_EVENT.c.household_id == proposal["household_id"],
+            ),
         )
         if event is None:
             raise ProposalError(
-                f"proposal {proposal['id']} belongs to a life event that isn't approved yet: "
-                "approve the event with it"
+                f"proposal {proposal['id']} belongs to a life event of this household "
+                "that isn't approved yet: approve the event with it"
             )
     source_kind, source_ref = await _source(conn, proposal)
     new = NewFact(
@@ -635,6 +642,11 @@ async def approve(
                     written = await _write_decision(conn, row)
             except (FactStoreError, PayloadError) as exc:
                 raise ProposalError(f"proposal {row['id']} can't be written: {exc}") from exc
+            except IntegrityError:
+                # An id the payload chose is already taken (a life event, decision or option).
+                raise ProposalError(
+                    f"proposal {row['id']} can't be written: an id it names is already used"
+                ) from None
             results.append(Decided(row["id"], row["kind"], "approved", False, (written,)))
     return results
 
