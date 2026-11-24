@@ -243,6 +243,16 @@ async def _upkeep(services: Services, household_id: uuid.UUID) -> None:
         log.warning("Meko upkeep after an approval didn't run: %s", safe_error(exc))
 
 
+async def _offer_promotions(services: Services, household_id: uuid.UUID, now: datetime) -> None:
+    """After an approval, in a transaction of its own: what now holds may be ready to share, so it
+    is offered at once (pending, for a yes). It never undoes the approval."""
+    try:
+        async with services.engine.begin() as conn:
+            await propose_promotions(conn, household_id, now=now)
+    except (ProposalError, PayloadError) as exc:
+        log.warning("Promotions after an approval weren't offered: %s", safe_error(exc))
+
+
 async def _decide(
     request: Request,
     body: Decide,
@@ -274,9 +284,8 @@ async def _decide(
                 )
         except ProposalError as exc:
             raise HTTPException(409, str(exc)) from None
-        if action == "approve" and any(not d.already for d in decided):
-            # What now holds may be ready to share: offered at once (pending, for a yes).
-            await propose_promotions(conn, household, now=now)
+    if action == "approve" and any(not d.already for d in decided):
+        await _offer_promotions(services, household, now)
     if tasks is not None and any(not d.already for d in decided):
         tasks.add_task(_upkeep, services, household)
     return [

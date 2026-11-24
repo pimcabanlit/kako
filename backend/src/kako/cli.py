@@ -658,6 +658,7 @@ async def _decide(
     from kako.api.proposals import people
     from kako.db.proposal_store import ProposalError, approve, list_proposals, reject
     from kako.dreaming.promotion import propose_promotions
+    from kako.facts.proposals import PayloadError
 
     async def work(conn: AsyncConnection) -> int:
         chosen = await _household(conn, household_id)
@@ -690,8 +691,14 @@ async def _decide(
             print(f"{d.proposal_id} {d.kind}: {state}" + (f" ({wrote})" if wrote else ""))
         if action == "approve" and any(not d.already for d in decided):
             # What now holds may be ready to share: offered at once, not at the next dreaming run.
-            offered = await propose_promotions(conn, chosen, now=now)
-            await conn.commit()
+            # The approval is committed already; a refusal here only skips the offer.
+            try:
+                offered = await propose_promotions(conn, chosen, now=now)
+                await conn.commit()
+            except (ProposalError, PayloadError) as exc:
+                await conn.rollback()
+                print(f"Nothing was offered for sharing: {exc}", file=sys.stderr)
+                offered = []
             if offered:
                 print(
                     f"{len(offered)} promotion(s) offered for sharing, waiting for a yes "

@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from kako.db.fact_store import snapshot
 from kako.db.models import Decision, DecisionOption, Fact, Proposal, Session
-from kako.db.proposal_store import MAX_EVIDENCE, Evidence, propose
+from kako.db.proposal_store import MAX_EVIDENCE, MAX_QUOTE, Evidence, propose
 from kako.dreaming.patterns import Choice, Pattern, find_patterns
 from kako.facts.proposals import fact_payload, idempotency_key, promote_payload
 
@@ -150,7 +150,7 @@ async def propose_patterns(
             replaces=old.id if old is not None else None,
         )
         evidence = [
-            Evidence("decision", str(c.decision_id), c.reasoning, c.decided_by)
+            Evidence("decision", str(c.decision_id), c.reasoning[:MAX_QUOTE], c.decided_by)
             for c in pattern.choices[-MAX_EVIDENCE:]
         ]
         proposed = await propose(
@@ -196,7 +196,7 @@ async def propose_promotions(
     for fact_id, _, why, _ in list(preferences):
         made += await _offer(
             conn, household_id, "fact", fact_id, SHARE_PREFERENCE,
-            Evidence("fact", str(fact_id), why), now, dream_run_id,
+            Evidence("fact", str(fact_id), why[:MAX_QUOTE]), now, dream_run_id,
         )  # fmt: skip
     later = (
         select(func.count())
@@ -224,7 +224,8 @@ async def propose_promotions(
     for decision_id, reasoning, person in list(decisions):
         made += await _offer(
             conn, household_id, "decision", decision_id, SHARE_DECISION,
-            Evidence("decision", str(decision_id), reasoning, person), now, dream_run_id,
+            Evidence("decision", str(decision_id), reasoning[:MAX_QUOTE], person), now,
+            dream_run_id,
         )  # fmt: skip
     return made
 
