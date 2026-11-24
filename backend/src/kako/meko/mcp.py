@@ -97,6 +97,17 @@ class McpMeko:
             args["seed"] = turn.seed
         return _text(await self._call("conversation_add_message", agent_id, args), "message_id")
 
+    async def read_turns(self, conversation_id: str, *, agent_id: str) -> list[Turn]:
+        answer = await self._call(
+            "conversation_get",
+            agent_id,
+            {"conversation_id": conversation_id, "include_messages": True},
+        )
+        messages = answer.get("messages") if isinstance(answer, dict) else None
+        if not isinstance(messages, list):
+            raise MekoProtocolError("conversation_get didn't answer with the messages")
+        return [_turn(m) for m in messages]
+
     async def delete_conversation(self, conversation_id: str, *, agent_id: str) -> None:
         await self._call("conversation_delete", agent_id, {"conversation_id": conversation_id})
 
@@ -265,6 +276,28 @@ def _limit(limit: int) -> int:
     if not 1 <= limit <= 50:
         raise MekoError("a search asks for 1 to 50 results")
     return limit
+
+
+def _turn(item: Any) -> Turn:
+    if not isinstance(item, dict):
+        raise MekoProtocolError("a conversation message isn't an object")
+    metadata = item.get("metadata") or {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            raise MekoProtocolError("a message's metadata isn't JSON") from None
+    plan = item.get("plan") or []
+    if not isinstance(metadata, dict) or not isinstance(plan, list):
+        raise MekoProtocolError("a message's plan or metadata has the wrong shape")
+    reasoning = item.get("reasoning")
+    return Turn(
+        input=str(item.get("input") or ""),
+        output=str(item.get("output") or ""),
+        plan=tuple(str(step) for step in plan),
+        reasoning=reasoning if isinstance(reasoning, str) and reasoning else None,
+        metadata=metadata,
+    )
 
 
 def _text(answer: Any, key: str) -> str:

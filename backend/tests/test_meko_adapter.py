@@ -283,6 +283,7 @@ async def test_the_fake_keeps_what_meko_keeps() -> None:
     await meko.add_turn(c, turn, agent_id="kako:orchestrator")
     await meko.add_turn(c, turn, agent_id="kako:orchestrator")  # the same seed: stored once
     assert meko.conversations[c].turns == [turn]
+    assert await meko.read_turns(c, agent_id="kako:orchestrator") == [Turn("in", "out")]
     m = await meko.add_memory(c, "Mara Villanueva's take-home pay is ₱68,000.", {"fact_id": "f"},
                               agent_id="kako:dreaming")  # fmt: skip
     found = await meko.search_context(c, "Mara take-home pay", agent_id="kako:budget")
@@ -364,3 +365,44 @@ def test_the_trace_link(make_settings: MakeSettings) -> None:
     assert local.meko_trace_url("c1") is None
     assert make_settings().meko_cloud_ceiling == 0
     assert make_settings(meko_datapack_id="  ").meko_datapack_id is None
+
+
+async def test_turns_read_back_with_their_trace(log: MemoryCallLog) -> None:
+    kept = {
+        "message_id": "m1",
+        "input": "Mara here.",
+        "output": "Two options.",
+        "plan": ["Read the brief", "Asked the debt specialist"],
+        "reasoning": "debt specialist: all on the card.",
+        "metadata": {"kako_plan_id": "p1", "kako_turn": "t1"},
+    }
+    server = Server(
+        {"conversation_get": {"id": "c1", "messages": [kept, {**kept, "metadata": '{"a": 1}'}]}}
+    )
+    async for meko in _meko(server, log):
+        turns = await meko.read_turns("c1", agent_id="kako:orchestrator")
+    assert turns == [
+        Turn(
+            "Mara here.",
+            "Two options.",
+            ("Read the brief", "Asked the debt specialist"),
+            "debt specialist: all on the card.",
+            {"kako_plan_id": "p1", "kako_turn": "t1"},
+        ),
+        Turn(
+            "Mara here.",
+            "Two options.",
+            ("Read the brief", "Asked the debt specialist"),
+            "debt specialist: all on the card.",
+            {"a": 1},
+        ),
+    ]
+    assert server.tools == [
+        ("conversation_get", {
+            "conversation_id": "c1", "include_messages": True, "agent_id": "kako:orchestrator",
+        }),
+    ]  # fmt: skip
+    for broken in ({"id": "c1"}, {"messages": [{"metadata": "{not json"}]}, {"messages": ["x"]}):
+        async for meko in _meko(Server({"conversation_get": broken}), log):
+            with pytest.raises(MekoProtocolError):
+                await meko.read_turns("c1", agent_id="kako:orchestrator")

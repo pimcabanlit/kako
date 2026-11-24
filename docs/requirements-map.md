@@ -53,8 +53,8 @@ Phases refer to [build-plan.md](build-plan.md).
 | Memory: goals, risk profile and past decisions, across sessions | Not started | One memory per approved fact, decision and preference, with Kako's ids in its metadata; replaced facts rewritten in the past tense | 4 |
 | Knowledge base: statements, budgets and planning rules (synthetic) | In progress | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) for the demo household. Written in `data/demo-household/`; `kako demo upload` puts them in Meko's knowledge base (tested on local Meko); the demo datapack on Meko Cloud is seeded in Phase 5 | 2 |
 | Artifacts: generated plans and reports in the datapack | Not started | Each plan report kept with `artifact_put`; its hash stored on the plan | 4 |
-| Conversations: planning sessions over time | Not started | One conversation per session, turns with `plan` and `reasoning`; dreaming reads them | 3 |
-| Traces: why each recommendation was made | Not started | The session's conversation id is its trace id; every Meko call in a turn is a span; recommendations store their turn | 3 |
+| Conversations: planning sessions over time | In progress | One conversation per session, turns with `plan` and `reasoning`; dreaming reads them. Built: `POST /api/v1/sessions` starts the conversation and each turn (`POST /api/v1/sessions/{id}/turns`, or `kako ask`) is kept in it with the steps taken, the specialists' reasons and the ids of the plan, recommendations, conflicts and what-if runs; dreaming is Phase 4 | 3 |
+| Traces: why each recommendation was made | In progress | The session's conversation id is its trace id; every Meko call in a turn is a span; recommendations store their turn. Built: `GET /api/v1/sessions/{id}/trace` gives the session's Meko calls as spans from local Meko's call log (each search with its parts), or the Observe hub link on Meko Cloud; the turn's Meko metadata names the plan and recommendation ids, and each recommendation its turn seed. The "why" screen is Phase 5 | 3 |
 
 ## Expected outcomes
 
@@ -85,7 +85,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Learning | Not started | Meko's own self-learning: weak searches become questions, and `selflearning_verify` shows the search improved (a Must if the tools are available). Dreaming reads Meko's extracted memories and Learnings, proposes promotions; the household approves; a preference goes to collective memory, a decision record to shared knowledge | 1, 4 |
 | Knowledge | Not started | Statements, rules, reference documents; promoted memories | 2, 4 |
 | Artifacts | Not started | Plan reports | 4 |
-| Decision tracing | Not started | Turns with `plan` and `reasoning`; spans for every Meko call; linked from each recommendation | 3 |
+| Decision tracing | In progress | Turns with `plan` and `reasoning`; spans for every Meko call; linked from each recommendation. Built in the backend (Phase 3, task 6); the screens are Phase 5 | 3 |
 | Blending data infrastructure: Postgres inside the context | Not started | The household's facts in AMP, Postgres in the datapack, if the Phase 1 test passes; a scenario as an AMP branch (Should) | 1, 5 |
 | Sharing context and collaborating to improve it | Not started | Six agents on one datapack; both adults taking part across sessions (one reports the job, the other approves the promotion); the debt specialist acting on a preference the household approved; Context Gaps answered by the household | 4–5 |
 

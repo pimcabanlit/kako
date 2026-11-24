@@ -50,6 +50,7 @@ class Plan(Base):
     summary: Mapped[str] = mapped_column(Text)
     meko_artifact_hash: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    recommended_option: Mapped[str | None] = mapped_column(Text)
 
 
 class Recommendation(Base):
@@ -58,6 +59,7 @@ class Recommendation(Base):
         enum_check("recommendation", "area"),
         enum_check("recommendation", "specialist"),
         CheckConstraint("allocation IS NULL OR allocation >= 0", name="allocation"),
+        UniqueConstraint("plan_id", "option", "entity_id"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -68,6 +70,7 @@ class Recommendation(Base):
     entity_id: Mapped[uuid.UUID | None] = fk("entity.id", nullable=True)
     allocation: Mapped[int | None] = mapped_column(BigInteger)
     meko_turn_seed: Mapped[str] = mapped_column(Text)
+    option: Mapped[str] = mapped_column(Text)
 
 
 class RecommendationSource(Base):

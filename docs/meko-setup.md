@@ -79,6 +79,23 @@ in a setting, added with the Meko adapter (Phase 2). The page shows each tool ca
 and its tags (`agent:<agent_id>`). It needs the account's sign-in, so the link is for Pim and the
 video, not for judges without the account.
 
+**Local Meko's trace (verified Nov 24, Meko 1.20261116.0):** local Meko keeps a call log, one row
+per MCP tool call with its conversation id, latency, outcome and parts (a `context_search` lists its
+`conversation_search`, `memory_search` and `knowledge_base_search` with their times and result
+counts). It serves the log at `GET /api/v1/calls` (newest first, `before=<id>` for the next page; the
+web UI's Calls page reads the same), with no token from this machine. That is the local equivalent of
+the Observe hub's spans: `GET /api/v1/sessions/{id}/trace` reads it for one session's conversation
+(`meko/trace.py`, local Meko only, at most 20 pages back to the session's start). It is a read of
+Meko's own log, not a tool call, so no allowance is spent and it isn't counted in `meko_call`.
+
+**Each turn Kako keeps** (Phase 3, task 6): `input` the household's message, `output` the reply,
+`plan` the steps taken (2 to 4), `reasoning` the specialists' summaries and the resolution's reason,
+and `metadata` the turn seed, session, household and date, the turn's run, each what-if's run, and
+the plan, recommendation and reconciliation ids. `conversation_get` with `include_messages: true`
+reads them back (`Meko.read_turns`, counted like any call). Meko makes a turn's `message_id` from its
+`seed` alone (the same seed in two conversations gave the same id, verified Nov 24), so Kako's seed
+for Meko is `<session id>:<turn seed>`.
+
 ### 2. Meko Cloud from the backend with an API key
 
 **Docs:** a server process sends `Authorization: Bearer mko_tkn_...` and a `User-Agent` to
@@ -171,3 +188,4 @@ the choice can't be changed later. The password is shown once. Each tier has a c
 | Nov 17, 2026 | Pim's laptop | `kako migrate` and `/api/v1/health` against the AMP endpoint; the portal's trace page for the spike conversation |
 | Nov 17, 2026 | Cloud session, local Meko 1.20261116.0 | The adapter (Phase 2, task 6): every demo document uploaded and indexed in seconds; a second upload finds each one already there; a search for 13th-month pay finds its document |
 | Nov 17, 2026 | Cloud session, Meko Cloud | Clean-up: AMP database deleted (vCPU back to 0 of 0.5), both conversations and the `kako-spike` datapack deleted |
+| Nov 24, 2026 | Cloud session, local Meko 1.20261116.0 | A turn through the session API (session 2, recorded model): the conversation's turn read back with its plan, reasoning and Kako's ids; the session's 3 Meko calls read from the call log as spans, the same 3 counted in `meko_call`. Found: a turn's message id comes from its seed alone |

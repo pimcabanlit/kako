@@ -108,6 +108,11 @@ class Meko(Protocol):
         """Store one turn; returns its message id."""
         ...
 
+    async def read_turns(self, conversation_id: str, *, agent_id: str) -> list[Turn]:
+        """The conversation's turns, oldest first, as kept: the trace's plan, reasoning and ids
+        (a turn read back carries no seed)."""
+        ...
+
     async def delete_conversation(self, conversation_id: str, *, agent_id: str) -> None: ...
 
     async def add_memory(

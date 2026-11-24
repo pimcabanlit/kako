@@ -184,7 +184,7 @@ uv run pytest                             # unit tests; integration tests skip u
 KAKO_TEST_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/kako_test \
 KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against local Postgres and local Meko (never Meko Cloud)
 uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
-uv run kako api                           # /api/v1 on 127.0.0.1:8000; /api/v1/health, docs at /api/v1/docs
+uv run kako api                           # /api/v1 on 127.0.0.1:8000; /api/v1/health, /api/v1/sessions (turns, trace), docs at /api/v1/docs
 uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
@@ -217,11 +217,13 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
 - `backend/`: the FastAPI backend (uv project `kako`, Python 3.12). `src/kako/settings.py` holds every
   setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`); `cli.py` is the `kako` command;
   `health.py` the health report and `safe_error` (no secret reaches a response or a log);
-  `api/app.py` the app and `/api/v1/health`; `db/` the engine, the declarative base, the table
+  `api/app.py` the app and `/api/v1/health`; `api/sessions.py` the session API (start a session, a
+  turn in it, one at a time, and its trace); `db/` the engine, the declarative base, the table
   models (`db/models/`, one module per layer of `docs/data-model.md`), every enumerated column's
   values (`db/enums.py`, held as check constraints) and Alembic (`db/migrations/`, append-only once
   merged; `0002_tables.py` creates every table, `0003_fact_guard.py` the trigger that allows only
-  the fact status transitions, a non-seed fact only with its approved proposal, and refuses deletes);
+  the fact status transitions, a non-seed fact only with its approved proposal, and refuses deletes;
+  `0004_recommendation_option.py` each recommendation's option and a plan's recommended one);
   `db/fact_store.py` records, replaces and retracts facts and reads snapshots, one transaction per
   write, each exactly what its proposal's payload names (only the seed loader calls
   `record_seed_fact`); `facts/` the pure fact rules (`attributes.py` the attribute catalog, `values.py`
@@ -233,7 +235,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   rounding and ratios; `dates.py` calendar months and the 100-year horizon; `inputs.py` what it
   reads; `figures.py` the figure and the run; `diff.py` F-DIFF-1, what changed between two runs and
   why, and the decisions to revisit). `db/calc_store.py` stores a run with the facts it read and its
-  figures, and reads it back; `demo/` the demo household (`files.py` reads and checks
+  figures, and reads it back; `db/plan_store.py` keeps a turn's what-ifs (a scenario, its overrides,
+  its run) and the plan it proposes (recommendations per option with their sources, reconciliation),
+  in one transaction; `demo/` the demo household (`files.py` reads and checks
   `data/demo-household/`, `load.py` loads it through the fact store, each change as an approved
   proposal and then its write). `planning/reconcile.py` holds the reconciliation rules: the
   specialists' asks together through the engine, over-allocation, opposite moves and missed goal
@@ -243,7 +247,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   any past their `max_tool_calls` ceiling, 0 by default; `adapter.py`, the one interface for every
   Meko call Kako makes; `mcp.py`, that interface over MCP (`open_meko`); `fake.py`, the same in memory
   for unit tests; `quota.py`, the call counter and quota guard every call goes through;
-  `health.py`, the handshake probe). `db/meko_log.py` counts the calls in `meko_call`, and
+  `health.py`, the handshake probe; `trace.py`, a session's spans from local Meko's call log).
+  `db/meko_log.py` counts the calls in `meko_call` (bound to the session once it exists), and
   `demo/kb.py` uploads the demo's documents to the knowledge base. `agents/` the agents' plumbing:
   `chat.py` (a model call's request and reply as plain values, the request digest, the token
   estimate), `model_manager.py` (the only module that imports a model SDK: `check_models`, the
@@ -269,8 +274,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   by the rules, and the resolution with the option rejected), `numbers.py` (the number check, V-10:
   every number in a text read out and matched to a figure, fact, what-if allocation or the
   household's words; used by `submit_answer` and `submit_proposal`, one regeneration, then
-  flagged) with `checks.py` (what it finds and logs), `ask.py` (one turn for `kako ask`: a
-  session, the brief, the turn's run stored, the answer and its checks, and what it cost) and
+  flagged) with `checks.py` (what it finds and logs), `ask.py` (a session and its turns, for `kako ask`
+  and the API: the session's conversation, the brief, the turn's run stored, the answer, its plan
+  and checks stored, the turn kept in Meko with its steps, reasons and ids, and what it cost) and
   `prompts/` (the shared rules, then one file per role; every system prompt is the shared rules,
   the brief, then the role). Recorded real runs
   live in `data/recorded/`, and each is logged in `docs/tuning-log.md`.
@@ -288,7 +294,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   tests the number check on session 2's figures (what matches, what fails, rounding,
   multipliers, dates in any common form, spelled-out numbers with a unit, refs, names),
   and `test_agents_numbers.py` in a scripted turn (sent back once, then flagged; every text; the
-  specialists'; an answer kept when the model stops).
+  specialists'; an answer kept when the model stops). `test_agents_session.py` checks the turn Meko
+  keeps (steps, reasons, ids) and which row each final check names; `test_meko_trace.py` reads a
+  mocked call log; `test_api_sessions.py` the routes' refusals with no database; and
+  `tests/integration/test_session_api.py` is task 6's done-when: a turn through the API on Postgres
+  and local Meko leaves the conversation's turn, a plan, recommendations with sources and the
+  session's Meko calls as spans.
   `test_facts_*.py` test the fact rules on rows in memory (`tests/support/facts.py` builds them);
   `test_engine_worked_example.py` checks every worked-example figure to the centavo
   (`tests/support/villanueva.py` builds that household's history in memory from the demo files), `test_engine_rules.py` the flags,

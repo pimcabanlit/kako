@@ -256,7 +256,7 @@ A planning session is one Meko conversation.
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `household_id` | UUID FK | |
-| `meko_conversation_id` | TEXT | Also the session's trace id in Meko. Unique |
+| `meko_conversation_id` | TEXT | Also the session's trace id in Meko. Unique. A session run with Meko off has `local-<hex>` here instead |
 | `title` | TEXT | |
 | `household_date` | DATE | The demo clock when the session ran |
 | `started_at` | TIMESTAMPTZ | |
@@ -322,7 +322,7 @@ most one of `value_numeric` and `value_date` is set, and a figure with neither h
 
 ### `plan`
 
-A plan is a version: the household's recommended moves as of one date.
+A plan is a version: the household's recommended moves as of one date. Each turn that offers options or finds a conflict proposes one (`db/plan_store.py`); it stays `proposed` until the household accepts one of its options.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -337,6 +337,7 @@ A plan is a version: the household's recommended moves as of one date.
 | `summary` | TEXT | The orchestrator's checked summary |
 | `meko_artifact_hash` | TEXT, null | The plan report kept as a Meko artifact |
 | `created_at` | TIMESTAMPTZ | |
+| `recommended_option` | TEXT, null | The label of the option the orchestrator recommends; null when the choice is the household's |
 
 Unique on (`household_id`, `version`).
 
@@ -347,11 +348,14 @@ Unique on (`household_id`, `version`).
 | `id` | UUID PK | |
 | `plan_id` | UUID FK | |
 | `area` | TEXT | `budget`, `debt`, `savings`, `goals` |
-| `specialist` | TEXT | The specialist that proposed it: `budget`, `debt`, `savings` or `goals` |
-| `text` | TEXT | Passed the number check |
+| `specialist` | TEXT | The specialist that proposed it: `budget`, `debt`, `savings` or `goals`. The area's own specialist when the option draws on it, else the first specialist the option draws on |
+| `text` | TEXT | The option's summary, which passed the number check |
 | `entity_id` | UUID FK, null | The debt, account or goal the move is about |
 | `allocation` | BIGINT, null | Centavos per month the recommendation puts on that entity, not negative. Accepting the plan writes these as `plan.allocation` facts |
 | `meko_turn_seed` | TEXT | The session turn whose trace holds the reasoning |
+| `option` | TEXT | The label of the option it belongs to ("A: all extra on the card"). An option is one what-if; each of its allocations is one recommendation |
+
+Unique on (`plan_id`, `option`, `entity_id`).
 
 ### `recommendation_source`
 
@@ -362,7 +366,7 @@ What a recommendation stands on. One row per source.
 | `recommendation_id` | UUID PK, FK | |
 | `source_kind` | TEXT PK | `figure`, `fact`, `decision`, `memory`, `knowledge`, `conversation` |
 | `source_id` | TEXT PK | A Kako id, or a Meko memory id, document id or conversation id |
-| `quote` | TEXT, null | The excerpt used, for memories and documents |
+| `quote` | TEXT, null | The excerpt used, for memories and documents; for `conversation` (the household's own words in the turn, `source_id` the session's conversation id), the message. At most 500 characters |
 
 ### `reconciliation`
 
@@ -387,7 +391,7 @@ A what-if: the snapshot plus hypothetical facts (`scenario_override`) that are n
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `household_id` | UUID FK | |
-| `name` | TEXT | "If Jun takes the Cebu job" |
+| `name` | TEXT | "If Jun takes the Cebu job"; a turn's what-if is named by its ref and allocations ("debt1-W1: debt:credit-card ₱9,050.00 a month"), kept as it runs so its `agent_step` names its run |
 | `base_as_of` | DATE | |
 | `amp_branch_id` | TEXT, null | Set when the scenario is kept as an AMP branch (a Should, see the build plan) |
 

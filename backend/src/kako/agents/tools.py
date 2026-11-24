@@ -1,5 +1,6 @@
 """The agents' tools: read the turn's figures and facts, search Meko once, try allocations
-through the engine, and hand in an answer. None writes anything (REVIEW.md rule 4).
+through the engine, and hand in an answer. None writes household knowledge (REVIEW.md rule 4): a
+what-if is kept as a `scenario` with its run, whose overrides are never facts.
 
 Every argument is model output, so each tool parses it in code and refuses what it can't use with
 a reason the model can act on (`ToolInputError`). Amounts are specs (`agents.answers`), resolved
@@ -18,7 +19,8 @@ import re
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Final
+from datetime import date
+from typing import Any, Final, Protocol
 
 from kako.agents.answers import Allocation, Citation
 from kako.agents.brief import FREE_TEXT, Brief, BriefInputs, data, decision_lines
@@ -94,6 +96,12 @@ class WhatIf:
     over_allocated: bool
 
 
+class WhatIfStore(Protocol):
+    """Keeps a what-if: a `scenario`, its overrides, and its run with the scenario."""
+
+    async def save(self, what_if: WhatIf, *, on: date) -> uuid.UUID: ...
+
+
 @dataclass
 class TurnState:
     """Everything the tools of one turn read, and the what-ifs they ran."""
@@ -110,6 +118,19 @@ class TurnState:
     # An answer sent back for its numbers, by agent path: shown flagged if the agent runs out of
     # calls before it hands in another.
     held: dict[str, Any] = field(default_factory=dict)
+    # Where each what-if is kept (a scenario and its run), and the run each one was stored as.
+    what_if_store: WhatIfStore | None = None
+    stored: dict[str, uuid.UUID] = field(default_factory=dict)
+
+    async def store(self, ref: str) -> uuid.UUID | None:
+        """Keep a what-if of this turn, once: its run id, or None with no store (unit tests)."""
+        if ref in self.stored:
+            return self.stored[ref]
+        if self.what_if_store is None:
+            return None
+        run_id = await self.what_if_store.save(self.what_ifs[ref], on=self.snapshot.on)
+        self.stored[ref] = run_id
+        return run_id
 
     @property
     def refs(self) -> Refs:
@@ -489,6 +510,7 @@ def what_if_tool(state: TurnState, path: str = ORCHESTRATOR) -> Tool:
             "\n".join(lines),
             short(summary),
             outcome="rejected" if result.over_allocated else "ok",
+            calc_run_id=await state.store(result.ref),
             value=result,
         )
 
