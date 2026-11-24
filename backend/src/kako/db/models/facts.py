@@ -85,4 +85,5 @@ class LifeEvent(Base):
     occurs_on: Mapped[date] = mapped_column(Date)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     source_ref: Mapped[str] = mapped_column(Text)
-    proposal_id: Mapped[uuid.UUID] = fk("proposal.id")
+    # Unique (migration 0005): a proposal writes one at most.
+    proposal_id: Mapped[uuid.UUID] = fk("proposal.id", unique=True)

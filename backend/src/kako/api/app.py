@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from kako import __version__
+from kako.api.proposals import router as proposals_router
 from kako.api.sessions import Services, services_from
 from kako.api.sessions import router as sessions_router
 from kako.db.engine import make_engine, probe_postgres
@@ -99,4 +100,5 @@ def create_app(
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(LOOPBACK_HOSTS))
     app.include_router(router)
     app.include_router(sessions_router)
+    app.include_router(proposals_router)
     return app

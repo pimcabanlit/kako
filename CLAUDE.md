@@ -188,6 +188,8 @@ uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback 
 uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
+uv run kako proposals list                # what waits for the household (--status pending|approved|rejected|expired|all, --household)
+uv run kako proposals approve <id>… --by Mara   # approve together and write what each names; again changes nothing (reject: the same)
 uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine's figures then (--household, --save)
 uv run kako demo upload                   # the demo's statements and reference documents into Meko's knowledge base (counted in meko_call)
 uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko)
@@ -223,23 +225,32 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`); `cli.py` is the `kako` command;
   `health.py` the health report and `safe_error` (no secret reaches a response or a log);
   `api/app.py` the app and `/api/v1/health` (it answers only to a loopback Host); `api/sessions.py` the session API (start a session, a
-  turn in it, one at a time, and its trace); `db/` the engine, the declarative base, the table
+  turn in it, one at a time, and its trace); `api/proposals.py` the approvals API (list, approve,
+  reject; JSON only; `describe` writes a proposal in plain words); `db/` the engine, the declarative base, the table
   models (`db/models/`, one module per layer of `docs/data-model.md`), every enumerated column's
   values (`db/enums.py`, held as check constraints) and Alembic (`db/migrations/`, append-only once
   merged; `0002_tables.py` creates every table, `0003_fact_guard.py` the trigger that allows only
   the fact status transitions, a non-seed fact only with its approved proposal, and refuses deletes;
-  `0004_recommendation_option.py` each recommendation's option and a plan's recommended one);
+  `0004_recommendation_option.py` each recommendation's option and a plan's recommended one;
+  `0005_approval_guard.py` the triggers that keep a decided proposal from changing, refuse a decision
+  or life event without its approved proposal, and keep decisions, options and assumptions as recorded);
+  `db/proposal_store.py` proposals and approvals: `propose` (pending, with evidence, V-09, once per
+  idempotency key), `approve` (one or several in one transaction, each exactly its payload, once; again
+  changes nothing), `reject` and `list_proposals`;
   `db/fact_store.py` records, replaces and retracts facts and reads snapshots, one transaction per
   write, each exactly what its proposal's payload names (only the seed loader calls
   `record_seed_fact`); `facts/` the pure fact rules (`attributes.py` the attribute catalog, `values.py`
-  a value against its attribute, `proposals.py` proposal payloads and the check that a write is the
-  one approved, `snapshot.py` snapshots `on` a date and `known_at` a time, `rules.py` V-01 to V-08 and
+  a value against its attribute, `proposals.py` proposal payloads of every kind, their
+  idempotency keys and the check that a write is the one approved, `evidence.py` V-09 (every number a
+  proposal writes is in its quotes), `reading.py` numbers read out of text, shared with the number check
+  and the test set's scoring, `snapshot.py` snapshots `on` a date and `known_at` a time, `rules.py` V-01 to V-08 and
   V-16); `engine/` the deterministic engine, pure like `facts/` (`engine.py` `compute`: a snapshot,
   the entities and a what-if's overrides in, every figure of docs/data-model.md "Calculations" out,
   each citing what it read; `debts.py` the payoff with the rollover; `arith.py` centavos, half-up
   rounding and ratios; `dates.py` calendar months and the 100-year horizon; `inputs.py` what it
   reads; `figures.py` the figure and the run; `diff.py` F-DIFF-1, what changed between two runs and
-  why, and the decisions to revisit). `db/calc_store.py` stores a run with the facts it read and its
+  why, and the decisions to revisit); `decisions/`, pure too (`tags.py` the fixed option tags, V-15;
+  `assumptions.py` the facts a decision rests on: not balances, savings or allocations). `db/calc_store.py` stores a run with the facts it read and its
   figures, and reads it back; `db/plan_store.py` keeps a turn's what-ifs (a scenario, its overrides,
   its run, and the `agent_step` rows that ran it then name it; the tools write nothing) and the plan
   it proposes (recommendations per option with their sources, reconciliation), in one transaction; `demo/` the demo household (`files.py` reads and checks
@@ -327,6 +338,11 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   there are the worked example's (also as known at an earlier time), a run's round trip and the commands;
   `tests/integration/test_fact_store.py` each status transition, the rules on each write and the
   database guard behind them.
+  `test_facts_evidence.py` V-09 on the household's many ways of writing a number, and
+  `test_decisions.py` what plan v2 rests on; `tests/integration/test_proposal_store.py` is Phase 4
+  task 1's done-when (approving twice changes nothing), with the refusals, a life event and its fact
+  approved together, a batch undone by one refused write, decisions that revise and accept plans, and
+  migration 0005's guard; `tests/integration/test_proposals_api.py` the API and `kako proposals`.
   `tests/integration/test_meko_smoke.py` creates a conversation, adds a memory, finds it and
   cleans up (at most 6 tool calls).
   `test_model_calls.py` (budgets, the cap, retries, cost and the log), `test_tool_loop.py` (the

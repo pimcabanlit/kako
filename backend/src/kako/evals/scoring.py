@@ -2,7 +2,7 @@
 
 Pure: it reads the checked answer (`TurnAnswer`) and what the turn's tools read (`TurnState`: the
 snapshot for the current allocations, the refs for the figures). No model judges an answer: a
-number is read out of the text the way the number check reads it (`agents.numbers.scan`), so
+number is read out of the text the way the number check reads it (`facts.reading.scan`), so
 "₱9,050", "₱9,050.00" and "9,050.00 pesos" all state ₱9,050.00, and "2.14 months" states 2.1 months.
 
 What the household reads: the reply, each option's label and summary, the figures each option cites,
@@ -17,9 +17,9 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Final
 
 from kako.agents.answers import Citation, Option, TurnAnswer
-from kako.agents.numbers import Token, scan
 from kako.agents.tools import TurnState
 from kako.evals.questions import Move, Question, centavos
+from kako.facts.reading import Token, scan
 
 ALLOCATION: Final = "plan.allocation"
 # Kinds that state the same sort of value: a month count may be written in months, an amount with ₱.

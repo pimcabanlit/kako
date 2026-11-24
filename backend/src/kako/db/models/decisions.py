@@ -36,7 +36,8 @@ class Decision(Base):
     status: Mapped[str] = mapped_column(Text)
     replaced_by: Mapped[uuid.UUID | None] = fk("decision.id", nullable=True)
     outcome: Mapped[str | None] = mapped_column(Text)
-    proposal_id: Mapped[uuid.UUID] = fk("proposal.id")
+    # Unique (migration 0005): a proposal writes one at most.
+    proposal_id: Mapped[uuid.UUID] = fk("proposal.id", unique=True)
 
 
 class DecisionOption(Base):

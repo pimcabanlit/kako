@@ -8,9 +8,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
+from kako.facts.reading import Kind as Kind  # what the number check finds
+
 Subject = Literal["reply", "recommendation", "summary", "reconciliation"]
 Result = Literal["pass", "fail", "regenerated"]
-Kind = Literal["money", "months", "percent", "date", "month", "number", "code", "scaled"]
 
 
 @dataclass(frozen=True)
