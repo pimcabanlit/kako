@@ -248,7 +248,11 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   with no network; `KAKO_MODEL_MODE`), `spend.py` (cost from the per-token prices, the `llm_call`
   log protocol), `turn.py` (a turn's token budget and step numbers, the `agent_step` log protocol)
   and `tool_loop.py` (`run_agent`: one agent's bounded loop, at most 4 counted tool calls and
-  then only its final tool, every tool call an `agent_step`). `db/llm_log.py` and
+  then only its final tool, every tool call an `agent_step`), `present.py` (what agents see: stable
+  refs such as `debt:credit-card`, figures and facts written out as ₱9,050.00, 12 months, Feb 15,
+  2028), `brief.py` (`render_brief`, pure: the brief within `KAKO_BRIEF_TOKEN_BUDGET`, people's and
+  Meko's words wrapped in `<data>` blocks, and what it drops first when over budget) and
+  `brief_store.py` (`gather_brief`: Postgres, then one `context_search`). `db/llm_log.py` and
   `db/agent_steps.py` write those two tables, each row committed on its own.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
@@ -273,6 +277,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   socket refused) and `test_model_sdk_imports.py` (Ruff refuses a model SDK anywhere but the model
   manager) use the scripted model in `tests/support/models.py`, never Foundry;
   `tests/integration/test_agent_logs.py` writes and reads `llm_call` and `agent_step`.
+  `test_brief.py` builds the worked example's brief in memory (under budget, with the approved
+  preference; Meko results wrapped; trimming in order), and `tests/integration/test_brief_store.py`
+  gathers it from the demo household in Postgres and local Meko, with its one search counted.
   `test_meko_quota.py` and `test_meko_adapter.py` test the counter, the guard, `McpMeko` against a
   scripted server, `FakeMeko` and the demo upload; `tests/integration/test_meko_adapter.py` runs the
   adapter on local Meko with every call counted in Postgres (documents go to a throwaway datapack),
