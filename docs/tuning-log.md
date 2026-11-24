@@ -446,3 +446,36 @@ it led to.
   and the same score.
 - **Root cause / change made:** none needed. Phase 4, task 3's first measure (at least 90% found, none
   unquoted) is met on the real model. The two runs together cost US$0.15 of the US$0.75 Pim approved.
+
+### 12. Task 4's done-when: session 4 after dreaming learned and shared the preference (Nov 24, 2026)
+
+- **Change tested:** no prompt or tool change. The demo story now holds Jun's decisions in Sessions
+  1 and 3 beside Mara's in Session 2 (`decisions.toml`), all three choosing cash on hand. Before
+  session 4, demo mode dreams over Session 3 (`learning.toml`): code finds the pattern (no model
+  call), Mara approves the preference, Jun confirms its sharing, and upkeep promotes it in Meko. So
+  every brief from Oct 20 on lists three decisions, and session 4's marks the preference
+  "promoted: shared with every agent in Meko's collective memory". Session 4's replan now compares
+  against the latest decision (Session 3's, Oct 18) and lists all three decisions to revisit (Pim's
+  choice, Nov 24). Every recording's requests differ, so session 2, session 4 and the test set are
+  recorded again. Pim approved about US$1.50 (Nov 24).
+- **Prediction (written before the runs):**
+  - **Session 2** (Sep 15): the same options as entry 9, A all on the card (9 months, ₱12,460.10 of
+    interest) and B Jun's split (17 months, the fund's target in 12 months), the over-allocation
+    caught in code, no `propose_change`, `why` empty. New: the brief shows Session 1's decision
+    (D1, a bigger buffer), and I expect option B's sources to cite it (`decision:D1`) about half the
+    time. 6 to 9 calls, **US$0.03 to US$0.05**.
+  - **Session 4, turn 1:** as entry 9: one `propose_change`, no specialist, 2 calls.
+  - **Session 4, turn 2 (the done-when):** a replan against Session 3's decision of Oct 18, with
+    Sessions 1, 2 and 3 to revisit. The orchestrator asks debt and savings (budget maybe), and its
+    ask to debt does not mention the preference. **The debt specialist cites
+    `fact:preference.debt_vs_flexibility` in its proposal's sources** and says the household keeps
+    cash on hand; I'd put that at 85%, since its prompt says to respect approved preferences and
+    the brief now marks this one promoted. The options carry entry 9's figures (Jun's ₱10,000: card
+    in 7 months, ₱9,358.80; all on the card: 3 months, ₱4,620.01). The likeliest miss is entry 9's:
+    refs (D1, D2, D3 now) written in the household's text, sent back once. With three decisions in
+    `why`, a second send-back is possible. 10 to 15 calls, **US$0.08 to US$0.15**.
+  - **Test set** (on a database after `kako demo run`, so the briefs are the ones demo mode replays):
+    specialists **94% to 100%** (98.1% before), single agent **88% to 96%** (93.9% before); the
+    preference questions (q10, q16, q21) more likely to cite the preference now that it is marked
+    promoted. About **US$0.55 to US$0.75** and **US$0.35 to US$0.50**.
+  - In all, **US$1.00 to US$1.45**.
