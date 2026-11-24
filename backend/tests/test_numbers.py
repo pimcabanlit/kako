@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from kako.agents.numbers import check_text, check_texts, mismatch, names_of, pool_of
-from kako.agents.tools import TurnState
+from kako.agents.tools import MESSAGE_CHARS, TurnState
 from tests.support.villanueva import Villanueva, build
 from tests.test_agents_turn import ALL_ON_CARD, SPLIT, _state
 
@@ -84,7 +84,7 @@ def test_numbers_worked_out_by_a_model_fail(state: TurnState) -> None:
         ("8 months", "months"),
         ("₱11,843.52", "money"),
         ("₱12,000", "money"),
-        ("150k", "code"),
+        ("150k", "scaled"),
     ]
 
 
@@ -121,8 +121,82 @@ def test_names_terms_and_ordinals(state: TurnState, house: Villanueva) -> None:
     ]
 
 
-def test_spelled_out_numbers_and_plain_words_are_not_checked(state: TurnState) -> None:
+def test_spelled_out_numbers_with_a_unit_are_checked(state: TurnState) -> None:
     assert _matches(state, "Two ways to go: clear the card, or keep cash for school.") == []
+    assert _matches(
+        state, "Nine months on the card, or seventeen months; eight months sooner."
+    ) == [
+        ("Nine months", "months", "figure:debt1-W1:debt.payoff_months@debt:credit-card"),
+        ("seventeen months", "months", "figure:savings1-W1:debt.payoff_months@debt:credit-card"),
+        ("eight months", "months", None),
+    ]
+    assert [
+        m for _, _, m in _matches(state, "about one year, or 1 year, or forty-two percent")
+    ] == [
+        "figure:savings1-W1:savings.months_to_target",  # 12 months
+        "figure:savings1-W1:savings.months_to_target",
+        None,
+    ]
+
+
+def test_a_number_with_a_multiplier_never_matches(house: Villanueva) -> None:
+    s = _state(house, "We have 2 kids and 12 goals.")
+    assert _matches(s, "Save ₱2M a year, about 12 thousand pesos, or 9k.") == [
+        ("₱2M", "scaled", None),
+        ("12 thousand", "scaled", None),
+        ("9k", "scaled", None),
+    ]
+    # The household's small numbers are counts, never pesos: "2 kids" is not ₱2.
+    assert _matches(s, "₱2 a month")[0] == ("₱2", "money", None)
+
+
+def test_dates_in_any_common_form_are_one_date(state: TurnState) -> None:
+    payoff = "figure:savings1-W1:debt.payoff_date@debt:credit-card"  # Feb 15, 2028
+    for written in (
+        "Feb 15, 2028",
+        "February 15th, 2028",
+        "15 Feb 2028",
+        "the 15th of February 2028",
+        "2028-02-15",
+        "15/02/2028",
+        "02/15/2028",
+        "Feb 15",
+    ):
+        assert _matches(state, f"Paid off {written}.") == [(written, "date", payoff)], written
+    for wrong in (
+        "March 3rd, 2028",
+        "3 March 2028",
+        "2028-03-03",
+        "03/03/2028",
+        "Feb 30, 2028",
+        "March 3",
+    ):
+        [(text, kind, match)] = _matches(state, f"Paid off {wrong}.")
+        assert (text, kind, match) == (wrong, "date", None), wrong
+
+
+def test_refs_in_a_summary_must_be_the_turns_own(state: TurnState) -> None:
+    text = "See figure:50000php and fact:x-99999k, not debt1-W1."
+    [check] = check_texts(state, [("recommendation", "the summary", text)], refs_allowed=True)
+    assert [(n.text, n.match) for n in check.numbers] == [
+        ("figure:50000php", None),
+        ("99999k", None),
+        ("debt1-W1", "ref"),
+    ]
+
+
+def test_odd_numbers_fail_without_crashing(state: TurnState, house: Villanueva) -> None:
+    assert _matches(state, "₱9,050.0000000000000000000000001 and 1" + "0" * 40) == [
+        ("₱9,050.0000000000000000000000001", "money", None),
+        ("1" + "0" * 40, "number", None),
+    ]
+    # A name with a digit is left out only as a whole word: "Card 15,000" keeps its 15,000.
+    pool = pool_of(state)
+    check = check_text("reply", "the reply", "Card 15,000 and Card 1.", pool, ("Card 1",))
+    assert [n.text for n in check.numbers] == ["15,000"]
+    # Numbers past what the agents were shown of the message are not the household's.
+    long = _state(house, "x" * MESSAGE_CHARS + " 777 pesos")
+    assert _matches(long, "₱777") == [("₱777", "money", None)]
 
 
 def test_the_households_own_numbers_match(house: Villanueva) -> None:

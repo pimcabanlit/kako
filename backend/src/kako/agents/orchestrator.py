@@ -22,7 +22,7 @@ is sent back once with the numbers named, and a second miss is kept with them fl
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Final
 
 from kako.agents.answers import (
@@ -292,7 +292,8 @@ async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState
         return run.answer
     held = state.held.pop(PATH, None)  # sent back for its numbers, and out of calls since
     if isinstance(held, TurnAnswer):
-        return held
+        # With every proposal handed in, including any asked for after it was sent back.
+        return replace(held, proposals=tuple(p for p in asked.proposals if p is not None))
     if not run.text.strip():
         raise OrchestratorError("the orchestrator ended the turn with no answer")
     # A plain reply with no options: shown as it is, its numbers checked (and flagged if need be).

@@ -285,7 +285,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   over-allocation, opposite moves, missed goal dates, one split), and `test_agents_reconcile.py`
   the what-if loop with a scripted model: session 2's over-allocation caught, splits tried and
   logged, the resolution checked in code and shown with the rejected option. `test_numbers.py`
-  tests the number check on session 2's figures (what matches, what fails, rounding, refs, names),
+  tests the number check on session 2's figures (what matches, what fails, rounding,
+  multipliers, dates in any common form, spelled-out numbers with a unit, refs, names),
   and `test_agents_numbers.py` in a scripted turn (sent back once, then flagged; every text; the
   specialists'; an answer kept when the model stops).
   `test_facts_*.py` test the fact rules on rows in memory (`tests/support/facts.py` builds them);

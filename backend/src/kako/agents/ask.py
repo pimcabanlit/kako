@@ -143,7 +143,8 @@ def render_answer(asked: Asked) -> str:
             lines.append(f"  cites {c.ref}" + (f" = {c.shown}" if c.figure is not None else ""))
     if not answer.options:
         lines.append("No options.")
-    flagged = [f"{n.text!r} in {c.label}" for c in answer.checks for n in c.unmatched]
+    checks = [*answer.checks, *(p.check for p in answer.proposals if p.check is not None)]
+    flagged = [f"{n.text!r} in {c.label}" for c in checks for n in c.unmatched]
     if flagged:
         lines += ["", "Numbers that match no figure or fact (flagged): " + "; ".join(flagged)]
     if answer.resolution is not None:

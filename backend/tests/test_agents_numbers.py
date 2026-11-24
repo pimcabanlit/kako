@@ -139,6 +139,7 @@ async def test_an_answer_sent_back_is_kept_if_the_model_stops(
     assert answer.reply == "A is 8 months faster."
     assert [o.label for o in answer.options] == ["A: all extra on the card", "B: split"]
     assert [n.text for c in answer.checks for n in c.unmatched] == ["8 months"]
+    assert [p.specialist for p in answer.proposals] == ["debt", "savings"]
 
 
 async def test_a_plain_reply_is_checked(house: Villanueva, make_settings: MakeSettings) -> None:
@@ -151,3 +152,26 @@ async def test_a_plain_reply_is_checked(house: Villanueva, make_settings: MakeSe
     [check] = answer.checks
     assert [(n.text, n.match is not None) for n in check.numbers] == [("₱9,050.00", True)]
     assert check.ok
+
+
+async def test_a_specialists_summary_flagged_twice_is_shown_flagged(
+    house: Villanueva, make_settings: MakeSettings
+) -> None:
+    script = _session_2_script()
+    good = json.loads(script[f"{SEED}/debt#1/2"].tool_calls[0].arguments)
+    bad = {**good, "summary": "All of the surplus clears the card 8 months sooner."}
+    script[f"{SEED}/debt#1/2"] = calls(("submit_proposal", bad))
+    script[f"{SEED}/debt#1/3"] = calls(("submit_proposal", bad))
+    manager, _ = _manager(make_settings, script)
+    state, log = _logged(house)
+    answer = await answer_turn(manager, manager.turn(SEED), state)
+
+    [debt] = [p for p in answer.proposals if p.specialist == "debt"]
+    assert debt.check is not None
+    assert debt.check.result == "fail"
+    assert [r.result for r in log.records if r.checked_text == bad["summary"]] == [
+        "regenerated",
+        "fail",
+    ]
+    shown = render_answer(Asked(answer, uuid.uuid4(), SEED, 0, 0, 0, Decimal(0)))
+    assert "'8 months' in the debt specialist's summary" in shown

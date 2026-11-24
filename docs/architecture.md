@@ -140,8 +140,9 @@ flowchart LR
 7. **The number check.** Every number in the reply, the options' labels and summaries, the resolution's
    reason and each specialist's summary must match a figure of the turn's run or one of its what-ifs,
    a fact in the snapshot, a what-if's allocation, or a number the household wrote (rule V-10,
-   `agents/numbers.py`). A specialist's summary may also name the turn's refs, which the
-   orchestrator resolves from the proposal's citations; what the household reads may not. It runs inside the final tools (`submit_answer`, `submit_proposal`): a
+   `agents/numbers.py`). A specialist's summary may also name the turn's own refs, which the
+   orchestrator resolves from the proposal's citations; the reply, the options and the reason may
+   not. It runs inside the final tools (`submit_answer`, `submit_proposal`): a
    failure is sent back once with the mismatch named; if it fails again, the text is shown with the
    unmatched numbers flagged, never silently. Every check is a `number_check` row, against the turn's
    run, which is stored before the agents start.

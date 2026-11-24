@@ -10,7 +10,7 @@ from typing import Any, Literal, Protocol
 
 Subject = Literal["reply", "recommendation", "summary", "reconciliation"]
 Result = Literal["pass", "fail", "regenerated"]
-Kind = Literal["money", "months", "percent", "date", "month", "number", "code"]
+Kind = Literal["money", "months", "percent", "date", "month", "number", "code", "scaled"]
 
 
 @dataclass(frozen=True)
