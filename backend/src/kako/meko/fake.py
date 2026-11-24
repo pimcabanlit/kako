@@ -40,6 +40,7 @@ class _Memory:
     text: str
     metadata: dict[str, Any]
     agent_id: str
+    conversation_id: str | None = None
 
 
 @dataclass
@@ -118,7 +119,7 @@ class FakeMeko:
     ) -> str:
         async with self._call("memory_add", agent_id, conversation_id):
             memory_id = str(uuid.uuid4())
-            self.memories[memory_id] = _Memory(text, dict(metadata), agent_id)
+            self.memories[memory_id] = _Memory(text, dict(metadata), agent_id, conversation_id)
             return memory_id
 
     def _own(self, tool: str, memory_id: str, agent_id: str) -> _Memory:
@@ -147,6 +148,20 @@ class FakeMeko:
         ]
         hits = [h for h in hits if h.score]
         return tuple(sorted(hits, key=lambda h: -(h.score or 0))[:limit])
+
+    async def search_memories(
+        self, conversation_id: str, query: str, *, agent_id: str, limit: int = 20
+    ) -> tuple[Memory, ...]:
+        _check_limit(limit)
+        async with self._call("memory_search", agent_id, conversation_id) as result:
+            found = [
+                Memory(i, m.text, dict(m.metadata), score, m.agent_id, m.conversation_id)
+                for i, m in self.memories.items()
+                if m.conversation_id == conversation_id and (score := _score(query, m.text))
+            ]
+            found.sort(key=lambda m: -(m.score or 0))
+            result.result_count = len(found[:limit])
+            return tuple(found[:limit])
 
     async def search_context(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5

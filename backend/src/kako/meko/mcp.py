@@ -140,6 +140,24 @@ class McpMeko:
             {"conversation_id": conversation_id, "memory_id": memory_id},
         )
 
+    async def search_memories(
+        self, conversation_id: str, query: str, *, agent_id: str, limit: int = 20
+    ) -> tuple[Memory, ...]:
+        answer = await self._call(
+            "memory_search",
+            agent_id,
+            {
+                "conversation_id": conversation_id,
+                "query": query,
+                "limit": _limit(limit),
+                "run_id": conversation_id,
+            },
+        )
+        results = answer.get("results") if isinstance(answer, dict) else None
+        if not isinstance(results, list):
+            raise MekoProtocolError("memory_search answered without its results")
+        return tuple(_memory(m) for m in results)
+
     async def search_context(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5
     ) -> Context:
@@ -320,7 +338,13 @@ def _memory(item: Any) -> Memory:
         text=str(item.get("memory") or ""),
         metadata=metadata if isinstance(metadata, dict) else {},
         score=_score(item.get("score")),
+        agent_id=_optional(item.get("agent_id")),
+        conversation_id=_optional(item.get("run_id")),
     )
+
+
+def _optional(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
 
 
 def _hit(item: Any) -> KnowledgeHit:
