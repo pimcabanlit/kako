@@ -111,6 +111,16 @@ flowchart LR
    `get_figures`, `get_facts`, `get_decisions`, `search_memory` (one extra Meko search at most) and
    `run_what_if` (the engine with hypothetical allocations). It returns a structured proposal: the
    allocation it wants (an entity and an amount), its recommendation text, and the sources it cites.
+   **Amounts are specs, never numbers a model worked out:** `none`, `rest` (the rest of the surplus,
+   subtracted in code), `figure:<ref>`, `fact:<ref>`, or `said:<amount>`, an amount the household wrote
+   in this turn's message, which code finds there. A proposal rests on one of the specialist's own
+   what-ifs, so its allocations are ones the engine has run; code refuses a what-if over the surplus or
+   outside the specialist's area, and a proposal that cites no figure of its what-if or no other source
+   (V-11). The orchestrator's options are checked the same way: each is one what-if of the turn, cited.
+   What-ifs are named after the agent that ran them (`debt1-W1`), and a specialist sees only its own
+   what-ifs and searches (the orchestrator sees all of them), so parallel specialists send the same
+   requests on every run and a recorded turn replays. A final tool runs only on its own in a reply, so
+   an answer rests on results the agent has read.
    Every tool call by every agent is logged as an `agent_step` (the agent, the tool, a short input and
    result, the what-if run if any), which the "agents' steps" view shows.
 6. **Reconciliation in code.** The engine runs once more with all proposed allocations together. Rules
@@ -239,12 +249,15 @@ per specialist, at most 3 what-if splits per conflict, a token budget per turn, 
 settings. Deployment names live in settings only; the orchestrator and dreaming use the stronger
 deployment and the specialists a faster one, confirmed in Phase 3 by the agent test set.
 
-**Why four specialists and not one agent.** Each specialist gets its own slice of the brief, its own
-rules from the knowledge base and its own what-ifs. Phase 3 runs the agent test set once against a
+**Why four specialists and not one agent.** Each specialist gets its own role and scope on the shared
+brief, its own rules from the knowledge base and its own what-ifs. Phase 3 runs the agent test set once against a
 single all-in-one agent as a baseline; both scores go on the metrics page. If the specialists don't
 score better, the docs say so and the design is revisited.
 
-**Prompts and context.** Each prompt is short and sectioned: the role, the one rule (the engine
+**Prompts and context.** Every agent's system prompt starts with the same two parts, the shared rules
+and the turn's brief, so the provider's prompt cache serves them to every agent of the turn; each
+specialist's slice is its role and scope, which come last (`backend/src/kako/agents/prompts/`). Each
+prompt is short and sectioned: the role, the one rule (the engine
 calculates, agents explain and propose, the household decides), a glossary of figure keys, the tool
 contract and one worked example. Stable parts come first so prompt caching applies. Conversation text,
 memories and documents are wrapped as data, never as instructions.

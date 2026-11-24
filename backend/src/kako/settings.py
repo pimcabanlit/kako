@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     brief_token_budget: int = Field(default=3_000, ge=500, le=20_000)
     # Results the brief's one context_search asks Meko for.
     brief_search_limit: int = Field(default=5, ge=0, le=10)
+    # The most a model may write in one call, reasoning included: a specialist (fast deployment)
+    # and the orchestrator (strong). The model manager reserves it against the turn's budget.
+    specialist_max_output_tokens: int = Field(default=4_000, ge=256, le=32_000)
+    orchestrator_max_output_tokens: int = Field(default=6_000, ge=256, le=32_000)
     # Retries after a failed attempt that may pass next time (rate limit, timeout, server error).
     model_max_retries: int = Field(default=2, ge=0, le=3)
     model_timeout_seconds: float = Field(default=60.0, gt=0, le=300)

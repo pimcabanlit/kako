@@ -141,12 +141,13 @@ def plain(text: str, limit: int = NAME_CHARS) -> str:
     return _escape(body)
 
 
-def data(text: str, **attributes: str) -> str:
-    """People's or a model's words, wrapped so they read as data, never as instructions."""
+def data(text: str, *, limit: int = QUOTE_CHARS, **attributes: str) -> str:
+    """People's or a model's words, wrapped so they read as data, never as instructions, and cut
+    at `limit` characters."""
     attrs = "".join(
         f' {k}="{_escape(v).replace(chr(34), "&quot;")}"' for k, v in attributes.items()
     )
-    return f"<data{attrs}>{plain(text, QUOTE_CHARS)}</data>"
+    return f"<data{attrs}>{plain(text, limit)}</data>"
 
 
 @dataclass(frozen=True)
@@ -162,6 +163,24 @@ class _Parts:
 
 def is_preference(attribute: str) -> bool:
     return attribute.startswith(PREFERENCE_PREFIXES) or attribute in PREFERENCE_KEYS
+
+
+def decision_lines(ref: str, decision: DecisionView, *, rejected: bool = True) -> list[str]:
+    """A decision as the brief and `get_decisions` show it, with its rejected options."""
+    lines = [
+        f"- {ref}: {plain(decision.question, QUESTION_CHARS)} "
+        f"Chose '{plain(decision.chosen)}' on "
+        f"{day(decision.valid_from)} ({plain(decision.session_title)}). "
+        + data(decision.reasoning, source="household")
+    ]
+    if rejected:
+        lines += [
+            f"  - Rejected '{plain(option.label)}': "
+            + data(option.rejected_reason, source="household")
+            for option in decision.options
+            if option.rejected_reason is not None
+        ]
+    return lines
 
 
 @dataclass(frozen=True)
@@ -240,21 +259,8 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
         lines.append("None.")
     decisions: dict[str, uuid.UUID] = {}
     for n, decision in enumerate(inputs.decisions, start=1):
-        ref = f"D{n}"
-        decisions[ref] = decision.id
-        lines.append(
-            f"- {ref}: {plain(decision.question, QUESTION_CHARS)} "
-            f"Chose '{plain(decision.chosen)}' on "
-            f"{day(decision.valid_from)} ({plain(decision.session_title)}). "
-            + data(decision.reasoning, source="household")
-        )
-        if parts.rejected_options:
-            for option in decision.options:
-                if option.rejected_reason is not None:
-                    lines.append(
-                        f"  - Rejected '{plain(option.label)}': "
-                        + data(option.rejected_reason, source="household")
-                    )
+        decisions[f"D{n}"] = decision.id
+        lines += decision_lines(f"D{n}", decision, rejected=parts.rejected_options)
 
     lines += ["", "## Pending proposals (waiting for a person's yes)"]
     kept = inputs.proposals[: parts.proposals]

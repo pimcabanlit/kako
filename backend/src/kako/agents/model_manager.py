@@ -392,6 +392,10 @@ class ModelManager:
     def replays(self) -> bool:
         return self._backend.replays
 
+    @property
+    def settings(self) -> Settings:
+        return self._settings
+
     def turn(
         self,
         meko_turn_seed: str,

@@ -87,7 +87,7 @@ async def test_the_worked_examples_brief_from_postgres_and_local_meko(
                 await _session(migrated, household_id, conversation)
                 await _link(migrated, household_id, memory_id)
                 async with migrated.connect() as conn:
-                    brief, figures = await gather_brief(
+                    brief, inputs = await gather_brief(
                         conn,
                         meko,
                         household_id=household_id,
@@ -109,7 +109,7 @@ async def test_the_worked_examples_brief_from_postgres_and_local_meko(
         "dreaming, approved by Mara on Oct 20, 2026"
     ) in brief.text
     assert "- cashflow.monthly_surplus = ₱25,050.00:" in brief.text
-    assert figures.value("cashflow.monthly_surplus") == 2_505_000
+    assert inputs.run.value("cashflow.monthly_surplus") == 2_505_000
     assert memory_id in brief.memories.values()
     assert sentence in brief.text
     # Approved because meko_link ties it to the household's preference, not because of metadata.
