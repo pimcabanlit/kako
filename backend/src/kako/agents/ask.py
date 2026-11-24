@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kako.agents.answers import TurnAnswer
 from kako.agents.brief_store import gather_brief
+from kako.agents.checks import record
 from kako.agents.model_manager import ModelManager
 from kako.agents.orchestrator import answer_turn
 from kako.agents.present import money
@@ -29,8 +30,10 @@ from kako.agents.reconciling import render_resolution
 from kako.agents.recorded import ChatBackend
 from kako.agents.tools import TurnState
 from kako.db.agent_steps import DbStepLog
+from kako.db.calc_store import save_run
 from kako.db.llm_log import DbLlmLog
 from kako.db.models import LlmCall, Session
+from kako.db.number_checks import DbCheckLog
 from kako.meko.adapter import Meko
 from kako.settings import Settings
 
@@ -95,10 +98,18 @@ async def ask(
             budget=settings.brief_token_budget,
             search_limit=settings.brief_search_limit,
         )
-    state = TurnState(brief, inputs, seed, meko, conversation if meko is not None else None)
+    async with engine.connect() as conn:
+        # The turn's run, stored with its figures: what the number check holds the texts to.
+        calc_run_id = await save_run(conn, inputs.run, created_at=datetime.now(UTC))
+    checks = DbCheckLog(engine, session_id=session_id, calc_run_id=calc_run_id)
+    state = TurnState(
+        brief, inputs, seed, meko, conversation if meko is not None else None, checks=checks
+    )
     manager = ModelManager(settings, backend, DbLlmLog(engine))
     turn = manager.turn(seed, session_id=session_id, steps=DbStepLog(engine, session_id))
     answer = await answer_turn(manager, turn, state)
+    for check in answer.checks:  # each text as shown: passed, or with its numbers flagged
+        await checks.write(record(check, check.result))
     async with engine.connect() as conn:
         totals = (
             await conn.execute(
@@ -118,8 +129,9 @@ async def ask(
 
 def render_answer(asked: Asked) -> str:
     """The answer as the command prints it: the reply, each option with its allocations and
-    cited figures, how a conflict between the specialists was resolved (and the option rejected),
-    then each specialist's proposal and what the turn cost."""
+    cited figures, any number the number check couldn't match (flagged, never hidden), how a
+    conflict between the specialists was resolved (and the option rejected), then each
+    specialist's proposal and what the turn cost."""
     answer = asked.answer
     lines = [answer.reply, ""]
     for option in answer.options:
@@ -131,6 +143,9 @@ def render_answer(asked: Asked) -> str:
             lines.append(f"  cites {c.ref}" + (f" = {c.shown}" if c.figure is not None else ""))
     if not answer.options:
         lines.append("No options.")
+    flagged = [f"{n.text!r} in {c.label}" for c in answer.checks for n in c.unmatched]
+    if flagged:
+        lines += ["", "Numbers that match no figure or fact (flagged): " + "; ".join(flagged)]
     if answer.resolution is not None:
         lines += ["", *render_resolution(answer.resolution)]
     lines.append("")

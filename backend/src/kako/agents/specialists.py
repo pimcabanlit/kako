@@ -21,7 +21,9 @@ from typing import Any, Final
 from kako.agents.answers import Specialist, SpecialistProposal
 from kako.agents.brief import Brief, data
 from kako.agents.chat import ToolSpec
+from kako.agents.checks import record
 from kako.agents.model_manager import ModelManager
+from kako.agents.numbers import check_texts, mismatch
 from kako.agents.present import GLOSSARY
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult, run_agent
 from kako.agents.tools import (
@@ -88,9 +90,21 @@ def proposal_tool(state: TurnState, specialist: Specialist, path: str, prefix: s
             if not any(c.kind == "figure" and c.what_if == ref for c in citations):
                 raise ToolInputError(f"cite at least one figure of {ref}, as figure:{ref}:<ref>")
             allocations = what_if.allocations
-        proposal = SpecialistProposal(
-            specialist, summary.strip(), allocations, ref or None, citations
+        label = f"the {specialist} specialist's summary"
+        [check] = check_texts(
+            state, [("recommendation", label, summary.strip())], refs_allowed=True
         )
+        proposal = SpecialistProposal(
+            specialist, summary.strip(), allocations, ref or None, citations, check
+        )
+        if not check.ok and path not in state.regenerated:
+            # V-10: sent back once with the numbers named; a second miss is shown flagged.
+            state.regenerated.add(path)
+            state.held[path] = proposal
+            await state.checks.write(record(check, "regenerated"))
+            raise ToolInputError(mismatch([check]))
+        state.held.pop(path, None)
+        await state.checks.write(record(check, check.result))
         return ToolResult(
             "Proposal received.",
             short(f"{ref or 'no change'}: {summary}"),
@@ -154,4 +168,10 @@ async def run_specialist(
         max_output_tokens=manager.settings.specialist_max_output_tokens,
         max_tool_calls=MAX_TOOL_CALLS,
     )
-    return run.answer if isinstance(run.answer, SpecialistProposal) else None
+    if isinstance(run.answer, SpecialistProposal):
+        return run.answer
+    held = state.held.pop(path, None)  # sent back for its numbers, and out of calls since
+    if isinstance(held, SpecialistProposal) and held.check is not None:
+        await state.checks.write(record(held.check, "fail"))
+        return held
+    return None

@@ -13,8 +13,11 @@ the orchestrator what the rules found (`agents.reconciling`); while a conflict i
 `run_what_if` calls are splits the rules check, and its answer carries the resolution.
 
 Bounds kept in code: at most 4 specialist asks a turn, at most 8 counted tool calls for the
-orchestrator, at most 3 splits, and the specialists' own bounds (`agents.specialists`). The number
-check over the reply (task 5) comes next.
+orchestrator, at most 3 splits, and the specialists' own bounds (`agents.specialists`).
+
+Every text the household reads (the reply, each option's label and summary, the resolution's
+reason) goes through the number check (`agents.numbers`, V-10) before the answer is taken: a miss
+is sent back once with the numbers named, and a second miss is kept with them flagged.
 """
 
 from __future__ import annotations
@@ -31,7 +34,9 @@ from kako.agents.answers import (
 )
 from kako.agents.brief import data
 from kako.agents.chat import ToolSpec
+from kako.agents.checks import Subject, record
 from kako.agents.model_manager import ModelManager
+from kako.agents.numbers import check_texts, mismatch
 from kako.agents.present import money
 from kako.agents.reconciling import RESOLUTION_SCHEMA, Reconciler
 from kako.agents.specialists import run_specialist, system_prompt
@@ -190,13 +195,30 @@ def _answer_tool(state: TurnState, asked: _Asked, reconciler: Reconciler) -> Too
         resolution = reconciler.resolution(
             arguments.get("resolution"), options, recommended.strip() or None
         )
+        texts: list[tuple[Subject, str, str]] = [("reply", "the reply", reply)]
+        for o in options:
+            texts.append(("recommendation", f"option {o.label!r}'s label", o.label))
+            texts.append(("recommendation", f"option {o.label!r}'s summary", o.summary))
+        if resolution is not None:
+            texts.append(("reconciliation", "the resolution's reason", resolution.reason))
+        checks = check_texts(state, texts)
         answer = TurnAnswer(
             reply,
             options,
             recommended.strip() or None,
             tuple(p for p in asked.proposals if p is not None),
             resolution,
+            checks,
         )
+        failed = [c for c in checks if not c.ok]
+        if failed and PATH not in state.regenerated:
+            # V-10: sent back once with the numbers named; a second miss is shown flagged.
+            state.regenerated.add(PATH)
+            state.held[PATH] = answer
+            for check in failed:
+                await state.checks.write(record(check, "regenerated"))
+            raise ToolInputError(mismatch(failed))
+        state.held.pop(PATH, None)
         summary = f"{len(options)} options" + (
             f", recommends {answer.recommended}" if answer.recommended else ""
         )
@@ -268,8 +290,13 @@ async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState
     )
     if isinstance(run.answer, TurnAnswer):
         return run.answer
+    held = state.held.pop(PATH, None)  # sent back for its numbers, and out of calls since
+    if isinstance(held, TurnAnswer):
+        return held
     if not run.text.strip():
         raise OrchestratorError("the orchestrator ended the turn with no answer")
-    # A plain reply with no options: shown as it is, still subject to the number check (task 5).
+    # A plain reply with no options: shown as it is, its numbers checked (and flagged if need be).
+    reply = run.text.strip()[:MAX_REPLY]
     proposals = tuple(p for p in asked.proposals if p is not None)
-    return TurnAnswer(run.text.strip()[:MAX_REPLY], (), None, proposals, reconciler.unresolved())
+    checks = check_texts(state, [("reply", "the reply", reply)])
+    return TurnAnswer(reply, (), None, proposals, reconciler.unresolved(), checks)

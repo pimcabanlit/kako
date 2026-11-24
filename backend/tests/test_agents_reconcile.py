@@ -298,8 +298,9 @@ async def test_proposals_that_fit_together_need_no_resolution(
         )
     )
     good = json.loads(script[f"{SEED}/orchestrator/2"].tool_calls[0].arguments)
-    script[f"{SEED}/orchestrator/2"] = calls(("submit_answer", good))
-    script[f"{SEED}/orchestrator/3"] = calls(("submit_answer", {**good, "resolution": None}))
+    named = {**good, "resolution": {"what_if": "debt1-W2", "rejected": "", "reason": "x"}}
+    script[f"{SEED}/orchestrator/2"] = calls(("submit_answer", named))
+    script[f"{SEED}/orchestrator/3"] = calls(("submit_answer", good))  # names no what-if: fine
     manager, backend = _manager(make_settings, script)
     steps = MemoryStepLog()
     state = _state(house)

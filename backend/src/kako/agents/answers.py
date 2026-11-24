@@ -21,6 +21,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
+from kako.agents.checks import TextCheck
 from kako.engine.figures import Figure
 from kako.planning.reconcile import Conflict
 
@@ -52,10 +53,11 @@ class Citation:
 @dataclass(frozen=True)
 class SpecialistProposal:
     specialist: Specialist
-    summary: str  # the specialist's recommendation, to be checked by the number check (task 5)
+    summary: str  # the specialist's recommendation, number-checked (`check`)
     allocations: tuple[Allocation, ...]
     what_if: str | None  # the what-if whose figures show the move
     citations: tuple[Citation, ...]
+    check: TextCheck | None = None  # the number check on its summary
 
 
 @dataclass(frozen=True)
@@ -90,7 +92,7 @@ class Resolution:
     chosen: str | None  # the what-if of the option that resolves it; None: left to the household
     rejected: str | None  # the what-if it did not take
     rejected_allocations: tuple[Allocation, ...]
-    reason: str  # checked by the number check like any other text (task 5)
+    reason: str  # number-checked like any other text
 
     @property
     def attempts(self) -> int:
@@ -104,3 +106,4 @@ class TurnAnswer:
     recommended: str | None  # an option's label, or None when the choice is the household's
     proposals: tuple[SpecialistProposal, ...]  # every specialist's answer, in the order asked
     resolution: Resolution | None = None  # None when the rules found no conflict
+    checks: tuple[TextCheck, ...] = ()  # the number check on every text, as finally shown

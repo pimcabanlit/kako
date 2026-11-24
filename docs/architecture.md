@@ -137,10 +137,14 @@ flowchart LR
    the household's own words) supports one split or no split fits, the choice left to the household,
    which sees the conflict and the options, not a guess. The resolution, each split tried and the
    option rejected are shown, and stored in `reconciliation` with the plan.
-7. **The number check.** Every number in the reply, the recommendations and the resolutions must match a
-   figure of the run or a fact in the snapshot (rule V-10). A failure is regenerated once with the
-   mismatch named; if it fails again, the reply is shown with the unmatched numbers flagged, never
-   silently.
+7. **The number check.** Every number in the reply, the options' labels and summaries, the resolution's
+   reason and each specialist's summary must match a figure of the turn's run or one of its what-ifs,
+   a fact in the snapshot, a what-if's allocation, or a number the household wrote (rule V-10,
+   `agents/numbers.py`). A specialist's summary may also name the turn's refs, which the
+   orchestrator resolves from the proposal's citations; what the household reads may not. It runs inside the final tools (`submit_answer`, `submit_proposal`): a
+   failure is sent back once with the mismatch named; if it fails again, the text is shown with the
+   unmatched numbers flagged, never silently. Every check is a `number_check` row, against the turn's
+   run, which is stored before the agents start.
 8. **Recorded.** The reply goes to the household with a "why" link on each recommendation. The turn goes
    to Meko with the orchestrator's `plan` (its steps) and `reasoning`, and metadata naming the plan,
    run and recommendation ids, so the Meko trace and Kako's own sources say the same thing. The plan is

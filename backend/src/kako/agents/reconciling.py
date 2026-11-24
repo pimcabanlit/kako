@@ -247,6 +247,10 @@ class Reconciler:
     ) -> Resolution | None:
         """The answer's resolution, checked: None when no conflict is open."""
         if self.open is None:
+            # Nothing to resolve: null, or a resolution that names no what-if (its reason is not
+            # kept, since there is no conflict for it to explain).
+            if isinstance(raw, dict) and not raw.get("what_if") and not raw.get("rejected"):
+                return None
             if raw is not None:
                 raise ToolInputError("code found no conflict to resolve: pass resolution null")
             return None
