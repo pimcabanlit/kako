@@ -122,7 +122,8 @@ flowchart LR
    What-ifs are named after the agent that ran them (`debt1-W1`), and a specialist sees only its own
    what-ifs and searches (the orchestrator sees all of them), so parallel specialists send the same
    requests on every run and a recorded turn replays. A final tool runs only on its own in a reply, so
-   an answer rests on results the agent has read.
+   an answer rests on results the agent has read. An empty reply (no words, no tool call; seen once on
+   Foundry) is sent back once with only the final tool offered.
    Every tool call by every agent is logged as an `agent_step` (the agent, the tool, a short input and
    result, the what-if run if any), which the "agents' steps" view shows.
 6. **Reconciliation in code.** Once two or more specialists propose a move, the engine runs once more
@@ -184,10 +185,12 @@ This is the centre of the live demo.
 3. The session's next turn is a **replan** (`agents/replan_store.py`): code finds the changes approved
    from this session's turns, as known at the turn, and takes the turn as of the latest day one of them
    takes effect (Dec 1). It recomputes the run the household last decided on, from the facts as Kako
-   knew them when it decided (the decision of Sep 15, Session 2; with no decision, the session before
-   its changes), and F-DIFF-1 gives what changed between the two runs, the facts behind it, and the
-   **decisions whose assumptions** included a replaced or retracted fact ("to revisit"). Both runs are
-   stored, so each figure in the diff traces.
+   knew them when it decided (the latest decision: in the demo, Session 3's of Oct 18; with no
+   decision, the session before its changes), and F-DIFF-1 gives what changed between the two runs,
+   the facts behind it, and the **decisions whose assumptions** included a replaced or retracted fact
+   ("to revisit": in the demo, all three of Sessions 1 to 3, in the order they were made, never by
+   id, so a recording replays on any database). Both runs are stored, so each figure in the diff
+   traces.
 4. The brief has a replan section with the figures before and now, the facts behind them and the
    decisions to revisit, all by ref; code tells the orchestrator which specialists' figures moved, and
    it asks them to reassess, with the decisions to revisit and the preferences in the brief. The
@@ -348,25 +351,28 @@ deployment and the specialists a faster one, confirmed in Phase 3 by the agent t
 
 **Why four specialists and not one agent.** Each specialist gets its own role and scope on the shared
 brief, its own rules from the knowledge base and its own what-ifs. The agent test set (22 questions,
-`data/test-set/questions.toml`, scored in code) ran once against each architecture on Nov 24, 2026,
-with the same tools, checks and deployments (the single agent on the stronger one):
+`data/test-set/questions.toml`, scored in code) ran against each architecture on Nov 24, 2026, with
+the same tools, checks and deployments (the single agent on the stronger one), and again the same day
+once the demo story held three decisions and the learned preference (tuning log entry 12):
 
 | | Four specialists and the orchestrator | One agent alone (`agents/single.py`) |
 | --- | --- | --- |
-| Score | 98.1% (99 of 102 checks) | 93.9% (93 of 102 checks) |
-| Model calls | 110 | 40 |
-| Tokens | 602,904 | 210,686 |
-| Cost of the run | US$0.60 | US$0.42 |
+| Score, first run (entry 8) | 98.1% (99 of 102 checks) | 93.9% (93 of 102 checks) |
+| Score, now (entry 12) | 93.3% (95 of 102 checks) | 90.7% (90 of 102 checks) |
+| Model calls, now | 109 | 41 |
+| Tokens, now | 648,722 | 264,921 |
+| Cost of the run, now | US$0.62 | US$0.49 |
 
-The specialists score higher, by a small margin: one run each, and a question either way moves a score
-about 4.5 points. Neither stated a number the engine didn't give. The gap is in what a household can
-check: the single agent answered two "what if we put ₱X in" questions in prose with no option to
-choose or trace, while the specialists turned each into a what-if with its figures cited; their one
-miss was a misread move (q12). The single agent is cheaper (30% less spent, about a third of the calls,
-half the time). Kako keeps the specialists, for the traceable options and because each area's rules
-stay in its own prompt as the knowledge base grows; the margin is small, so the README reports both
-scores as they are, and the baseline is run again when a prompt changes (`kako test-set
---architecture single`). Details in `docs/tuning-log.md` entry 8; results in `data/test-set/results/`.
+The specialists score higher in both runs, by a small margin: one run each, and a question either way
+moves a score about 4.5 points. Neither stated a number the engine didn't give. The gap is in what a
+household can check: both times the single agent answered two "what if we put ₱X in" questions (q06,
+q17) in prose with no option to choose or trace, while the specialists turned each into a what-if with
+its figures cited; their misses are figures left out of a reply. The single agent is cheaper (about a
+third of the calls). Kako keeps the specialists, for the traceable options and because each area's
+rules stay in its own prompt as the knowledge base grows; the margin is small, so the README reports
+both scores as they are, and the baseline is run again when a prompt changes (`kako test-set
+--architecture single`). Details in `docs/tuning-log.md` entries 8 and 12; results in
+`data/test-set/results/`.
 
 **Prompts and context.** Every agent's system prompt starts with the same two parts, the shared rules
 and the turn's brief, so the provider's prompt cache serves them to every agent of the turn; each
@@ -389,7 +395,11 @@ memories and documents are wrapped as data, never as instructions.
 database with the demo household, and the model manager replays **recorded model responses** instead of
 calling Foundry, so no Azure account is needed. It replays the scripted sessions only; asking new
 questions needs live mode with a Foundry deployment. The README says both plainly and gives setup steps
-for each.
+for each. Between sessions it also plays what dreaming learns in the story (`learning.toml`): before
+session 4 it ends Session 3 and dreams over it (code finds the pattern in the three decisions of
+Sessions 1 to 3; no model call), Mara approves the preference, Jun confirms the sharing of it and of
+Session 1's decision record, and both are shared in Meko. So session 4's brief marks the preference
+promoted, and the debt specialist cites it though nobody in the session mentions it.
 
 **Recorded responses** (`agents/recorded.py`). A recording is a JSON file of model replies, each under
 the key of the call it answered: `<turn seed>/<agent path>/<n>`, such as `session-2:turn-1/debt#1/2`.

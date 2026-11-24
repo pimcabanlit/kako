@@ -194,7 +194,7 @@ uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine'
 uv run kako demo upload                   # the demo's statements and reference documents into Meko's knowledge base (counted in meko_call)
 uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko, --by Mara: who says it)
 KAKO_MODEL_MODE=replay KAKO_RECORDED_RESPONSES=../data/recorded/session-2.json uv run kako ask …   # the same turn from a recording, no Foundry
-uv run kako demo run                      # demo mode: migrate, load the whole story, upload the documents, replay the scripted sessions (local Meko, no Azure)
+uv run kako demo run                      # demo mode: migrate, load the whole story, upload the documents, replay the scripted sessions, with dreaming over Session 3 before session 4 (local Meko, no Azure)
 uv run kako demo run --test-set           # … and replay the agent test set for each recorded architecture (--strict: refuse a request that differs from its recording)
 KAKO_MODEL_MODE=record uv run kako demo record session-4   # record one scripted session on Foundry, on an empty database (spends; log a prediction in docs/tuning-log.md first)
 uv run kako test-set                      # the agent test set's score, replayed from data/recorded/test-set-specialists.json (needs the household loaded through Dec 1)
@@ -287,7 +287,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   with no network; `KAKO_MODEL_MODE`), `spend.py` (cost from the per-token prices, the `llm_call`
   log protocol), `turn.py` (a turn's token budget and step numbers, the `agent_step` log protocol)
   and `tool_loop.py` (`run_agent`: one agent's bounded loop, at most 4 counted tool calls and
-  then only its final tool, every tool call an `agent_step`, and a note from code between rounds),
+  then only its final tool, an empty reply sent back once for it, every tool call an `agent_step`,
+  and a note from code between rounds),
   `present.py` (what agents see: stable
   refs such as `debt:credit-card`, figures and facts written out as ₱9,050.00, 12 months, Feb 15,
   2028), `brief.py` (`render_brief`, pure: the brief within `KAKO_BRIEF_TOKEN_BUDGET`, people's and
@@ -352,8 +353,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   household with its whole story, the documents uploaded once, each session replayed by call key
   (a request that differs from its recording, as when another machine's Meko ranks the brief's
   search results differently, is replayed and reported; `--strict` refuses it), a turn's `approve`
-  step approved at its time in the story, and the `changes.csv` rows a session `writes` left out of
-  the load and checked after it (`kako demo record` records a session the same way).
+  step approved at its time in the story, the `changes.csv` rows a session `writes` left out of
+  the load and checked after it, and `learn`, what dreaming learns in the story between sessions
+  (`data/demo-household/learning.toml`, read by `read_learning` in `demo/sessions.py`): before
+  session 4, Session 3 dreamed over (code finds the pattern, no model call), the preference
+  (changes.csv row 6, left out of the load) approved, its sharing confirmed and shared in Meko, once
+  (`kako demo record` records a session the same way).
   `db/llm_log.py`, `db/agent_steps.py` and `db/number_checks.py` write those three tables, each row
   committed on its own.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
@@ -380,7 +385,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   rollover, goals, what-ifs and what each figure cites, and `test_engine_properties.py` seeded
   property tests (payments equal balance plus interest, order independence, identities), and
   `test_engine_diff.py` the worked example's diff from plan v2 to v3 and each label;
-  `test_demo_files.py` the demo files and each mistake they can hold;
+  `test_demo_files.py` the demo files and each mistake they can hold (the three decisions of
+  Sessions 1 to 3 among them);
   `tests/integration/test_demo_load.py` the demo loaded into Postgres: every rule passes, its figures
   there are the worked example's (also as known at an earlier time), a run's round trip and the commands;
   `tests/integration/test_fact_store.py` each status transition, the rules on each write and the
@@ -430,11 +436,13 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `tests/integration/test_promotion.py` the demo household's three decisions: the pattern proposed
   once, the offers, a no that is final, the second confirmation through the API and the command
   line, upkeep sharing on the fake and on local Meko in a datapack of its own (never twice after a
-  stopped run), V-13, and the brief's promoted marker as known at a time; `test_demo_sessions.py` the session files and each mistake;
+  stopped run), V-13, and the brief's promoted marker as known at a time; `test_demo_sessions.py` the session files and each mistake, the learning step, and task 4's
+  done-when on session 4's recording (the debt specialist cites the learned preference);
   `tests/integration/test_demo_mode.py` runs `kako demo run --test-set` on a fresh database and local
-  Meko with no Azure settings, then again (session 4 isn't replayed twice), and its refusals, session 4
-  recorded from the scripted model with its approval and the rows it writes, and `kako demo record`'s
-  refusals; `test_agents_proposing.py` tests `propose_change` on the worked example (held, and each
+  Meko with no Azure settings (dreaming over Session 3 before session 4, the preference and Session
+  1's decision record shared), then again (session 4 isn't replayed twice, nothing learned twice),
+  and its refusals, session 4 recorded from the scripted model with its approval and the rows it
+  writes, and `kako demo record`'s refusals; `test_agents_proposing.py` tests `propose_change` on the worked example (held, and each
   refusal a model could cause), and `tests/integration/test_replan.py` runs session 4 with a scripted
   model on Postgres, through `run_turn` and through the API: the new job proposed, approved, then the
   replan in three parts with the September decision to revisit; `test_agent_tools.py` also checks that

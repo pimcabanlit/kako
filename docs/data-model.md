@@ -1,4 +1,4 @@
-# Kako data model v0.13
+# Kako data model v0.14
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -41,7 +41,11 @@ in the same change once agreed.
   memory and a decision record uploaded to the knowledge base by Meko upkeep, their `meko_link`
   rows, and V-13 over both. v0.13 (Nov 24) is Context Gaps (task 6): how a gap is collected from
   Meko's search log, answered by a proposal that writes a fact, replayed once that fact is in Meko,
-  and dismissed; no schema change.
+  and dismissed; no schema change. v0.14 (Nov 24) is task 4's done-when: the demo story's decisions
+  of Sessions 1 and 3 (a decision in `decisions.toml` may have no `after`), the preference pattern
+  from Oct 18 (`changes.csv` row 6), `learning.toml` (what dreaming learns in the story between
+  sessions), and session 4's replan against the latest decision with all three to revisit; no
+  schema change.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -871,9 +875,11 @@ rolls to the car loan, which is paid off in 22 months (₱38,914.35 of interest)
 
 **The diff Kako explains (F-DIFF-1):** income +₱16,000 because one fact was *replaced* by the new job;
 surplus ₱9,050 → ₱25,050; card extra ₱4,000 → ₱10,000; emergency target in 5 months, not 12; a new
-₱5,050 a month for the house. Decision "split the surplus" rested on Mara's old salary, so it is listed
-**to revisit**, and plan v3 explains why it still leans toward flexibility, citing the promoted preference
-and the October session where it was learned.
+₱5,050 a month for the house. The three decisions of Sessions 1 to 3 (the bigger buffer, "split the
+surplus" and the trip) each rested on Mara's old salary, so all three are listed **to revisit**, and
+plan v3 explains why it still leans toward flexibility, citing the promoted preference and the October
+session where it was learned. (Session 4's replan, on Nov 20, compares against the latest decision,
+Session 3's of Oct 18: the decision the household last made.)
 
 ## Demo dataset
 
@@ -891,16 +897,27 @@ that doesn't hold the household yet:
   event, with the explanation the household saw. Loading writes the approved proposal, then exactly
   the fact it names (V-08); a fact may name the life event it belongs to. `--through` stops the replay
   at a point in the story (without it, only the seed is loaded). The 18 changes are the worked example:
-  plan v2 (Sep 15), the Oct and Nov statements, the October preference pattern, the new job (Nov 20)
-  and plan v3 (Dec 1). Rows 10 and 11, the new job, are the ones session 4 writes: their `source_ref`
-  is its turn (`s4:t1`).
+  plan v2 (Sep 15), the Oct and Nov statements, the October preference pattern (row 6, from Oct 18,
+  Session 3's day), the new job (Nov 20) and plan v3 (Dec 1). Rows 10 and 11, the new job, are the
+  ones session 4 writes: their `source_ref` is its turn (`s4:t1`).
 - `decisions.toml`: the decisions of the story, each written right after the change it follows
-  (`after`, a seq, at the same `recorded_at`): its session's title and date, who decided (an adult),
+  (`after`, a seq, at the same `recorded_at`) or, with no `after`, in its own moment, in time order
+  with the changes (it may not share a change's `recorded_at`): its session's title and date, who
+  decided (an adult),
   the question, the reasoning and quote in the household's words, the chosen option's label, the date
   it takes effect, and every option with its tags (from `decision_option.tags`' fixed list) and, for
   each rejected one, the reason. Loading writes a session row, then a `decision` proposal approved by
-  that person at that moment, with the facts it rests on as known then. One decision today: session
-  2's "B: split" (Sep 15), which session 4's replan lists to revisit.
+  that person at that moment, with the facts it rests on as known then. Three decisions, each
+  choosing cash on hand: Jun's "B: bigger buffer" in Session 1 (Aug 15), Mara's "B: split" in
+  Session 2 (Sep 15) and Jun's "B: keep it for the trip" in Session 3 (Oct 18). Session 4's replan
+  lists all three to revisit.
+- `learning.toml`: what dreaming learns in the story between sessions, for demo mode (`kako demo
+  run`): the session it dreams over (Session 3) and when, the `changes.csv` row its pattern must be
+  (row 6, which demo mode leaves out of the load and lets dreaming propose; its `decided_by` approves
+  it at its `recorded_at`), and who confirms the sharing and when (`promote`, Jun at 9:30 PM on Oct
+  20). Demo mode plays it before the first session after that time: the dreaming run (code finds the
+  pattern; no model call), the approval, each `promote` it offers approved with its second
+  confirmation, and each shared in Meko. Checked against the story when read.
 - `statements/*.csv` (synthetic monthly bank, card and loan statements, cited by each statement fact's
   `source_ref`, and uploaded to the knowledge base),
 - `kb/*.md` (planning rules and plain-language reference: 13th-month pay, SSS, Pag-IBIG, emergency funds).

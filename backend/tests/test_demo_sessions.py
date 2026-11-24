@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -48,6 +49,24 @@ GOOD = (
     'recording = "s.json"\n'
     '[[turn]]\nspeaker = "mara"\nseed = "s9:t1"\nmessage = "Hi"\n'
 )
+
+
+def test_session_4s_debt_specialist_cites_the_learned_preference() -> None:
+    """Phase 4, task 4's done-when, as recorded on Foundry (docs/tuning-log.md entry 12): dreaming
+    learned the preference from Sessions 1 to 3 and it was shared, and in session 4's replan the
+    debt specialist cites it, though the household's message never mentions it."""
+    four = next(s for s in read_sessions(people=PEOPLE) if s.name == "session-4")
+    assert "flexib" not in four.turns[1].message.lower()
+    recorded = read_recording(four.recording)
+    cited = [
+        json.loads(call.arguments)["sources"]
+        for key, c in recorded.items()
+        if key.startswith("s4:t2/debt#")
+        for call in c.reply.tool_calls
+        if call.name == "submit_proposal"
+    ]
+    assert cited
+    assert "fact:preference.debt_vs_flexibility" in cited[-1]
 
 
 @pytest.mark.parametrize(

@@ -180,8 +180,7 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    Done when: after sessions 1 to 3 (Mara in some, Jun in others) dreaming proposes the flexibility
    preference; after approval and promotion the debt specialist cites it in session 4 without being
    told.
-   Built Nov 24 (all but the done-when, which needs the demo story's sessions 1 and 3 and recorded
-   sessions): `dreaming/patterns.py` counts the household's decisions by the tags of the option
+   Built Nov 24: `dreaming/patterns.py` counts the household's decisions by the tags of the option
    chosen, and each dreaming run (steps 4 and 5, `dreaming/promotion.py`) proposes a new pattern as a
    `preference_pattern`, citing each decision in the household's words, once for the decisions
    behind it. An approved preference from a pattern, and a decision two sessions have held, are
@@ -191,6 +190,14 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    record, linked in `meko_link`, and V-13 checks both. The brief marks a preference promoted once
    its sharing was approved by the brief's `known_at`. Tested on Postgres with the demo household's
    three decisions (`tests/integration/test_promotion.py`), and on local Meko in a datapack of its own.
+   **Done-when met Nov 24** (tuning log entry 12). The demo story holds Jun's decisions in Sessions 1
+   and 3 beside Mara's in Session 2 (`decisions.toml`), and demo mode plays what dreaming learns
+   (`learning.toml`): before session 4 it dreams over Session 3, Mara approves the preference, Jun
+   confirms its sharing, and upkeep shares it in Meko. In session 4's replan, recorded on Foundry,
+   the debt specialist cites `fact:preference.debt_vs_flexibility` though neither the household nor
+   the session mentions it; with an ask from the orchestrator that doesn't name it either, it cited
+   it in 3 of 3 runs. Session 4's replan now compares against the latest decision (Session 3's) and
+   lists all three to revisit (Pim, Nov 24).
 5. **Meko upkeep.** Add, rewrite in the past tense, delete on retraction, promote, and `meko_link`.
    Done when: after the four sessions, memory search for "Mara's salary" returns the current value and
    the old one in the past tense, and the validation suite's link check passes.

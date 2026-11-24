@@ -7,6 +7,8 @@ go back, and so on. The loop is where the architecture's bounds are kept in code
   final tool is offered, and the model must call it;
 - at most `max_tool_calls + 2` model calls, so a model that keeps talking still stops;
 - the final tool only on its own in a reply, so an answer rests on results the model has read;
+- an empty reply (no words and no tool call) is sent back once, with only the final tool offered;
+  a reply in plain words ends the loop, and the caller decides what it is worth;
 - every tool call is an `agent_step` (the agent, the tool, a short input and result, the what-if
   run if any, the outcome), written as it happens;
 - after each round of tool calls, code may add a note of its own (`between_rounds`): the
@@ -108,8 +110,9 @@ async def run_agent(
     messages = [Message("system", system), Message("user", user)]
     counted = model_calls = 0
     text = ""
+    sent_back = False  # an empty reply was sent back once
     while model_calls < max_tool_calls + 2:
-        at_limit = counted >= max_tool_calls
+        at_limit = counted >= max_tool_calls or sent_back
         offered = finals if at_limit else list(tools)
         offered_names = {t.spec.name for t in offered}
         request = ChatRequest(
@@ -125,7 +128,13 @@ async def run_agent(
         )
         text = reply.text
         if not reply.tool_calls:
-            return AgentRun(None, text, counted, model_calls)
+            if text.strip() or not finals or sent_back:
+                return AgentRun(None, text, counted, model_calls)
+            sent_back = True
+            # Nothing to carry back: the empty reply isn't kept, only code's note.
+            name = finals[0].spec.name
+            messages.append(Message("user", f"Your reply was empty. Answer with {name}."))
+            continue
         messages.append(Message("assistant", reply.text or None, reply.tool_calls))
 
         # Decide in order which calls may run, then run them together.
