@@ -147,22 +147,35 @@ async def _approved_memories(
 
 
 async def _decisions(
-    conn: AsyncConnection, household_id: uuid.UUID, on: date
+    conn: AsyncConnection, household_id: uuid.UUID, on: date, known_at: datetime | None
 ) -> tuple[DecisionView, ...]:
-    """Active decisions in force on `on`, each with its options."""
-    rows = list(
-        await conn.execute(
-            select(DECISION, SESSION.c.title)
-            .join(SESSION, SESSION.c.id == DECISION.c.session_id)
-            .where(
-                DECISION.c.household_id == household_id,
-                DECISION.c.status == "active",
-                DECISION.c.valid_from <= on,
-                or_(DECISION.c.valid_to.is_(None), DECISION.c.valid_to > on),
-            )
-            .order_by(DECISION.c.valid_from, DECISION.c.id)
-        )
+    """Decisions in force on `on`, as Kako knew them at `known_at` (now, when None), each with its
+    options: approved by then, and not yet revised or reversed by a decision approved by then."""
+    made = PROPOSAL.alias("made")
+    later = DECISION.alias("later")
+    later_made = PROPOSAL.alias("later_made")
+    revised_later = (
+        select(later_made.c.decided_at)
+        .join(later, later.c.proposal_id == later_made.c.id)
+        .where(later.c.id == DECISION.c.replaced_by)
+        .scalar_subquery()
     )
+    in_force = and_(
+        DECISION.c.status == "active",
+        or_(DECISION.c.valid_to.is_(None), DECISION.c.valid_to > on),
+    )
+    query = (
+        select(DECISION, SESSION.c.title)
+        .join(SESSION, SESSION.c.id == DECISION.c.session_id)
+        .join(made, made.c.id == DECISION.c.proposal_id)
+        .where(DECISION.c.household_id == household_id, DECISION.c.valid_from <= on)
+        .order_by(DECISION.c.valid_from, DECISION.c.id)
+    )
+    if known_at is None:
+        query = query.where(in_force)
+    else:
+        query = query.where(made.c.decided_at <= known_at, or_(in_force, revised_later > known_at))
+    rows = list(await conn.execute(query))
     if not rows:
         return ()
     options = list(
@@ -190,12 +203,24 @@ async def _decisions(
     return tuple(views)
 
 
-async def _pending(conn: AsyncConnection, household_id: uuid.UUID) -> tuple[ProposalView, ...]:
-    rows = await conn.execute(
+async def _pending(
+    conn: AsyncConnection, household_id: uuid.UUID, known_at: datetime | None
+) -> tuple[ProposalView, ...]:
+    """Proposals waiting for a person at `known_at` (now, when None): made by then and not yet
+    decided then."""
+    query = (
         select(PROPOSAL.c.id, PROPOSAL.c.kind, PROPOSAL.c.explanation, PROPOSAL.c.created_at)
-        .where(and_(PROPOSAL.c.household_id == household_id, PROPOSAL.c.status == "pending"))
+        .where(PROPOSAL.c.household_id == household_id)
         .order_by(PROPOSAL.c.created_at, PROPOSAL.c.id)
     )
+    if known_at is None:
+        query = query.where(PROPOSAL.c.status == "pending")
+    else:
+        query = query.where(
+            PROPOSAL.c.created_at <= known_at,
+            or_(PROPOSAL.c.status == "pending", PROPOSAL.c.decided_at > known_at),
+        )
+    rows = await conn.execute(query)
     return tuple(ProposalView(r.id, r.kind, r.explanation, r.created_at) for r in rows)
 
 
@@ -289,8 +314,8 @@ async def gather_brief(
         approvals=await _approvals(
             conn, household_id, preferences, dreamed, ZoneInfo(household.timezone)
         ),
-        decisions=await _decisions(conn, household_id, on),
-        proposals=await _pending(conn, household_id),
+        decisions=await _decisions(conn, household_id, on, known_at),
+        proposals=await _pending(conn, household_id, known_at),
         message=message,
         context=context,
         approved_memories=approved,

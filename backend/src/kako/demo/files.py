@@ -5,6 +5,9 @@
 - `changes.csv`: what happened after, in order. Each row is one proposal an adult approved (a new
   or replaced fact, a preference pattern, or a life event); loading replays them through the fact
   store.
+- `decisions.toml`: what the household decided in its sessions before the demo begins, each with
+  its options, written after the change it follows (the plan's allocations), through the same
+  proposal store and approval as any decision.
 - `statements/*.csv` and `kb/*.md`: documents for the knowledge base, cited by `source_ref`.
 
 Money is written in pesos with two decimals and read as exact centavos; a rate is a decimal
@@ -14,15 +17,15 @@ fraction. Every error names the file and line.
 from __future__ import annotations
 
 import csv
+import tomllib
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Final, Literal
+from typing import Any, Final, Literal
 
-from kako.facts.attributes import attribute
+from kako.decisions.tags import DECISION_TAGS
 from kako.facts.model import FactValue, SourceKind
-from kako.facts.values import check_value
+from kako.facts.values import parse_money, parse_value
 
 DEMO_DIR: Final = Path(__file__).resolve().parents[4] / "data" / "demo-household"
 
@@ -86,6 +89,30 @@ class Change:
 
 
 @dataclass(frozen=True)
+class DecisionOptionFile:
+    label: str
+    rejected_reason: str | None  # None for the chosen option
+    tags: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class DemoDecision:
+    """A decision the household made in a session of the story (`decisions.toml`)."""
+
+    after: int  # written after this change (its seq), in the same moment
+    recorded_at: datetime
+    session: str  # the session's title
+    session_date: date
+    decided_by: str  # a person key
+    question: str
+    reasoning: str  # in the household's words
+    quote: str  # what they said, the decision's evidence
+    chosen: str  # the chosen option's label
+    valid_from: date
+    options: tuple[DecisionOptionFile, ...]
+
+
+@dataclass(frozen=True)
 class DemoHousehold:
     household: HouseholdRow
     people: tuple[PersonRow, ...]
@@ -93,39 +120,7 @@ class DemoHousehold:
     facts: tuple[SeedFact, ...]
     changes: tuple[Change, ...]
     documents: tuple[Path, ...]  # statements and knowledge-base documents, sorted
-
-
-def parse_money(text: str) -> int:
-    """Pesos with at most two decimals, as exact centavos ("85000.00" is 8,500,000)."""
-    try:
-        pesos = Decimal(text)
-    except InvalidOperation as exc:
-        raise ValueError(f"{text!r} isn't an amount in pesos") from exc
-    centavos = pesos * 100
-    if not pesos.is_finite() or centavos != centavos.to_integral_value():
-        raise ValueError(f"{text!r} has more than two decimals")
-    return int(centavos)
-
-
-def parse_value(attribute_key: str, text: str) -> FactValue:
-    """A value as its attribute's type, checked against the attribute (V-01, V-07)."""
-    attr = attribute(attribute_key)
-    value: FactValue
-    if attr.value_type == "money":
-        value = parse_money(text)
-    elif attr.value_type == "rate":
-        try:
-            value = Decimal(text)
-        except InvalidOperation as exc:
-            raise ValueError(f"{text!r} isn't a rate") from exc
-    elif attr.value_type == "int":
-        value = int(text)
-    elif attr.value_type == "date":
-        value = date.fromisoformat(text)
-    else:
-        value = text
-    check_value(attr, value)
-    return value
+    decisions: tuple[DemoDecision, ...] = ()
 
 
 def _rows(path: Path, columns: list[str]) -> list[tuple[int, dict[str, str]]]:
@@ -197,7 +192,9 @@ def read_demo(folder: Path = DEMO_DIR) -> DemoHousehold:
         for number, row in _rows(folder / "changes.csv", columns):
             where = f"changes.csv:{number}"
             changes.append(_change(row))
-    except (ValueError, KeyError) as exc:
+        where = "decisions.toml"
+        decisions = _decisions(folder / where) if (folder / where).exists() else ()
+    except (ValueError, KeyError, TypeError) as exc:
         raise DemoDataError(f"{where}: {exc}") from exc
     demo = DemoHousehold(
         household,
@@ -206,6 +203,7 @@ def read_demo(folder: Path = DEMO_DIR) -> DemoHousehold:
         tuple(facts),
         tuple(changes),
         tuple(sorted([*folder.glob("statements/*.csv"), *folder.glob("kb/*.md")])),
+        decisions,
     )
     _check_references(demo)
     return demo
@@ -240,6 +238,90 @@ def _change(row: dict[str, str]) -> Change:
     )
 
 
+DECISION_FIELDS: Final = {
+    "after", "recorded_at", "session", "session_date", "decided_by", "question", "reasoning",
+    "quote", "chosen", "valid_from", "option",
+}  # fmt: skip
+
+
+def _text(raw: dict[str, Any], name: str) -> str:
+    value = raw.get(name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be non-empty text")
+    return value.strip()
+
+
+def _decisions(path: Path) -> tuple[DemoDecision, ...]:
+    try:
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(str(exc)) from None
+    if set(raw) - {"decision"}:
+        raise ValueError(f"unknown fields {sorted(set(raw) - {'decision'})}")
+    found = []
+    for n, item in enumerate(raw.get("decision", []), start=1):
+        try:
+            found.append(_decision(item))
+        except ValueError as exc:
+            raise ValueError(f"decision {n}: {exc}") from None
+    return tuple(found)
+
+
+def _decision(raw: Any) -> DemoDecision:
+    if not isinstance(raw, dict) or set(raw) != DECISION_FIELDS:
+        raise ValueError(f"a [[decision]] has exactly {', '.join(sorted(DECISION_FIELDS))}")
+    recorded_at, session_date, valid_from = (
+        raw["recorded_at"],
+        raw["session_date"],
+        raw["valid_from"],
+    )
+    if not isinstance(recorded_at, datetime) or recorded_at.tzinfo is None:
+        raise ValueError("recorded_at must be a time with its zone")
+    for name, value in (("session_date", session_date), ("valid_from", valid_from)):
+        if not isinstance(value, date) or isinstance(value, datetime):
+            raise ValueError(f"{name} must be a date")
+    if not isinstance(raw["after"], int) or isinstance(raw["after"], bool):
+        raise ValueError("after must be a change's seq")
+    options = []
+    for option in raw["option"] if isinstance(raw["option"], list) else [None]:
+        if not isinstance(option, dict) or not {"label"} <= set(option) <= {
+            "label", "rejected_reason", "tags",
+        }:  # fmt: skip
+            raise ValueError(
+                "each [[decision.option]] has a label, tags and, unless chosen, a reason"
+            )
+        tags = option.get("tags", [])
+        if not isinstance(tags, list) or not set(tags) <= set(DECISION_TAGS):
+            raise ValueError(f"tags come from the fixed list: {', '.join(DECISION_TAGS)}")
+        reason = option.get("rejected_reason")
+        options.append(
+            DecisionOptionFile(
+                _text(option, "label"),
+                _text(option, "rejected_reason") if reason is not None else None,
+                tuple(tags),
+            )
+        )
+    chosen = _text(raw, "chosen")
+    for option in options:
+        if (option.label == chosen) != (option.rejected_reason is None):
+            raise ValueError("the chosen option has no reason for rejection; every other one has")
+    if chosen not in {o.label for o in options}:
+        raise ValueError(f"the chosen option {chosen!r} isn't one of the options")
+    return DemoDecision(
+        after=raw["after"],
+        recorded_at=recorded_at,
+        session=_text(raw, "session"),
+        session_date=session_date,
+        decided_by=_text(raw, "decided_by"),
+        question=_text(raw, "question"),
+        reasoning=_text(raw, "reasoning"),
+        quote=_text(raw, "quote"),
+        chosen=chosen,
+        valid_from=valid_from,
+        options=tuple(options),
+    )
+
+
 def _check_references(demo: DemoHousehold) -> None:
     people = {p.key for p in demo.people}
     entities = {e.key for e in demo.entities}
@@ -265,12 +347,27 @@ def _check_references(demo: DemoHousehold) -> None:
             events.add(change.life_event)
         elif change.life_event is not None and change.life_event not in events:
             raise DemoDataError(f"changes.csv: change {change.seq} names a later life event")
+    seqs = {c.seq: c for c in demo.changes}
+    for n, decision in enumerate(demo.decisions, start=1):
+        after = seqs.get(decision.after)
+        if after is None:
+            raise DemoDataError(
+                f"decisions.toml: decision {n} follows unknown change {decision.after}"
+            )
+        if after.recorded_at != decision.recorded_at:
+            raise DemoDataError(
+                f"decisions.toml: decision {n} is recorded with the change it follows"
+            )
+        if decision.decided_by not in people:
+            raise DemoDataError(f"decisions.toml: decision {n} decided by unknown person")
 
 
 __all__ = [
     "DEMO_DIR",
     "Change",
+    "DecisionOptionFile",
     "DemoDataError",
+    "DemoDecision",
     "DemoHousehold",
     "EntityFile",
     "HouseholdRow",

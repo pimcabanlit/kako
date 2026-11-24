@@ -75,7 +75,7 @@ async def test_the_demo_loads_and_every_rule_passes(migrated: AsyncEngine) -> No
             .where(proposals.c.household_id == household_id)
             .group_by(proposals.c.status)
         )
-        assert dict(statuses.all()) == {"approved": 18}
+        assert dict(statuses.all()) == {"approved": 19}  # the 18 changes and session 2's decision
         new_job = next(f for f in later if f.attribute == "income.monthly_net")
         assert new_job.life_event_id is not None
         assert new_job.replaces is not None
@@ -83,6 +83,57 @@ async def test_the_demo_loads_and_every_rule_passes(migrated: AsyncEngine) -> No
             text("SELECT as_of_date FROM household WHERE id = :id"), {"id": household_id}
         )
         assert as_of.scalar_one() == date(2026, 12, 1)
+
+
+async def test_session_2s_decision_rests_on_the_days_facts(migrated: AsyncEngine) -> None:
+    """The decision of the story: B chosen, A kept with its reason, and the facts it rested on,
+    Mara's salary among them, but not the balances or the allocations that move as plans work."""
+    async with migrated.connect() as conn:
+        household_id = await _loaded(conn)
+        decision = (
+            (
+                await conn.execute(
+                    text(
+                        "SELECT d.id, d.question, d.status, d.valid_from, s.title, "
+                        "s.household_date, o.label AS chosen, p.decided_at "
+                        "FROM decision d JOIN session s ON s.id = d.session_id "
+                        "JOIN decision_option o ON o.id = d.chosen_option_id "
+                        "JOIN proposal p ON p.id = d.proposal_id WHERE d.household_id = :h"
+                    ),
+                    {"h": household_id},
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert decision["question"] == "How hard should we pay down the credit card?"
+        assert (decision["status"], decision["chosen"]) == ("active", "B: split")
+        assert (decision["title"], decision["household_date"]) == ("Session 2", SEP_15)
+        assert decision["decided_at"] == datetime(2026, 9, 15, 10, tzinfo=MANILA)
+        rejected = await conn.execute(
+            text("SELECT label, rejected_reason, tags FROM decision_option WHERE decision_id = :d "
+                 "AND rejected_reason IS NOT NULL"),
+            {"d": decision["id"]},
+        )  # fmt: skip
+        assert [tuple(r) for r in rejected] == [
+            (
+                "A: all extra on the card",
+                "Lia starts school and we want cash on hand.",
+                ["favours_speed"],
+            )
+        ]
+        rested_on = await conn.execute(
+            text(
+                "SELECT f.attribute, e.name FROM decision_assumption a "
+                "JOIN fact f ON f.id = a.fact_id LEFT JOIN entity e ON e.id = f.entity_id "
+                "WHERE a.decision_id = :d"
+            ),
+            {"d": decision["id"]},
+        )
+        assumed = {(attribute, name) for attribute, name in rested_on}
+        assert ("income.monthly_net", "Mara's salary") in assumed
+        assert ("preference.debt_strategy", None) in assumed
+        assert not {a for a, _ in assumed} & {"debt.balance", "account.balance", "plan.allocation"}
 
 
 async def test_figures_from_the_database_are_the_worked_example(migrated: AsyncEngine) -> None:
