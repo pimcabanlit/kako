@@ -237,6 +237,7 @@ class Reconciler:
                 short(f"split {n}: {result.summary}; " + ("refused" if found else "fits")),
                 outcome="rejected" if found else "ok",
                 calc_run_id=result.calc_run_id,
+                what_if=result.what_if,
                 value=what_if,
             )
 

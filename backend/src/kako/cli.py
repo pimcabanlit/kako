@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from kako.engine.figures import Figure
 
 MIGRATIONS = Path(__file__).parent / "db" / "migrations"
+LOOPBACK = frozenset({"127.0.0.1", "localhost"})  # the API's Host check allows these
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,7 +29,9 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
 
     api = commands.add_parser("api", help="run the API on http://127.0.0.1:8000/api/v1")
-    api.add_argument("--host", default="127.0.0.1")
+    api.add_argument(
+        "--host", default="127.0.0.1", help="a loopback address only, until there is sign-in"
+    )
     api.add_argument("--port", type=int, default=8000)
     api.add_argument("--reload", action="store_true", help="restart on code changes")
 
@@ -129,6 +132,10 @@ def main(argv: list[str] | None = None) -> int:
 def _api(host: str, port: int, *, reload: bool) -> int:
     import uvicorn
 
+    if host not in LOOPBACK:
+        # No sign-in yet, and a turn spends money: never open the API to the network.
+        print(f"kako api: {host} isn't a loopback address; use 127.0.0.1", file=sys.stderr)
+        return 2
     uvicorn.run("kako.api.app:create_app", factory=True, host=host, port=port, reload=reload)
     return 0
 
@@ -329,7 +336,7 @@ async def _ask(
 
     from sqlalchemy import select
 
-    from kako.agents.ask import ask, render_answer
+    from kako.agents.ask import MEKO_CALLS, ask, render_answer
     from kako.agents.brief_store import BriefStoreError
     from kako.agents.chat import ModelError
     from kako.agents.model_manager import chat_backend
@@ -358,9 +365,9 @@ async def _ask(
                 await conn.execute(select(table.c.as_of_date).where(table.c.id == chosen))
             ).scalar_one()
         async with AsyncExitStack() as stack:
-            # The brief's search, a conversation, and one extra search per specialist ask.
+            calls = DbCallLog(engine)
             meko = (
-                await stack.enter_async_context(open_meko(settings, DbCallLog(engine), max_calls=8))
+                await stack.enter_async_context(open_meko(settings, calls, max_calls=MEKO_CALLS))
                 if use_meko
                 else None
             )
@@ -375,8 +382,9 @@ async def _ask(
                 known_at=known_at,
                 title=title,
                 seed=seed,
+                call_log=calls,
             )
-        print(render_answer(asked))
+        print(render_answer(asked, settings))
         return 0
     except (ModelError, MekoError, BriefStoreError, OrchestratorError) as exc:
         print(f"The turn stopped: {exc}", file=sys.stderr)

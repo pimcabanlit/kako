@@ -1,5 +1,7 @@
 """The agents' tools: read the turn's figures and facts, search Meko once, try allocations
-through the engine, and hand in an answer. None writes anything (REVIEW.md rule 4).
+through the engine, and hand in an answer. None writes anything (REVIEW.md rules 4 and 5): a what-if
+runs in memory, and is kept as a `scenario` with its run only when the turn is
+(`db/plan_store.save_answer`), with overrides that are never facts.
 
 Every argument is model output, so each tool parses it in code and refuses what it can't use with
 a reason the model can act on (`ToolInputError`). Amounts are specs (`agents.answers`), resolved
@@ -110,6 +112,9 @@ class TurnState:
     # An answer sent back for its numbers, by agent path: shown flagged if the agent runs out of
     # calls before it hands in another.
     held: dict[str, Any] = field(default_factory=dict)
+    # The run each what-if was stored as, once the turn is kept (`db/plan_store.save_answer`).
+    # The tools write nothing: a turn that fails leaves no scenario behind.
+    stored: dict[str, uuid.UUID] = field(default_factory=dict)
 
     @property
     def refs(self) -> Refs:
@@ -290,9 +295,16 @@ class TurnState:
         if kind == "decision" and value in self.brief.decisions:
             return Citation("decision", ref, str(self.brief.decisions[value]), value)
         if kind == "memory" and value in self.brief.memories:
-            return Citation("memory", ref, self.brief.memories[value], value)
+            shown = self.brief.excerpts.get(value, "")
+            return Citation("memory", ref, self.brief.memories[value], shown)
         if kind == "doc" and value in self.brief.knowledge:
-            return Citation("knowledge", ref, self.brief.knowledge[value] or value, value)
+            document_id = self.brief.knowledge[value]
+            if document_id is None:
+                raise ToolInputError(
+                    f"can't cite {ref!r}: Meko gave that document no id, so it can't be traced; "
+                    "cite another source"
+                )
+            return Citation("knowledge", ref, document_id, self.brief.excerpts.get(value, ""))
         if kind in ("memory", "doc"):
             paths = list(self.searches) if agent_path == ORCHESTRATOR else [agent_path]
             found = next(
@@ -489,6 +501,7 @@ def what_if_tool(state: TurnState, path: str = ORCHESTRATOR) -> Tool:
             "\n".join(lines),
             short(summary),
             outcome="rejected" if result.over_allocated else "ok",
+            what_if=result.ref,
             value=result,
         )
 
@@ -534,8 +547,14 @@ def search_tool(state: TurnState, path: str, agent_id: str, limit: int = 3) -> T
             )
         for n, hit in enumerate(found.knowledge, start=1):
             ref = f"{prefix}-K{n}"
-            source_id = hit.document_id or ref
-            state.searches[path][ref] = Citation("knowledge", f"doc:{ref}", source_id, hit.text)
+            if hit.document_id is None:  # nothing to trace it to: read it, but it isn't a source
+                lines.append(
+                    "- (no document id, not citable) " + data(hit.text, source="knowledge-base")
+                )
+                continue
+            state.searches[path][ref] = Citation(
+                "knowledge", f"doc:{ref}", hit.document_id, hit.text
+            )
             lines.append(f"- doc:{ref} " + data(hit.text, source="knowledge-base"))
         return ToolResult("\n".join(lines) or "Nothing found.", f"{len(lines)} results")
 

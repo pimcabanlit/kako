@@ -83,6 +83,14 @@ def _row(figure: Figure, run_id: uuid.UUID, ids: dict[FigureRef, uuid.UUID]) -> 
     }
 
 
+async def figure_ids(conn: AsyncConnection, run_id: uuid.UUID) -> dict[FigureRef, uuid.UUID]:
+    """Each figure of a stored run, by its key and entity."""
+    rows = await conn.execute(
+        select(FIGURE.c.key, FIGURE.c.entity_id, FIGURE.c.id).where(FIGURE.c.calc_run_id == run_id)
+    )
+    return {FigureRef(key, entity): figure for key, entity, figure in rows}
+
+
 async def load_run(conn: AsyncConnection, run_id: uuid.UUID) -> Run:
     """A stored run, as the engine returned it (without a what-if's override ids)."""
     head = (

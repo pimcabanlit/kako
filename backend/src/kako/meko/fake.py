@@ -12,7 +12,7 @@ import re
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from kako.meko.adapter import (
@@ -102,6 +102,10 @@ class FakeMeko:
             return hashlib.sha256(
                 f"{conversation_id}:{turn.seed or len(turns)}".encode()
             ).hexdigest()
+
+    async def read_turns(self, conversation_id: str, *, agent_id: str) -> list[Turn]:
+        async with self._call("conversation_get", agent_id, conversation_id):
+            return [replace(t, seed=None) for t in self.conversations[conversation_id].turns]
 
     async def delete_conversation(self, conversation_id: str, *, agent_id: str) -> None:
         async with self._call("conversation_delete", agent_id, conversation_id):

@@ -36,7 +36,9 @@ def figures_tool(seen: list[dict[str, Any]]) -> Tool:
 async def what_if(arguments: dict[str, Any]) -> ToolResult:
     if arguments.get("amount") == "lots":
         raise ToolInputError("amount must be a figure reference or 'rest'")
-    return ToolResult('{"run": "W1"}', "W1: card paid off in 9 months", calc_run_id=RUN_ID)
+    return ToolResult(
+        '{"run": "W1"}', "W1: card paid off in 9 months", calc_run_id=RUN_ID, what_if="W1"
+    )
 
 
 async def submit(arguments: dict[str, Any]) -> ToolResult:
@@ -105,6 +107,8 @@ async def test_tools_run_and_the_final_tool_answers(make_settings: MakeSettings)
     log = turn.steps
     assert isinstance(log, MemoryStepLog)
     assert log.steps[1].calc_run_id == RUN_ID
+    # The step that ran a what-if is remembered by its ref: it names the run once the turn is kept.
+    assert turn.what_if_steps == {"W1": [log.steps[1].id]}
     assert log.steps[1].result_summary == "W1: card paid off in 9 months"
     # The second call carries the tool results back, each answering its call.
     second = backend.requests[1][2]

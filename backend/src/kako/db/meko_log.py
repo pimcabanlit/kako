@@ -25,6 +25,20 @@ class DbCallLog:
     def __init__(self, engine: AsyncEngine, session_id: uuid.UUID | None = None) -> None:
         self._engine = engine
         self._session_id = session_id
+        self._unbound: list[uuid.UUID] = []  # calls made before the session existed
+
+    async def bind(self, session_id: uuid.UUID) -> None:
+        """Count every later call against the session, and the calls made before it existed
+        (creating its conversation) too."""
+        self._session_id = session_id
+        if self._unbound:
+            async with self._engine.begin() as conn:
+                await conn.execute(
+                    update(MEKO_CALL)
+                    .where(MEKO_CALL.c.id.in_(self._unbound), MEKO_CALL.c.session_id.is_(None))
+                    .values(session_id=session_id)
+                )
+            self._unbound.clear()
 
     async def reserve(
         self, target: Target, tool: str, agent_id: str, ceiling: int | None
@@ -58,6 +72,8 @@ class DbCallLog:
                     created_at=datetime.now(UTC),
                 )
             )
+        if self._session_id is None:
+            self._unbound.append(call_id)
         if refused and ceiling is not None:
             raise quota_refusal(tool, ceiling)
         return call_id

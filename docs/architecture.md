@@ -146,10 +146,20 @@ flowchart LR
    failure is sent back once with the mismatch named; if it fails again, the text is shown with the
    unmatched numbers flagged, never silently. Every check is a `number_check` row, against the turn's
    run, which is stored before the agents start.
-8. **Recorded.** The reply goes to the household with a "why" link on each recommendation. The turn goes
-   to Meko with the orchestrator's `plan` (its steps) and `reasoning`, and metadata naming the plan,
-   run and recommendation ids, so the Meko trace and Kako's own sources say the same thing. The plan is
-   `proposed` until the household accepts it; accepting writes the `plan.allocation` facts.
+8. **Recorded.** The agents' tools write nothing: each what-if runs in memory, and is kept with the
+   turn as a `scenario`, its `plan.allocation` overrides and its run, which the `agent_step` that ran
+   it then names (a turn that fails leaves no scenario). A turn that offers options or finds a conflict proposes a
+   plan (`db/plan_store.py`, one transaction): the reply is its summary, each option's allocations are
+   its recommendations with the option's sources (a figure of the run that showed it, and a fact,
+   decision, memory, document or the household's words), and each conflict is a `reconciliation` row.
+   Each final number check names the row it checked. The reply goes to the household with a "why" link
+   on each recommendation. The turn goes to Meko with a `plan` (the steps taken: the brief, the
+   specialists asked, the reconciliation, the options) and `reasoning` (the specialists' summaries and
+   the resolution's reason), built by code from what the agents handed in, and metadata naming the
+   plan, run, recommendation, reconciliation and what-if run ids (and any numbers the check flagged), so the Meko trace and Kako's own
+   sources say the same thing. The session's Meko calls are its trace: spans in Meko Cloud's Observe
+   hub, or local Meko's call log (`GET /api/v1/sessions/{id}/trace`). The plan is `proposed` until the
+   household accepts one option; accepting writes its `plan.allocation` facts (Phase 4).
 
 ## How a life event replans
 
@@ -231,7 +241,7 @@ current, what it replaced and which plans and decisions depended on it.
 | Component | Where | What it does |
 | --- | --- | --- |
 | Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and shadcn/ui. Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas |
-| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns, plans, why, diff, facts timeline, decisions, proposals and approvals, what-ifs, metrics |
+| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `POST /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), plans, why, diff, facts timeline, decisions, proposals and approvals, what-ifs, metrics |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |
