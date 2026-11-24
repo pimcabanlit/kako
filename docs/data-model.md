@@ -65,7 +65,7 @@ How the tables are used at run time is in [architecture.md](architecture.md); th
 | Facts | `fact`, `life_event` | Seed import; approved proposals |
 | Sessions | `session`, `session_participant` | The API when a planning session starts and ends |
 | Engine | `calc_run`, `calc_input`, `figure` | The engine only |
-| Planning | `plan`, `recommendation`, `recommendation_source`, `reconciliation`, `scenario`, `scenario_override`, `agent_step` | The orchestrator, through the backend; `agent_step` by the model manager's tool loop |
+| Planning | `plan`, `recommendation`, `recommendation_source`, `reconciliation`, `scenario`, `scenario_override`, `agent_step` | The orchestrator, through the backend; `agent_step` by the agents' tool loop (`agents/tool_loop.py`) |
 | Decisions | `decision`, `decision_option`, `decision_assumption` | Approved proposals |
 | Dreaming | `dream_run`, `proposal`, `proposal_evidence` | The dreaming job; the household's approvals |
 | Self-learning | `context_gap` | The Meko adapter (from Meko's self-learning tools); the household's answers |
@@ -578,8 +578,11 @@ Written by the model manager, the Meko adapter and the number check. Never edite
 
 ### `llm_call`
 
-Every model call. For the metrics page (cost and seconds per turn, average and worst case) and the
-spend cap.
+Every model call attempt, made or refused. For the metrics page (cost and seconds per turn, average
+and worst case) and the spend cap. A retried call is one row per attempt; a failed attempt costs 0;
+a call refused before sending (the turn's token budget or the daily cap) is `budget_exceeded` with
+0 tokens. A replayed call keeps the cost its recorded tokens would have had, for the metrics, and the
+daily cap sums real calls only (`recorded_replay` false, `created_at` since midnight UTC).
 
 | Column | Type | Notes |
 | --- | --- | --- |

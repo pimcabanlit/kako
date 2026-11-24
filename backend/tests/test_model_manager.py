@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 
 import httpx2
 import pytest
 from azure.core.credentials import AccessToken
 
+from kako.agents.chat import ChatRequest, Message, ToolCall, ToolSpec
 from kako.agents.model_manager import (
     COGNITIVE_SERVICES_SCOPE,
     CheckLine,
     FoundryBackend,
+    FoundryChat,
     ModelError,
     ModelReply,
     check_models,
@@ -226,3 +229,142 @@ def test_foundry_backend_errors_become_model_errors(foundry: Settings) -> None:
 def test_foundry_backend_needs_an_endpoint(make_settings: MakeSettings) -> None:
     with pytest.raises(ModelError, match="KAKO_FOUNDRY_ENDPOINT"):
         FoundryBackend(make_settings(), FakeCredential())  # type: ignore[arg-type]
+
+
+CHAT_RESPONSE = {
+    "id": "chatcmpl-2",
+    "object": "chat.completion",
+    "created": 0,
+    "model": "kako-fast",
+    "choices": [
+        {
+            "index": 0,
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "get_figures", "arguments": '{"keys": ["F1"]}'},
+                    }
+                ],
+            },
+        }
+    ],
+    "usage": {
+        "prompt_tokens": 1200,
+        "completion_tokens": 90,
+        "total_tokens": 1290,
+        "prompt_tokens_details": {"cached_tokens": 1024},
+    },
+}
+
+
+def _chat(foundry: Settings, handler: Callable[[httpx2.Request], httpx2.Response]) -> FoundryChat:
+    return FoundryChat(
+        foundry,
+        FakeCredential(),  # type: ignore[arg-type]
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+    )
+
+
+async def test_foundry_chat_sends_tools_and_reads_tool_calls(foundry: Settings) -> None:
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return httpx2.Response(200, json=CHAT_RESPONSE)
+
+    tool = ToolSpec("get_figures", "Read figures.", {"type": "object", "properties": {}})
+    request = ChatRequest(
+        "fast",
+        (
+            Message("system", "You are the debt specialist."),
+            Message("user", "Brief."),
+            Message("assistant", None, (ToolCall("call_0", "get_facts", "{}"),)),
+            Message("tool", '{"facts": []}', tool_call_id="call_0"),
+        ),
+        max_output_tokens=800,
+        tools=(tool,),
+    )
+    reply = await _chat(foundry, handler).chat(request, deployment="kako-fast", key="ignored")
+
+    assert reply.tool_calls == (ToolCall("call_1", "get_figures", '{"keys": ["F1"]}'),)
+    assert (reply.input_tokens, reply.cached_tokens, reply.output_tokens) == (1200, 1024, 90)
+    assert reply.finish_reason == "tool_calls"
+    (sent,) = seen
+    assert sent.headers["authorization"] == "Bearer fake-entra-token"
+    assert "api-key" not in sent.headers
+    body = json.loads(sent.content)
+    assert body["model"] == "kako-fast"
+    assert body["max_completion_tokens"] == 800
+    assert body["reasoning_effort"] == "low"
+    assert body["tool_choice"] == "auto"
+    assert body["tools"][0]["function"]["name"] == "get_figures"
+    assert body["tools"][0]["function"]["strict"] is True
+    assert body["messages"][2]["tool_calls"][0]["function"]["name"] == "get_facts"
+    assert body["messages"][3] == {
+        "role": "tool",
+        "content": '{"facts": []}',
+        "tool_call_id": "call_0",
+    }
+
+
+@pytest.mark.parametrize(
+    ("status", "headers", "retryable", "retry_after"),
+    [
+        (429, {"retry-after": "7"}, True, 7.0),
+        (429, {"retry-after-ms": "1500"}, True, 1.5),
+        (503, {}, True, None),
+        (400, {}, False, None),
+        (401, {}, False, None),
+    ],
+)
+async def test_foundry_chat_says_which_errors_may_pass_next_time(
+    foundry: Settings,
+    status: int,
+    headers: dict[str, str],
+    retryable: bool,
+    retry_after: float | None,
+) -> None:
+    def handler(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(status, headers=headers, json={"error": {"message": "no"}})
+
+    request = ChatRequest("fast", (Message("user", "hi"),), max_output_tokens=16)
+    with pytest.raises(ModelError) as caught:
+        await _chat(foundry, handler).chat(request, deployment="kako-fast", key="k")
+    assert caught.value.retryable is retryable
+    assert caught.value.retry_after == retry_after
+
+
+async def test_foundry_chat_sends_no_tools_when_there_are_none(
+    make_settings: MakeSettings,
+) -> None:
+    settings = make_settings(
+        foundry_endpoint=ENDPOINT, model_fast="kako-fast", reasoning_effort_fast=None
+    )
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(json.loads(request.content))
+        return httpx2.Response(
+            200,
+            json=CHAT_RESPONSE
+            | {
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": " ok "},
+                    }
+                ]
+            },
+        )
+
+    request = ChatRequest("fast", (Message("user", "hi"),), max_output_tokens=16)
+    reply = await _chat(settings, handler).chat(request, deployment="kako-fast", key="k")
+    assert reply.text == "ok"
+    assert "tools" not in seen[0]
+    assert "reasoning_effort" not in seen[0]

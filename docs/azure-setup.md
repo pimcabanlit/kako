@@ -101,6 +101,28 @@ KAKO_AZURE_CLIENT_SECRET=<client secret value>
 - The `KAKO_` prefix keeps these apart from another project's `AZURE_*` variables in a shared
   environment. Kako never reads `AZURE_*` and never uses `DefaultAzureCredential`.
 
+## Spend controls and prices
+
+The Azure budget only alerts; Kako stops spending itself. `ModelManager.chat`
+(`backend/src/kako/agents/model_manager.py`) checks every call before sending it:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `KAKO_TURN_TOKEN_BUDGET` | 200,000 | Tokens one planning turn may use, all its calls together (input, output and hidden reasoning). A call that could pass it (its input, estimated high at one token per 3 UTF-8 bytes plus a little per message and tool, and its output cap) is refused |
+| `KAKO_DAILY_SPEND_CAP_USD` | 3 | US$ of real calls per UTC day, summed from `llm_call`. A call whose worst case would pass it is refused |
+| `KAKO_MODEL_MAX_RETRIES` | 2 | Retries after a rate limit (honouring `Retry-After`, at most 20 s), a timeout or a server error. Never after a 400 or a sign-in failure |
+| `KAKO_PRICE_STRONG_*`, `KAKO_PRICE_FAST_*` | gpt-5.4: 2.50 / 0.25 / 15.00; gpt-5-mini: 0.25 / 0.025 / 2.00 | US$ per million tokens: input, cached input, output. OpenAI's list prices (Nov 2026); Azure's Global Standard prices usually match, but check the [pricing page](https://azure.microsoft.com/pricing/details/azure-openai/) for the deployment type and update these if they differ |
+| `KAKO_REASONING_EFFORT_STRONG`, `_FAST` | low | GPT-5 reasoning effort. Hidden reasoning is billed as output |
+
+Each call's worst case is reserved on the turn and on the day before it is sent and released when its
+row is written, so specialists running in parallel can't each pass a check only one of them fits. (The
+reservation is per backend process; Kako runs one.) A call that times out or loses its connection may
+still have been billed, so it is logged at its worst case. Prices must be above 0: a free price would
+turn the cap off. Every attempt is an `llm_call` row with its cost, including refused
+(`budget_exceeded`) and failed ones. Rough cost of one planning turn at these prices: about US$0.10 to US$0.25 (the orchestrator on
+gpt-5.4, four specialists on gpt-5-mini); measured figures go on the metrics page. Tests and CI never
+call Foundry; `KAKO_MODEL_MODE=record` does, and needs Pim's yes first.
+
 ## Check
 
 From `backend/`:

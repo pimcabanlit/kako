@@ -6,12 +6,16 @@ Secrets are `SecretStr`: they never appear in a repr, a log line or an API respo
 
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlencode, urlsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from kako.agents.chat import ReasoningEffort, Tier
 
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
@@ -72,6 +76,35 @@ class Settings(BaseSettings):
     # reasoning tokens against this cap, and 64 can leave nothing for the answer.
     check_models_max_tokens: int = Field(default=256, ge=16, le=1024)
 
+    # How the model manager reaches a model (docs/architecture.md, "Demo mode"): `live` calls
+    # Foundry, `record` calls Foundry and saves each reply to `recorded_responses`, `replay` answers
+    # from that file with no network and no Azure settings.
+    model_mode: Literal["live", "record", "replay"] = "live"
+    recorded_responses: Path | None = Field(
+        default=None, description="The recording file `record` writes and `replay` reads"
+    )
+    # Replay refuses a recorded reply whose request has changed since it was recorded.
+    replay_strict: bool = True
+    # Spend controls (REVIEW.md rule 10). A planning turn's model calls together may use at most
+    # this many tokens (input and output, hidden reasoning included).
+    turn_token_budget: int = Field(default=200_000, ge=1_000, le=2_000_000)
+    # US dollars of real model calls per UTC day, summed from `llm_call`. Replays cost nothing.
+    daily_spend_cap_usd: Decimal = Field(default=Decimal(3), ge=0, le=50)
+    # Retries after a failed attempt that may pass next time (rate limit, timeout, server error).
+    model_max_retries: int = Field(default=2, ge=0, le=3)
+    model_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    reasoning_effort_strong: ReasoningEffort | None = "low"
+    reasoning_effort_fast: ReasoningEffort | None = "low"
+    # Per-token prices in US$ per million tokens, per tier, for `llm_call.cost_usd`. Defaults are
+    # OpenAI's list prices for gpt-5.4 and gpt-5-mini (Nov 2026); check Azure's pricing page for
+    # the deployment type in use (docs/azure-setup.md). Never 0: a free price turns the cap off.
+    price_strong_input: Decimal = Field(default=Decimal("2.50"), gt=0)
+    price_strong_cached: Decimal = Field(default=Decimal("0.25"), gt=0)
+    price_strong_output: Decimal = Field(default=Decimal("15.00"), gt=0)
+    price_fast_input: Decimal = Field(default=Decimal("0.25"), gt=0)
+    price_fast_cached: Decimal = Field(default=Decimal("0.025"), gt=0)
+    price_fast_output: Decimal = Field(default=Decimal("2.00"), gt=0)
+
     @field_validator("meko_mcp_url")
     @classmethod
     def _meko_url_safe(cls, value: str) -> str:
@@ -84,7 +117,14 @@ class Settings(BaseSettings):
         return value
 
     @field_validator(
-        "model_strong", "model_fast", "meko_datapack_id", "meko_langfuse_project_id", mode="before"
+        "model_strong",
+        "model_fast",
+        "meko_datapack_id",
+        "meko_langfuse_project_id",
+        "recorded_responses",
+        "reasoning_effort_strong",
+        "reasoning_effort_fast",
+        mode="before",
     )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
@@ -102,6 +142,15 @@ class Settings(BaseSettings):
         if parts.scheme != "https" or not parts.hostname:
             raise ValueError("must be an https:// URL, such as https://<resource>.openai.azure.com")
         return f"https://{parts.netloc}"
+
+    def prices(self, tier: Tier) -> tuple[Decimal, Decimal, Decimal]:
+        """US$ per million tokens for a tier: input, cached input, output."""
+        if tier == "strong":
+            return self.price_strong_input, self.price_strong_cached, self.price_strong_output
+        return self.price_fast_input, self.price_fast_cached, self.price_fast_output
+
+    def reasoning_effort(self, tier: Tier) -> ReasoningEffort | None:
+        return self.reasoning_effort_strong if tier == "strong" else self.reasoning_effort_fast
 
     @property
     def deployments(self) -> dict[str, str]:
