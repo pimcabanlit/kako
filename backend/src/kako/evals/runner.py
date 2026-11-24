@@ -3,8 +3,8 @@
 `kako test-set` calls `run_test_set`. Each question is asked of the demo household as of its date
 and as known at its time, through the same `run_turn` a household's session uses, so the plan, the
 steps, the number checks and the Meko turn are all kept, and the answer is scored in code
-(`evals.scoring`). The model is `KAKO_MODEL_MODE`'s: a recording replays with no network; recording
-calls Foundry and costs money, so it needs Pim's yes first.
+(`evals.scoring`). `kako test-set` replays a recording with no network unless
+`KAKO_MODEL_MODE=record`, which calls Foundry and costs money, so it needs Pim's yes first.
 
 A report (`Report.as_json`) holds the score, each question's checks, and its model calls, tokens,
 cost, Meko calls and seconds. Saved under `data/test-set/results/`, it is what the metrics page

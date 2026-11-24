@@ -21,7 +21,7 @@ from kako.agents.orchestrator import answer_turn
 from kako.agents.single import answer_alone
 from kako.agents.tools import TurnState
 from kako.engine import compute
-from kako.evals.questions import Question, TestSetError, centavos, read_test_set
+from kako.evals.questions import TEST_SET, Question, TestSetError, centavos, read_test_set
 from kako.evals.scoring import current_allocations, score
 from kako.facts.snapshot import take_snapshot
 from tests.conftest import MakeSettings
@@ -285,3 +285,18 @@ async def test_the_single_agent_answers_alone_with_the_same_checks(
         "run_what_if",
         "submit_answer",
     }
+
+
+def test_the_command_replays_unless_asked_to_record(make_settings: MakeSettings) -> None:
+    """A whole run on Foundry costs money: `kako test-set` replays its recording even in live mode
+    (the default), and only KAKO_MODEL_MODE=record calls the model."""
+    from kako.cli import settings_for_test_set
+
+    recorded = TEST_SET.parent.parent / "recorded"
+    for mode, expected in [("live", "replay"), ("replay", "replay"), ("record", "record")]:
+        settings = settings_for_test_set(make_settings(model_mode=mode), "single")
+        assert settings.model_mode == expected
+        assert settings.recorded_responses == recorded / "test-set-single.json"
+    mine = Path("elsewhere.json")
+    chosen = make_settings(model_mode="replay", recorded_responses=mine)
+    assert settings_for_test_set(chosen, "specialists").recorded_responses == mine

@@ -11,7 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kako.settings import get_settings
+from kako.settings import Settings, get_settings
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -110,8 +110,9 @@ def main(argv: list[str] | None = None) -> int:
 
     test_set = commands.add_parser(
         "test-set",
-        help="the agent test set: every question a turn on the demo household, scored in code "
-        "(KAKO_MODEL_MODE: replay by default from data/recorded/test-set-<architecture>.json)",
+        help="the agent test set: every question a turn on the demo household, scored in code. "
+        "It replays data/recorded/test-set-<architecture>.json; only KAKO_MODEL_MODE=record calls "
+        "Foundry (and records)",
     )
     test_set.add_argument(
         "--architecture",
@@ -527,6 +528,18 @@ async def _ask(
         await engine.dispose()
 
 
+def settings_for_test_set(settings: Settings, architecture: str) -> Settings:
+    """The test set replays unless asked to record: a whole run on Foundry costs real money, so
+    `live` (the default mode) replays too, and only `KAKO_MODEL_MODE=record` calls the model."""
+    from kako.evals.questions import TEST_SET
+
+    mode = "record" if settings.model_mode == "record" else "replay"
+    recording = settings.recorded_responses
+    if recording is None:
+        recording = TEST_SET.parent.parent / "recorded" / f"test-set-{architecture}.json"
+    return settings.model_copy(update={"model_mode": mode, "recorded_responses": recording})
+
+
 async def _test_set(
     architecture: str, only: str | None, *, household_id: uuid.UUID | None, save: bool
 ) -> int:
@@ -547,9 +560,7 @@ async def _test_set(
         # Every question is a Meko conversation: never spent from Meko Cloud's lifetime 1,000.
         print("The test set runs on local Meko only (MEKO_MCP_URL).", file=sys.stderr)
         return 1
-    if settings.model_mode != "live" and settings.recorded_responses is None:
-        recording = TEST_SET.parent.parent / "recorded" / f"test-set-{architecture}.json"
-        settings = settings.model_copy(update={"recorded_responses": recording})
+    settings = settings_for_test_set(settings, architecture)
     try:
         questions = read_test_set()
     except TestSetError as exc:

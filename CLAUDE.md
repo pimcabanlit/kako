@@ -196,7 +196,7 @@ uv run kako demo run                      # demo mode: migrate, load the whole s
 uv run kako demo run --test-set           # … and replay the agent test set for each recorded architecture
 uv run kako test-set                      # the agent test set's score, replayed from data/recorded/test-set-specialists.json (needs the household loaded through Dec 1)
 uv run kako test-set --architecture single --only q01,q07   # the single-agent baseline, some questions (--household, --save: data/test-set/results/)
-KAKO_MODEL_MODE=record uv run kako test-set   # record it on Foundry (spends; log a prediction in docs/tuning-log.md first)
+KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
 ```
 
 The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be running):
