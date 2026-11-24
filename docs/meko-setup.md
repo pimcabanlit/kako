@@ -133,6 +133,13 @@ Meko 1.20261116.0 does not list them.
 So the "Context Gaps" story works on Free: a weak search, the missing fact added (after the household
 approves it), and a replay that proves the fix. Each replay counts as one search.
 
+Kako reads both tools in `backend/src/kako/meko/mcp.py` (Phase 4, task 6). The tool reference names
+what each field means but not every key, so the answer is read leniently (the list under `results` or
+a similar key; `log_id` or `id`, `band` or `match_quality`, `best_score` or `score`; before and after
+nested or flat), and a field Kako needs that isn't there is an error, never a guess. Local Meko answers
+"unknown tool", which the adapter turns into `SelfLearningUnavailable`: `kako gaps` says so and changes
+nothing.
+
 ### 4. Meko Cloud's own extraction
 
 **Docs:** Meko Cloud extracts memories from saved turns in the background, from the user's own

@@ -278,7 +278,8 @@ queues the run; `kako dream run` runs what is queued, one at a time. The code is
    `kako meko sync`; an approval never fails because of it. It also shares what was approved for
    sharing (`upkeep/promote.py`): it adds the preference's sentence and promotes it, after checking
    Meko's promoted memories so a stopped run never promotes twice, or uploads the decision record
-   (`upkeep/records.py`), and links each in `meko_link`.
+   (`upkeep/records.py`), and links each in `meko_link`. Then, if a Context Gap answered by what
+   was approved now has its memory, its search is replayed (`kako/gaps/`, Meko Cloud only).
 
 Dreaming is a fixed workflow with one model step (extraction); the orchestrator and specialists are the
 agentic part. The docs and the video say so.
@@ -300,7 +301,7 @@ real run's misses are the model's.
 | Knowledge base | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) | Cited excerpts in the why panel |
 | Artifacts | Each plan report | Download on the plan screen |
 | Postgres in the datapack (AMP) | The household's structured data, if the Phase 1 test passes; a scenario kept as an AMP branch (Should) | Architecture slide; what-if screen |
-| Self-learning (Context Gaps) | A **Must** if the Phase 1 test finds the tools on our account. `selflearning_shortfalls` lists `context_search` queries that came back Mid or Low (best score under 0.75); Kako asks the household; the answer goes through a proposal; `selflearning_verify` replays the search and reports `improved`. Kako's brief uses `context_search`, which is the only search the log counts. Each replay counts as one search, so it goes through the call counter | "Kako would like to know" card; before and after scores on the metrics page |
+| Self-learning (Context Gaps) | Built (Phase 4, task 6), on Meko Cloud only (local Meko has no self-learning tools). `selflearning_query_log` lists `context_search` queries that came back Mid or Low (best score under 0.75); Kako keeps each shortfall of coverage as a `context_gap` with a question written by code; an adult ties the proposal that answers it (one that writes a fact); once that is approved and upkeep has written its memory, `selflearning_verify` replays the search, and the outcome and the score after are kept. Kako's brief uses `context_search`, which is the only search the log counts. Each replay counts as one search, so it goes through the call counter, at most 5 a run | "Kako would like to know" card (Phase 5); before and after scores on the metrics page |
 | Metrics | `datapack_metrics` (context size, efficiency, relevance) next to Kako's own token and number-check counts | The metrics page |
 
 What Meko does not do, and Kako adds (see [concept.md](concept.md#what-meko-already-does-and-what-kako-adds)):
@@ -312,7 +313,7 @@ current, what it replaced and which plans and decisions depended on it.
 | Component | Where | What it does |
 | --- | --- | --- |
 | Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and shadcn/ui. Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas |
-| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `POST /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), plans, why, diff, facts timeline, decisions, what-ifs, metrics |
+| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `POST /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans, why, diff, facts timeline, decisions, what-ifs, metrics |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |
@@ -320,6 +321,7 @@ current, what it replaced and which plans and decisions depended on it.
 | Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), the tool loop with its bounds and the step log, recorded responses, orchestrator, the four specialists, brief builder, tools, number check, prompts |
 | Dreaming | `backend/src/kako/dreaming/` | The job (`job.py`), extraction (`extract.py`), the claims and the checks and classification in code (`claims.py`, `classify.py`, pure), proposals; patterns with task 4 |
 | Meko upkeep | `backend/src/kako/upkeep/` | Kako's own memory of each fact: the sentence (`sentences.py`) and the steps owed (`plan.py`), both pure; carrying them out as `kako:upkeep` (`sync.py`: after every approval, at the end of demo mode, `kako meko sync`); sharing what was approved for it, a promoted preference or a decision record (`promote.py`, `records.py`); V-13 (`check.py`, `kako meko check`) |
+| Context Gaps | `backend/src/kako/gaps/` | Which weak searches to ask about and the question (`questions.py`, pure); collecting them from Meko's search log, tying an answer, dismissing, and replaying the search once the answer is in Meko (`store.py`); `kako gaps`, `/api/v1/gaps` |
 | Meko adapter | `backend/src/kako/meko/` | One interface for every Meko call, an MCP client implementation, an in-memory fake for unit tests, the call counter and quota guard |
 | Database | `backend/src/kako/db/` | SQLAlchemy 2 async models, repositories, Alembic migrations |
 | Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, the Foundry endpoint, deployment names and their prices, budgets, demo mode |
