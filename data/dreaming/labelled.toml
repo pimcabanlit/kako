@@ -1,0 +1,184 @@
+# Dreaming's labelled set (Phase 4, task 3): scripted sessions with what a person would expect
+# dreaming to propose after each one.
+#
+# Each case is a session on the demo household (data/demo-household/, loaded through Dec 1, 2026),
+# as of `on` and as known at `known_at`, so Kako holds the facts the household had then. Its turns
+# are the household's words, each with its speaker (a key in people.csv) and a seed unique across
+# the set. `kako dream eval` runs extraction (the one model step) and dreaming's checks over each
+# case and scores what it would propose (backend/src/kako/evals/dreaming.py):
+#
+#   expect  the proposals a person would expect: each must be found
+#   maybe   proposals that are fine either way: neither found nor wrong (a raise as a life event)
+#
+# Anything else dreaming would propose is wrong. Each proposal is written as
+#   { kind = "new_fact" | "replace_fact", entity = <ref or "">, attribute, value, valid_from }
+#   { kind = "retract_fact", entity, attribute }         the fact in force that is retracted
+#   { kind = "life_event", event = <kind>, on = <day> }
+# with values as the household gave them (pesos "68000", a rate "0.095", a whole number, a date).
+#
+# The set passes when at least 90% of the expected proposals are found and no proposal has a number
+# that isn't in its quote (V-09). tests/test_evals_dreaming.py holds every case to the demo
+# household, so the set can't drift from it.
+
+version = 1
+
+# --- Nov 20, 2026: after the November statements, before Mara's news. --------------------------
+
+[[case]]
+id = "d01"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "Session 4's news: a life event and the salary it changes, from Dec 1."
+turns = [
+  { speaker = "mara", seed = "d01:t1", message = "Mara here, with news: I got a new job! I start on Dec 1, and my take-home pay will be ₱68,000 a month." },
+]
+expect = [
+  { kind = "life_event", event = "new_job", on = 2026-12-01 },
+  { kind = "replace_fact", entity = "income:mara-s-salary", attribute = "income.monthly_net", value = "68000", valid_from = 2026-12-01 },
+]
+
+[[case]]
+id = "d02"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "A raise from a later date: a replacement from that day."
+turns = [
+  { speaker = "jun", seed = "d02:t1", message = "Jun here. Good news from work: my take-home pay goes up to ₱51,000 a month from January 1, 2027." },
+]
+expect = [
+  { kind = "replace_fact", entity = "income:jun-s-salary", attribute = "income.monthly_net", value = "51000", valid_from = 2027-01-01 },
+]
+maybe = [
+  { kind = "life_event", event = "raise", on = 2027-01-01 },
+]
+
+[[case]]
+id = "d03"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "A correction: the value Kako holds was wrong from the start, so it is retracted and the right one takes its place from the same day."
+turns = [
+  { speaker = "mara", seed = "d03:t1", message = "Sorry, I had it wrong when we started: rent and utilities are ₱38,000 a month, not ₱40,000." },
+]
+expect = [
+  { kind = "retract_fact", entity = "expense:rent-and-utilities", attribute = "expense.monthly_amount" },
+  { kind = "new_fact", entity = "expense:rent-and-utilities", attribute = "expense.monthly_amount", value = "38000", valid_from = 2026-03-01 },
+]
+
+[[case]]
+id = "d04"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "A value Kako holds already (the November statement): nothing to propose."
+turns = [
+  { speaker = "jun", seed = "d04:t1", message = "Jun here. The card is at ₱76,880 after the November statement. How long until it's paid off at this rate?" },
+]
+expect = []
+
+[[case]]
+id = "d05"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "A what-if question is not a fact: nothing to propose."
+turns = [
+  { speaker = "mara", seed = "d05:t1", message = "What if we paid ₱15,000 a month on the card instead? Would we clear it before June?" },
+]
+expect = []
+
+[[case]]
+id = "d06"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "Two new facts Kako had none of, true from the day they were said."
+turns = [
+  { speaker = "mara", seed = "d06:t1", message = "Something I never told you: I get paid on the 15th of each month, and I also get a 13th month pay of ₱52,000." },
+]
+expect = [
+  { kind = "new_fact", entity = "income:mara-s-salary", attribute = "income.pay_day", value = "15", valid_from = 2026-11-20 },
+  { kind = "new_fact", entity = "income:mara-s-salary", attribute = "income.thirteenth_month", value = "52000", valid_from = 2026-11-20 },
+]
+
+[[case]]
+id = "d07"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "Two people, two turns, two changes: one from a later date, one from now."
+turns = [
+  { speaker = "mara", seed = "d07:t1", message = "Lia's school sent the new fees: school and transport will be ₱12,000 a month from January 2027." },
+  { speaker = "jun", seed = "d07:t2", message = "Then let's cut eating out. From now on we spend ₱4,000 a month on it." },
+]
+expect = [
+  { kind = "replace_fact", entity = "expense:school-and-transport", attribute = "expense.monthly_amount", value = "12000", valid_from = 2027-01-01 },
+  { kind = "replace_fact", entity = "expense:eating-out", attribute = "expense.monthly_amount", value = "4000", valid_from = 2026-11-20 },
+]
+
+[[case]]
+id = "d08"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "A household setting changed: the emergency fund's target in months."
+turns = [
+  { speaker = "jun", seed = "d08:t1", message = "We talked it over and we want the emergency fund to cover 6 months of expenses, not 3." },
+]
+expect = [
+  { kind = "replace_fact", entity = "", attribute = "household.emergency_months_target", value = "6", valid_from = 2026-11-20 },
+]
+
+[[case]]
+id = "d09"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "Wishes and plans they are only thinking about: nothing to propose."
+turns = [
+  { speaker = "mara", seed = "d09:t1", message = "Maybe someday we'll buy a second car, around ₱800,000, but not now. We might also move to a bigger place in a couple of years." },
+]
+expect = []
+
+[[case]]
+id = "d10"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "A correction with no right value: a value that shouldn't be there is retracted."
+turns = [
+  { speaker = "jun", seed = "d10:t1", message = "One mistake in what you have: I don't get a 13th month pay at my job. Please take that out." },
+]
+expect = [
+  { kind = "retract_fact", entity = "income:jun-s-salary", attribute = "income.thirteenth_month" },
+]
+
+[[case]]
+id = "d11"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "A life event with a month and its year: from the first of the month."
+turns = [
+  { speaker = "mara", seed = "d11:t1", message = "Big news: we're expecting a baby in April 2027!" },
+]
+expect = [
+  { kind = "life_event", event = "baby", on = 2027-04-01 },
+]
+
+[[case]]
+id = "d12"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "A rate corrected: the old rate retracted, the right one from the same day."
+turns = [
+  { speaker = "jun", seed = "d12:t1", message = "I misread the car loan papers: the annual rate is 9.5%, not 9%." },
+]
+expect = [
+  { kind = "retract_fact", entity = "debt:car-loan", attribute = "debt.annual_rate" },
+  { kind = "new_fact", entity = "debt:car-loan", attribute = "debt.annual_rate", value = "0.095", valid_from = 2026-03-01 },
+]
+
+[[case]]
+id = "d13"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00
+why = "Taglish, as a Filipino household writes: a new value from now."
+turns = [
+  { speaker = "mara", seed = "d13:t1", message = "Tumaas na ang kuryente, so rent and utilities are now ₱42,000 a month." },
+]
+expect = [
+  { kind = "replace_fact", entity = "expense:rent-and-utilities", attribute = "expense.monthly_amount", value = "42000", valid_from = 2026-11-20 },
+]
