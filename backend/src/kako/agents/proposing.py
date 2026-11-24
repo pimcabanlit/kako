@@ -24,7 +24,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Final
 
 from kako.agents.chat import ToolSpec
@@ -42,7 +42,8 @@ from kako.facts.proposals import (
     fact_target,
     life_event_payload,
 )
-from kako.facts.values import FactValueError, check_value, parse_money
+from kako.facts.values import FactValueError
+from kako.facts.values import parse_stated as stated
 
 MAX_CALLS: Final = 2  # propose_change calls a turn
 MAX_FACTS: Final = 4  # facts in one call
@@ -99,28 +100,11 @@ def _date(raw: Any, name: str) -> date:
 
 
 def parse_stated(attribute_key: str, text: str) -> FactValue:
-    """A value as the household stated it, read as its attribute's type: pesos (₱68,000,
-    68000.00), a rate (3.5% or 0.035), a whole number, a date (2026-12-01) or text."""
-    attr = attribute(attribute_key)
-    raw = text.strip()
-    value: FactValue
+    """`facts.values.parse_stated`, refusing to the model what doesn't fit."""
     try:
-        if attr.value_type == "money":
-            value = parse_money(re.sub(r"^(?:₱|PHP ?|P(?=\d))|,|\s", "", raw, flags=re.I))
-        elif attr.value_type == "rate":
-            value = (
-                Decimal(raw[:-1].strip()) / 100 if raw.endswith("%") else Decimal(raw)
-            ).normalize()
-        elif attr.value_type == "int":
-            value = int(raw.replace(",", ""))
-        elif attr.value_type == "date":
-            value = date.fromisoformat(raw)
-        else:
-            value = raw
-        check_value(attr, value)
-    except (ValueError, InvalidOperation, FactValueError) as exc:
+        return stated(attribute_key, text)
+    except ValueError as exc:
         raise ToolInputError(f"{attribute_key}: {exc}") from None
-    return value
 
 
 def _shown(attribute_key: str, value: FactValue) -> str:

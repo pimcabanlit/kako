@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -84,5 +85,31 @@ def parse_value(attribute_key: str, text: str) -> FactValue:
         value = date.fromisoformat(text)
     else:
         value = text
+    check_value(attr, value)
+    return value
+
+
+def parse_stated(attribute_key: str, text: str) -> FactValue:
+    """A value as the household stated it, read as its attribute's type: pesos (₱68,000,
+    68000.00), a rate (3.5% or 0.035), a whole number, a date (2026-12-01) or text. Raises
+    ValueError (a FactValueError for a value that doesn't fit the attribute)."""
+    attr = attribute(attribute_key)
+    raw = text.strip()
+    value: FactValue
+    try:
+        if attr.value_type == "money":
+            value = parse_money(re.sub(r"^(?:₱|PHP ?|P(?=\d))|,|\s", "", raw, flags=re.I))
+        elif attr.value_type == "rate":
+            value = (
+                Decimal(raw[:-1].strip()) / 100 if raw.endswith("%") else Decimal(raw)
+            ).normalize()
+        elif attr.value_type == "int":
+            value = int(raw.replace(",", ""))
+        elif attr.value_type == "date":
+            value = date.fromisoformat(raw)
+        else:
+            value = raw
+    except InvalidOperation as exc:
+        raise ValueError(f"{raw!r} isn't a {attr.value_type} value") from exc
     check_value(attr, value)
     return value
