@@ -1,15 +1,15 @@
 {
  "mode": "record",
- "at": "2026-11-24T11:34:45.890512+00:00",
+ "at": "2026-11-24T11:45:48.844855+00:00",
  "expected": 15,
- "found": 13,
- "score": "0.867",
- "wrong": 2,
+ "found": 15,
+ "score": "1.000",
+ "wrong": 0,
  "unquoted": 0,
- "passed": false,
- "input_tokens": 32541,
- "output_tokens": 2165,
- "cost_usd": "0.075813",
+ "passed": true,
+ "input_tokens": 34296,
+ "output_tokens": 2029,
+ "cost_usd": "0.074996",
  "results": [
   {
    "id": "d01",
@@ -155,19 +155,16 @@
   {
    "id": "d08",
    "expected": 1,
-   "found": [],
-   "missed": [
+   "found": [
     "replace_fact household/household.emergency_months_target = 6 from 2026-11-20"
    ],
-   "wrong": [
-    "Retract The household: household.emergency_months_target = 3 (since Mar 1, 2026): said to be wrong",
-    "The household: household.emergency_months_target = 6 from Mar 1, 2026, in its place"
-   ],
+   "missed": [],
+   "wrong": [],
    "unquoted": [],
    "findings": [
     {
-     "outcome": "retract",
-     "shown": "The household: household.emergency_months_target = 6 from Mar 1, 2026, not 3",
+     "outcome": "replace",
+     "shown": "The household: household.emergency_months_target = 6 from Nov 20, 2026, replacing 3 (since Mar 1, 2026)",
      "reason": ""
     }
    ],
@@ -207,17 +204,17 @@
   {
    "id": "d11",
    "expected": 1,
-   "found": [],
-   "missed": [
+   "found": [
     "life_event baby on 2027-04-01"
    ],
+   "missed": [],
    "wrong": [],
    "unquoted": [],
    "findings": [
     {
-     "outcome": "refused",
-     "shown": "Life event",
-     "reason": "occurs_on '' isn't a date written as \"2026-12-01\""
+     "outcome": "new",
+     "shown": "Life event (baby) on Apr 1, 2027: expecting a baby",
+     "reason": ""
     }
    ],
    "model_calls": 1,

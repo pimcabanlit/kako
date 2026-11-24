@@ -438,3 +438,11 @@ it led to.
     to US$0.25.
 - **Run:** `KAKO_MODEL_MODE=record uv run kako dream eval --save` on the same fresh database (the
   demo household through Dec 1, gpt-5.4), recorded to `data/recorded/dreaming.json`.
+  Spent **US$0.0750** (13 calls, 34,296 tokens in and 2,029 out).
+- **Result:** **15 of 15 found (100%), 0 wrong, 0 unquoted: PASS**, as predicted. d08 is now a change
+  from Nov 20 and d11's baby is dated Apr 1, 2027. The corrections held: d03, d10 and d12 are still
+  retractions with the right value from the old date. d04, d05 and d09 handed in nothing. Every
+  call's shape was right the first time. `kako dream eval` replays this recording with no Foundry
+  and the same score.
+- **Root cause / change made:** none needed. Phase 4, task 3's first measure (at least 90% found, none
+  unquoted) is met on the real model. The two runs together cost US$0.15 of the US$0.75 Pim approved.

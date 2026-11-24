@@ -173,6 +173,8 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    each settles to linked or deleted (`dreaming/candidates.py`, `dreaming/memories.py`,
    `kako dream settle`); `kako dream check` is V-14, and passes on local Meko after approval and after
    rejection.
+   On Foundry (tuning log entries 10 and 11): 13 of 15 found on the first run, then 15 of 15 (100%),
+   none wrong or unquoted, after the prompt said a change of mind isn't a correction.
 4. **Patterns and promotion.** Option tags, the preference pattern, and promotion with a second
    confirmation: a preference to collective memory, a decision record to shared knowledge.
    Done when: after sessions 1 to 3 (Mara in some, Jun in others) dreaming proposes the flexibility
