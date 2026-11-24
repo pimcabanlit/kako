@@ -142,6 +142,41 @@ def main(argv: list[str] | None = None) -> int:
         help="write the report to data/test-set/results/<architecture>.json (whole set only)",
     )
 
+    dream = commands.add_parser(
+        "dream",
+        help="dreaming: after a session ends, propose what the household stated that Kako "
+        "doesn't hold (pending until a person approves)",
+    )
+    dream_commands = dream.add_subparsers(dest="dream_command", required=True)
+    end = dream_commands.add_parser("end", help="end a session and queue its dreaming run")
+    end.add_argument("session", type=uuid.UUID, help="the session's id")
+    end.add_argument(
+        "--at", type=datetime.fromisoformat, help="when it ended, with its zone (default: now)"
+    )
+    dream_run = dream_commands.add_parser(
+        "run",
+        help="run the queued dreaming runs (or one session's), one at a time "
+        "(KAKO_MODEL_MODE: live, record or replay)",
+    )
+    dream_run.add_argument("--session", type=uuid.UUID, help="only this session's run")
+    dream_run.add_argument(
+        "--at",
+        type=datetime.fromisoformat,
+        help="the time its proposals are made, with its zone (default: now)",
+    )
+    dream_eval = dream_commands.add_parser(
+        "eval",
+        help="dreaming's labelled set on the demo household, scored in code. It replays "
+        "data/recorded/dreaming.json; only KAKO_MODEL_MODE=record calls Foundry (and records)",
+    )
+    dream_eval.add_argument("--only", help="case ids, such as d01,d03")
+    dream_eval.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+    dream_eval.add_argument(
+        "--save",
+        action="store_true",
+        help="write the report to data/dreaming/results.json (whole set only)",
+    )
+
     proposals = commands.add_parser(
         "proposals", help="what waits for the household's yes or no, and their decision"
     )
@@ -225,6 +260,12 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(
             _test_set(args.architecture, args.only, household_id=args.household, save=args.save)
         )
+    if args.command == "dream":
+        if args.dream_command == "end":
+            return asyncio.run(_dream_end(args.session, args.at))
+        if args.dream_command == "run":
+            return asyncio.run(_dream_run(args.session, args.at))
+        return asyncio.run(_dream_eval(args.only, household_id=args.household, save=args.save))
     parser.error(f"unknown command {args.command}")
     return 2
 
@@ -856,6 +897,189 @@ async def _test_set(
         )
         print(f"Saved {path}")
     return 0
+
+
+async def _dream_end(session_id: uuid.UUID, at: datetime | None) -> int:
+    from kako.db.engine import make_engine
+    from kako.dreaming.job import DreamError, end_session
+
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    if at is not None and at.tzinfo is None:
+        print("--at needs its time zone, such as +08:00.", file=sys.stderr)
+        return 1
+    engine = make_engine(settings.database_url)
+    try:
+        run_id = await end_session(engine, session_id, at or datetime.now(UTC))
+    except DreamError as exc:
+        print(f"Can't end it: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+    print(f"Session {session_id} ended; dreaming run {run_id} is queued (kako dream run).")
+    return 0
+
+
+async def _dream_run(session_id: uuid.UUID | None, at: datetime | None) -> int:
+    from sqlalchemy import select
+
+    from kako.agents.chat import ModelError
+    from kako.agents.model_manager import chat_backend
+    from kako.db.engine import make_engine
+    from kako.db.meko_log import DbCallLog
+    from kako.dreaming.job import DREAM_RUN, DreamError, queued_runs, run_dream
+    from kako.health import safe_error
+    from kako.meko.client import MekoError
+    from kako.meko.mcp import open_meko
+
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    if at is not None and at.tzinfo is None:
+        print("--at needs its time zone, such as +08:00.", file=sys.stderr)
+        return 1
+    try:
+        backend = chat_backend(settings)
+    except ModelError as exc:
+        print(f"No model to dream with: {exc}", file=sys.stderr)
+        return 1
+    engine = make_engine(settings.database_url)
+    failed = 0
+    try:
+        if session_id is None:
+            runs = await queued_runs(engine)
+        else:
+            async with engine.connect() as conn:
+                found = (
+                    await conn.execute(
+                        select(DREAM_RUN.c.id).where(DREAM_RUN.c.session_id == session_id)
+                    )
+                ).scalar_one_or_none()
+            if found is None:
+                print("That session has no dreaming run: end it first.", file=sys.stderr)
+                return 1
+            runs = [found]
+        if not runs:
+            print("No dreaming run is waiting.")
+        for run_id in runs:
+            calls = DbCallLog(engine)
+            try:
+                async with open_meko(settings, calls, max_calls=4) as meko:
+                    report = await run_dream(
+                        engine, meko, settings, backend, run_id, now=at or datetime.now(UTC)
+                    )
+            except (DreamError, MekoError, ModelError) as exc:
+                print(f"Dreaming run {run_id} failed: {safe_error(exc)}", file=sys.stderr)
+                failed += 1
+                continue
+            if not report.ran:
+                print(f"Dreaming run {run_id}: {report.status} already, nothing to do.")
+                continue
+            print(
+                f"Dreaming run {run_id} (session {report.session_id}): "
+                f"{len(report.proposed)} proposal(s) waiting for a yes."
+            )
+            for o in report.outcomes:
+                why = f": {o.reason}" if o.reason else ""
+                print(f"- {o.outcome}: {o.finding.shown}{why}")
+    finally:
+        await engine.dispose()
+    return 1 if failed else 0
+
+
+async def _dream_eval(only: str | None, *, household_id: uuid.UUID | None, save: bool) -> int:
+    import json
+
+    from sqlalchemy import select
+
+    from kako.agents.chat import ModelError
+    from kako.agents.model_manager import chat_backend
+    from kako.db.engine import make_engine
+    from kako.db.models import Household
+    from kako.demo.sessions import RECORDED_DIR
+    from kako.evals.dreaming import (
+        LABELLED,
+        CaseResult,
+        LabelledError,
+        read_labelled,
+        render_labelled,
+        run_labelled,
+    )
+
+    settings = get_settings()
+    database_url = settings.database_url
+    if database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    # Like the test set: it replays unless asked to record, since a whole run spends.
+    mode = "record" if settings.model_mode == "record" else "replay"
+    recording = settings.recorded_responses or RECORDED_DIR / "dreaming.json"
+    settings = settings.model_copy(update={"model_mode": mode, "recorded_responses": recording})
+    try:
+        cases = read_labelled()
+    except LabelledError as exc:
+        print(f"The labelled set can't be read: {exc}", file=sys.stderr)
+        return 1
+    if only:
+        wanted = {c.strip() for c in only.split(",") if c.strip()}
+        unknown = wanted - {c.id for c in cases}
+        if unknown:
+            print(f"No such cases: {', '.join(sorted(unknown))}", file=sys.stderr)
+            return 1
+        if save:
+            print("--save writes a whole run: leave out --only.", file=sys.stderr)
+            return 1
+        cases = tuple(c for c in cases if c.id in wanted)
+    try:
+        backend = chat_backend(settings)
+    except ModelError as exc:
+        print(f"No model to dream with: {exc}", file=sys.stderr)
+        return 1
+    engine = make_engine(database_url)
+    try:
+        async with engine.connect() as conn:
+            chosen = await _household(conn, household_id)
+            if chosen is None:
+                return 1
+            table = Household.__table__
+            name = (
+                await conn.execute(select(table.c.name).where(table.c.id == chosen))
+            ).scalar_one()
+
+        def progress(r: CaseResult) -> None:
+            note = f" ({r.error})" if r.error else ""
+            print(
+                f"{r.case.id}: {len(r.found)} of {len(r.case.expect)} found{note}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        try:
+            report = await run_labelled(
+                engine,
+                settings,
+                backend,
+                cases,
+                household_id=chosen,
+                household_name=name,
+                progress=progress,
+            )
+        except LabelledError as exc:
+            print(f"The labelled set doesn't fit this household: {exc}", file=sys.stderr)
+            return 1
+    finally:
+        await engine.dispose()
+    print(render_labelled(report))
+    if save:
+        path = LABELLED.parent / "results.json"
+        path.write_text(
+            json.dumps(report.as_json(), indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        print(f"Saved {path}")
+    return 0 if report.passed else 1
 
 
 def _shown(figure: Figure) -> str:

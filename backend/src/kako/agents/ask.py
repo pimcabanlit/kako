@@ -250,7 +250,16 @@ async def run_turn(
     message_id = meko_error = None
     if meko is not None and conversation is not None:
         meko_turn = trace_turn(
-            message, answer, saved, state, calc_run_id, session, seed, proposed, before_run_id
+            message,
+            answer,
+            saved,
+            state,
+            calc_run_id,
+            session,
+            seed,
+            proposed,
+            before_run_id,
+            speaker,
         )
         try:
             message_id = await meko.add_turn(conversation, meko_turn, agent_id=AGENT)
@@ -346,6 +355,7 @@ def trace_turn(
     seed: str,
     proposed: Sequence[StoredProposal] = (),
     before_run_id: uuid.UUID | None = None,
+    speaker: uuid.UUID | None = None,
 ) -> Turn:
     """The turn as Meko keeps it: the household's words and the reply, the steps taken, why, and
     the ids of what Kako stored, so the trace and the tables can be read side by side. Built by
@@ -394,6 +404,8 @@ def trace_turn(
         "kako_calc_run_id": str(calc_run_id),
         "kako_what_if_runs": {ref: str(run) for ref, run in state.stored.items()},
     }
+    if speaker is not None:  # who wrote the message: dreaming names them on what it proposes
+        metadata["kako_said_by"] = str(speaker)
     # Numbers the check couldn't match, by text: Meko keeps the texts as shown, so a reader of the
     # trace (or Meko's own extraction) can tell which numbers no figure, fact or said amount backs.
     checks = [*answer.checks, *(p.check for p in answer.proposals if p.check is not None)]

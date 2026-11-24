@@ -175,12 +175,12 @@ This is the centre of the live demo.
    value Kako already holds, a life event it already has, or `plan.allocation` (chosen by accepting a
    plan) is refused. The turn keeps what it holds as **pending proposals** with her words as evidence
    and her as the speaker, a life event with its facts in one transaction, and the answer says what
-   waits for a yes. Nothing changes until then. (Dreaming would find the same thing after the session;
-   proposals have an idempotency key, so it can't be proposed twice.)
+   waits for a yes. Nothing changes until then. (Dreaming finds the same thing after the session, under
+   the same idempotency key, and reports it as already proposed: never twice.)
 2. The household approves (`/api/v1/proposals/approve`, `kako proposals approve`). The fact store
    inserts the new fact, closes the old one (`valid_to` = Dec 1, `status` = `replaced`, `replaced_by` =
    the new one) and records the life event. (Rewriting the old memory in Meko in the past tense comes
-   with dreaming and promotion, Phase 4, tasks 3 and 4.)
+   with Meko upkeep, Phase 4, task 5.)
 3. The session's next turn is a **replan** (`agents/replan_store.py`): code finds the changes approved
    from this session's turns, as known at the turn, and takes the turn as of the latest day one of them
    takes effect (Dec 1). It recomputes the run the household last decided on, from the facts as Kako
@@ -209,39 +209,61 @@ and Jun's question answered as the replan.
 ## How dreaming works
 
 A background job queued when a session ends (`dream_run`, one per session, so a rerun does nothing).
+Ending a session (`POST /api/v1/sessions/{id}/end`, or `kako dream end`) refuses any more turns and
+queues the run; `kako dream run` runs what is queued, one at a time. The code is `kako/dreaming/`.
 
-1. **Read** the session's turns from Meko (`conversation_get`), the memories Meko extracted from those
-   turns on its own (Meko Cloud runs extraction automatically; their `source` is `extract`), Meko's own
-   Learnings (its top 5 candidates for sharing), the snapshot, the active decisions and the pending
-   proposals.
-2. **Extract** candidate claims with the model, as structured output: the entity, the attribute, the
-   value **as quoted**, when it takes effect, the quote, and who said it. The model copies; it does not
-   calculate. Meko's extracted memories are matched to these claims, so one fact yields one proposal.
-3. **Check in code.** Every number in a candidate must appear in its quote (V-09). The candidate is
-   matched to an entity and attribute in the catalog, and compared with the snapshot: **same** (dropped),
-   **new**, **replace** (a later value for the same thing), **retract** (the household said an earlier
-   value was wrong) or **conflict** (two values for the same day; asked as a question).
+1. **Read** the session's turns from Meko (`conversation_get`, as the orchestrator, the agent that
+   created the conversation: Meko answers no other). Only the turns Kako kept for this session count:
+   each carries its seed, the session's id, the household's date and who said it (`kako_said_by`) in
+   its metadata. Then the household's facts and life events as known at the run, with the life events
+   still waiting for a yes. (Built. Still to come with Phase 4, task 3's second part: the memories
+   Meko extracted from those turns on its own and Meko's Learnings, as candidates.)
+2. **Extract** candidate claims with the model, as structured output: one call to one tool,
+   `submit_claims`, with the turn, the quote, a life event if any, and each fact's entity, attribute,
+   value **as quoted** and the day it takes effect, and whether the household said a value Kako holds
+   was wrong. The model copies; it does not calculate. It reads only the household's words (Kako's
+   replies hold engine figures, which are not theirs), wrapped in `<data>` blocks, with the entities
+   by their refs, the attributes, and what Kako holds on the session's date. A wrong shape goes back to
+   it once; nothing else does (`dreaming/extract.py`, prompt `agents/prompts/dreaming.md`).
+3. **Check in code** (`dreaming/classify.py`, pure). The turn is the session's and the quote is in it,
+   word for word; the entity and attribute fit; every number in a candidate appears in its quote
+   (V-09). A claim that fails is **refused**, with why. Then each fact is compared with what Kako holds
+   on the day it takes effect: **same** (dropped), **new**, **replace** (a later value for the same
+   thing), **retract** (the household said a value was wrong: the retraction, and the right value from
+   the same day as a new fact, its date quoted from the fact it replaces) or **conflict** (two values
+   for the same day, or one older than a value Kako has; nothing is proposed, and the run lists it to
+   ask). Within one session the same value said twice is proposed once, two values for one day are a
+   conflict, and a second change to the same thing waits for the first (**deferred**).
 4. **Patterns.** Code counts the household's decisions by the tags of the option they chose (such as
    `favours_flexibility`, from a fixed list in `decision_option.tags`; the orchestrator tags options when
    it proposes them, and code rejects a tag that is not on the list). Three choices the same way across at least two sessions, with none the other
-   way, produce a `preference_pattern` proposal, citing each decision and session.
+   way, produce a `preference_pattern` proposal, citing each decision and session. (Phase 4, task 4.)
 5. **Promotion candidates.** An approved preference or decision that has held for two sessions is
    proposed for promotion, with the plain warning that promotion can't be undone. A preference goes to
    **collective memory** (a short fact every agent retrieves). A decision goes to **shared knowledge** as
    a decision-record document: the question, the option chosen, the options rejected with their reasons,
-   and the assumptions.
-6. **Propose.** Everything lands in the approvals inbox with an explanation and its evidence. Nothing
-   becomes household knowledge until a person says yes.
+   and the assumptions. (Phase 4, task 4.)
+6. **Propose.** Everything lands in the approvals inbox with an explanation and its evidence: the quote,
+   the turn it was said in (`<conversation id>:<seed>`) and who said it, with the run's id. A claim's
+   proposals are stored together (a life event with its facts, a retraction with the value that takes
+   its place). The idempotency key is the turn's, as in the session, so a change the session already
+   proposed from the same words is **already** and never proposed twice. Nothing becomes household
+   knowledge until a person says yes; a fact approved from dreaming's proposal says so (`source_kind`
+   `dreaming`). The run keeps what it found in `dream_run.counts`.
 7. **On approval**, the fact store writes the rows and the Meko adapter brings Meko in line: add the new
    memory (or link Meko's extracted one), rewrite a replaced one, delete a retracted one, promote what was
    approved for sharing. **On rejection**, an extracted memory the household says is wrong is deleted, so
-   no agent finds it again. Every extracted memory ends either linked to a fact or deleted.
+   no agent finds it again. Every extracted memory ends either linked to a fact or deleted. (Task 3's
+   second part for extracted memories; task 5 for the rest.)
 
 Dreaming is a fixed workflow with one model step (extraction); the orchestrator and specialists are the
 agentic part. The docs and the video say so.
 
-Dreaming is tested against a labelled set: scripted sessions with the facts, replacements and patterns
-a person would expect, scored for what it found, missed and wrongly proposed.
+Dreaming is tested against a labelled set (`data/dreaming/labelled.toml`, `kako dream eval`): scripted
+sessions on the demo household with the proposals a person would expect, scored in code for what it
+found, missed and wrongly proposed, and for any number not in its quote. It passes at 90% found with
+none unquoted. A careful extraction scores every case exactly (`tests/test_evals_dreaming.py`), so a
+real run's misses are the model's.
 
 ## How Kako uses each part of Meko
 
@@ -272,7 +294,7 @@ current, what it replaced and which plans and decisions depended on it.
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |
 | Decisions | `backend/src/kako/decisions/` (pure) and `backend/src/kako/db/proposal_store.py` (the writes) | The fixed list of option tags, the facts a decision rests on (`assumptions.py`), and decision records written on approval with their options and assumptions; "to revisit" is F-DIFF-1 |
 | Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), the tool loop with its bounds and the step log, recorded responses, orchestrator, the four specialists, brief builder, tools, number check, prompts |
-| Dreaming | `backend/src/kako/dreaming/` | The job, extraction, classification, patterns, proposals |
+| Dreaming | `backend/src/kako/dreaming/` | The job (`job.py`), extraction (`extract.py`), the claims and the checks and classification in code (`claims.py`, `classify.py`, pure), proposals; patterns with task 4 |
 | Meko adapter | `backend/src/kako/meko/` | One interface for every Meko call, an MCP client implementation, an in-memory fake for unit tests, the call counter and quota guard |
 | Database | `backend/src/kako/db/` | SQLAlchemy 2 async models, repositories, Alembic migrations |
 | Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, the Foundry endpoint, deployment names and their prices, budgets, demo mode |
@@ -290,7 +312,7 @@ never import the database, Meko or the model SDK.
 | Debt | Payoff order and extra payments, respecting preferences | Read tools, `run_what_if` | Nothing |
 | Savings | Emergency runway and target | Read tools, `run_what_if` | Nothing |
 | Goals | Goal dates, required contributions, trade-offs | Read tools, `run_what_if` | Nothing |
-| Dreaming | Extracts claims from a finished session | None (structured output only) | Pending proposals, through code |
+| Dreaming | Extracts claims from a finished session's turns | `submit_claims` only (structured output) | Pending proposals, through code |
 
 Bounds: at most 4 specialist calls per turn, at most 4 tool calls per specialist, one extra Meko search
 per specialist, at most 3 what-if splits per conflict, a token budget per turn, and a daily spend cap in

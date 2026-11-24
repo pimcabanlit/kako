@@ -21,7 +21,7 @@ import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Final, Literal, cast
 
 import httpx
@@ -50,6 +50,7 @@ from kako.agents.replan import changes_lines, why_lines
 from kako.agents.tools import MESSAGE_CHARS
 from kako.db.meko_log import DbCallLog
 from kako.db.models import Household, LlmCall, Person, Session
+from kako.dreaming.job import DREAM_RUN, DreamError, end_session
 from kako.health import safe_error
 from kako.meko.adapter import Meko
 from kako.meko.client import MekoError
@@ -462,6 +463,36 @@ def _turn_out(services: Services, asked: AskedTurn) -> TurnOut:
             output_tokens=asked.output_tokens,
             usd=f"{asked.cost_usd:.6f}",
         ),
+    )
+
+
+class EndOut(BaseModel):
+    session_id: uuid.UUID
+    ended_at: datetime
+    dream_run_id: uuid.UUID
+    dream_status: str  # queued until `kako dream run` runs it; done or failed after
+
+
+@router.post("/{session_id}/end", response_model=EndOut)
+async def end(session_id: uuid.UUID, request: Request) -> EndOut:
+    """End the session (no more turns) and queue its dreaming run, once: ending it again
+    answers with the same run."""
+    services = _services(request)
+    async with services.turn_lock:  # never while one of its turns is running
+        try:
+            run_id = await end_session(services.engine, session_id, datetime.now(UTC))
+        except DreamError as exc:
+            raise HTTPException(404, str(exc)) from None
+    async with services.engine.connect() as conn:
+        row = (
+            await conn.execute(
+                select(SESSION.c.ended_at, DREAM_RUN.c.status)
+                .join(DREAM_RUN, DREAM_RUN.c.session_id == SESSION.c.id)
+                .where(SESSION.c.id == session_id)
+            )
+        ).one()
+    return EndOut(
+        session_id=session_id, ended_at=row.ended_at, dream_run_id=run_id, dream_status=row.status
     )
 
 
