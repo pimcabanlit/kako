@@ -63,6 +63,10 @@ async def test_the_trace_has_the_steps_the_reasons_and_the_ids(
         },
         "kako_reconciliation_ids": [str(rec)],
     }
+    # Who wrote the message, when known: dreaming names them on what it proposes.
+    mara = uuid.uuid4()
+    said = trace_turn(SESSION_2, answer, saved, state, calc, session, SEED, speaker=mara)
+    assert said.metadata == {**turn.metadata, "kako_said_by": str(mara)}
 
     # Each final check names what it checked: the plan, an option's first row, the conflict.
     by_label = {c.label: saved.subject_id(c) for c in answer.checks}
