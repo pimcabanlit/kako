@@ -133,9 +133,8 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    architecture doc says so.
 9. **Demo mode.** One command: local Meko, a local database with the demo household, recorded responses.
    Done when: a fresh clone runs session 4 in demo mode with no Azure settings.
-   Built Nov 24 with session 2 and the agent test set (`kako demo run`): session 4 needs the
-   life-event replan (Phase 4, task 2), so it joins demo mode then, as one session file and its
-   recording, and this task's done-when is checked again with it.
+   Built Nov 24 with session 2 and the agent test set (`kako demo run`). Session 4 joined with the
+   life-event replan (Phase 4, task 2), and the fresh-clone check was run again with it.
 
 ### Phase 4: Memory over time (Mon Dec 28 to Sun Jan 3)
 
@@ -148,6 +147,13 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    and the decisions to revisit.
    Done when: the worked example's session 4 runs end to end on local Meko and shows the three-part
    answer (new plan, what changed, why).
+   Built Nov 24: `propose_change` (`agents/proposing.py`) holds the household's stated change as
+   pending proposals, checked in code (the quote, V-09, the entity and attribute, the value it
+   replaces); once a person approves, the session's next turns replan as of the change's date against
+   the decision last made (`agents/replan.py`, `agents/replan_store.py`: F-DIFF-1 and the decisions to
+   revisit), and the answer has three parts. Session 4 is recorded on Foundry (tuning log entry 9) and
+   plays in `kako demo run`: Mara's news, her approval at its time in the story (which writes
+   changes.csv rows 10 and 11), and Jun's question answered as the replan.
 3. **Dreaming.** The job, extraction, Meko's extracted memories and Learnings as candidates, the checks
    in code and the classification.
    Done when: the labelled set of scripted sessions scores at least 90% of expected proposals found and
