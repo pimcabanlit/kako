@@ -479,3 +479,77 @@ it led to.
     preference questions (q10, q16, q21) more likely to cite the preference now that it is marked
     promoted. About **US$0.55 to US$0.75** and **US$0.35 to US$0.50**.
   - In all, **US$1.00 to US$1.45**.
+- **Run:** each on an empty database and a throwaway local Meko datapack (gpt-5.4 and gpt-5-mini):
+  `KAKO_MODEL_MODE=record uv run kako demo record session-2`, then `session-4` (entry 9's recordings
+  kept as `session-2-run9.json` and `session-4-run9.json`); then `kako demo run` on a fresh database,
+  `KAKO_MODEL_MODE=record uv run kako test-set --architecture specialists`, then `single` (entry 8's
+  kept as `test-set-*-run8.json`), each replayed strictly with `--save`. Spent **US$1.28** of the
+  about US$1.50 approved:
+
+  | | Model calls | Tokens | Cost |
+  | --- | --- | --- | --- |
+  | Session 2, first try (stopped, see below) | 7 | 38,488 | US$0.0328 |
+  | Session 2 | 10 | 61,258 | US$0.0412 |
+  | Session 4 (s4:t1 and s4:t2) | 14 | 91,827 | US$0.0946 |
+  | The debt specialist alone, 3 runs (below) | 6 | not kept | about US$0.006 |
+  | Test set, specialists | 109 | 648,722 | US$0.6176 |
+  | Test set, single agent | 41 | 264,921 | US$0.4853 |
+
+- **Result:**
+  - **The first session 2 recording stopped:** the orchestrator's second call came back empty (no
+    words, no tool call, finish reason "stop", 141 output tokens), and the loop took that as the end
+    of the turn: "the orchestrator ended the turn with no answer". Not seen in the about 250 calls recorded before.
+    The tool loop now sends an empty reply back once with only the final tool offered (a plain reply
+    in words still ends the loop, as before). The partial recording was discarded.
+  - **Session 2** as predicted: A, all on the card (9 months, by Jun 15, 2027) and B, Jun's split
+    (17 months; the fund's target in 12), no `propose_change`, `why` empty. Option B cites Session
+    1's decision (`decision:D1`), and the debt specialist named "the active decision to keep a bigger
+    buffer" (debt's words). This time they agreed (both proposed the split), so there was no over-allocation to catch.
+    10 calls, one more than predicted: the first `submit_answer` was refused once, and the
+    orchestrator fetched the figures it cited before answering again.
+  - **Session 4, turn 1** as predicted: one `propose_change`, no specialist, 2 calls.
+  - **Session 4, turn 2: the done-when is met.** A replan against Session 3's decision of Oct 18 with
+    Sessions 1, 2 and 3 to revisit. Options: A, Jun's ₱10,000 on the card and ₱15,050.00 to the fund
+    (card in 7 months, the fund's target in 4), recommended, citing
+    `fact:preference.debt_vs_flexibility`; B, all on the card (3 months). The debt specialist's
+    proposal cites `fact:preference.debt_vs_flexibility` ("it respects the household's preference for
+    flexibility"), and `why` says "The recommendation follows your approved preference for
+    flexibility and the pattern in your earlier choices: you chose a bigger buffer before, then a
+    split when school costs mattered, and then keeping cash for the family trip." As
+    predicted, `submit_answer` was sent back once for refs (D1, D2 and D3 in `why`), then passed. 12
+    calls, inside 10 to 15.
+  - **One miss against the prediction: the orchestrator told the debt specialist.** Its ask said
+    "respecting avalanche and the household's flexibility preference", so this recording alone shows
+    the preference reached the debt specialist without the household saying it, not that the debt
+    specialist found it on its own. So I ran the stricter check: session 4 turn 2 replayed from its
+    recording, but the orchestrator's ask to debt replaced with one that never names a preference
+    ("compare putting ₱10,000 a month on the card with the rest to the emergency fund against putting
+    all the extra on the card"), and the debt specialist live on Foundry, on a fresh database each
+    time. **It cited `fact:preference.debt_vs_flexibility` in 3 of 3 runs**, from the brief alone.
+  - **Test set** (both replayed strictly to the same scores):
+
+    | | Specialists | Single agent |
+    | --- | --- | --- |
+    | Score | **93.3%** (95 of 102) | **90.7%** (90 of 102) |
+    | Entry 8 | 98.1% (99 of 102) | 93.9% (93 of 102) |
+    | Model calls | 109 | 41 |
+    | Cost | US$0.62 | US$0.49 |
+
+    Below the predicted ranges (94 to 100%, 88 to 96%), the specialists by one check. Specialists'
+    misses: q05 didn't state the card's 3% or the car loan's 9%; q10 and q21 didn't state one payoff's
+    months; q12 again named the preference without citing it; q16 named neither the surplus nor what
+    is unallocated; q22 offered an option where none was asked for. The single agent's: q06 and q17
+    again answered with no option (as in entry 8), q09 didn't say "December", q10 and q21 one figure
+    each, q19 didn't state the ₱5,000. No number was stated that the engine didn't give, and the
+    preference questions didn't cite the preference more often than before, against the prediction.
+- **Root cause:** for the scores, none found that a prompt change would fix: the misses are figures
+  left out, spread over different questions, one run each (one question either way moves a score
+  about 4.5 points), and the briefs are longer now (three decisions and their options). For the
+  orchestrator naming the preference: the prompt says to ask specialists to respect the preferences
+  in the brief, so passing it on is the orchestrator doing its job; the stricter check shows the debt
+  specialist doesn't need it.
+- **Change made:** the empty-reply send-back in the tool loop. No prompt change. Demo mode replays
+  session 4 with all 14 requests differing from the recording on the same machine, because `demo
+  record` doesn't replay session 2 before recording session 4, so the brief's Meko search sees a
+  different datapack (as with entry 9's recording); the replies are replayed and reported. Recording
+  session 4 after session 2, as demo mode plays them, is a follow-up.
