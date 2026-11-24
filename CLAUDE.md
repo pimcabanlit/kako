@@ -184,7 +184,7 @@ uv run pytest                             # unit tests; integration tests skip u
 KAKO_TEST_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/kako_test \
 KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against local Postgres and local Meko (never Meko Cloud)
 uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
-uv run kako api                           # /api/v1 on 127.0.0.1:8000; /api/v1/health, /api/v1/sessions (turns, trace), docs at /api/v1/docs
+uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback only: no sign-in yet); /api/v1/health, /api/v1/sessions (turns, trace), docs at /api/v1/docs
 uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
@@ -217,7 +217,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
 - `backend/`: the FastAPI backend (uv project `kako`, Python 3.12). `src/kako/settings.py` holds every
   setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`); `cli.py` is the `kako` command;
   `health.py` the health report and `safe_error` (no secret reaches a response or a log);
-  `api/app.py` the app and `/api/v1/health`; `api/sessions.py` the session API (start a session, a
+  `api/app.py` the app and `/api/v1/health` (it answers only to a loopback Host); `api/sessions.py` the session API (start a session, a
   turn in it, one at a time, and its trace); `db/` the engine, the declarative base, the table
   models (`db/models/`, one module per layer of `docs/data-model.md`), every enumerated column's
   values (`db/enums.py`, held as check constraints) and Alembic (`db/migrations/`, append-only once
@@ -236,8 +236,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   reads; `figures.py` the figure and the run; `diff.py` F-DIFF-1, what changed between two runs and
   why, and the decisions to revisit). `db/calc_store.py` stores a run with the facts it read and its
   figures, and reads it back; `db/plan_store.py` keeps a turn's what-ifs (a scenario, its overrides,
-  its run) and the plan it proposes (recommendations per option with their sources, reconciliation),
-  in one transaction; `demo/` the demo household (`files.py` reads and checks
+  its run, and the `agent_step` rows that ran it then name it; the tools write nothing) and the plan
+  it proposes (recommendations per option with their sources, reconciliation), in one transaction; `demo/` the demo household (`files.py` reads and checks
   `data/demo-household/`, `load.py` loads it through the fact store, each change as an approved
   proposal and then its write). `planning/reconcile.py` holds the reconciliation rules: the
   specialists' asks together through the engine, over-allocation, opposite moves and missed goal

@@ -397,3 +397,32 @@ async def test_a_proposal_must_move_money_in_its_area(house: Villanueva) -> None
                 "sources": ["figure:debt1-W1:plan.unallocated", "said"],
             }
         )
+
+
+async def test_a_cited_memory_or_document_is_quoted_and_traceable(house: Villanueva) -> None:
+    context = Context(
+        (Memory("mem-1", "Mara wants the card gone before Lia's school year.", {}, 0.9),),
+        (
+            KnowledgeHit("doc-1", "SSS salary loans charge 10% a year.", 0.8),
+            KnowledgeHit(None, "A document Meko gave no id.", 0.7),
+        ),
+    )
+    state = _state(house, context=context)
+    surplus = "figure:cashflow.monthly_surplus"
+    memory, doc = state.citations([surplus, "memory:M1", "doc:K1"], "debt#1")[1:]
+    # The source is Meko's id, and the quote is the words the agent read, never the ref.
+    assert (memory.source_id, memory.shown) == (
+        "mem-1",
+        "Mara wants the card gone before Lia's school year.",
+    )
+    assert (doc.source_id, doc.shown) == ("doc-1", "SSS salary loans charge 10% a year.")
+    with pytest.raises(ToolInputError, match="no id, so it can't be traced"):
+        state.citations([surplus, "doc:K2"], "debt#1")
+    # The same from a search: a document with no id is read, but has no ref to cite.
+    meko = _Meko(Context((), (KnowledgeHit(None, "No id here.", 0.5),)))
+    searched = _state(house, meko=meko)
+    found = await search_tool(searched, "debt#1", "kako:debt").run({"query": "loans"})
+    assert found.content == (
+        '- (no document id, not citable) <data source="knowledge-base">No id here.</data>'
+    )
+    assert searched.searches["debt#1"] == {}

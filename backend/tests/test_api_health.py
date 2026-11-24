@@ -10,6 +10,8 @@ from kako.health import MekoStatus, ServiceStatus
 from kako.settings import Settings
 from tests.conftest import MakeSettings
 
+LOCAL = "http://127.0.0.1:8000"  # the app answers only to a loopback Host
+
 
 def fake_probes(*, postgres_ok: bool, meko_ok: bool) -> Probes:
     async def postgres() -> ServiceStatus:
@@ -23,7 +25,7 @@ def fake_probes(*, postgres_ok: bool, meko_ok: bool) -> Probes:
 
 def get_health(settings: Settings, probes: Probes) -> dict[str, object]:
     app = create_app(settings, probes=probes)
-    with TestClient(app) as http:
+    with TestClient(app, base_url=LOCAL) as http:
         response = http.get("/api/v1/health")
     assert response.status_code == 200
     body: dict[str, object] = response.json()
@@ -56,7 +58,7 @@ def test_real_probes_report_what_is_missing(make_settings: MakeSettings) -> None
         meko_api_key="mk_should_not_show",
         health_timeout_seconds=2,
     )
-    with TestClient(create_app(settings)) as http:
+    with TestClient(create_app(settings), base_url=LOCAL) as http:
         response = http.get("/api/v1/health")
     assert response.status_code == 200
     body = response.json()
@@ -70,5 +72,5 @@ def test_real_probes_report_what_is_missing(make_settings: MakeSettings) -> None
 
 def test_docs_live_under_the_api_prefix(make_settings: MakeSettings) -> None:
     app = create_app(make_settings(), probes=fake_probes(postgres_ok=True, meko_ok=True))
-    with TestClient(app) as http:
+    with TestClient(app, base_url=LOCAL) as http:
         assert http.get("/api/v1/openapi.json").status_code == 200

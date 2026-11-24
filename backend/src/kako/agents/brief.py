@@ -126,6 +126,8 @@ class Brief:
     decisions: dict[str, uuid.UUID]
     proposals: dict[str, uuid.UUID]
     dropped: tuple[str, ...]  # what was left out to fit, in plain words
+    # The words behind M1 and K1 as Meko gave them: what a cited memory or document is quoted as.
+    excerpts: dict[str, str] = field(default_factory=dict)
 
 
 def _escape(text: str) -> str:
@@ -190,6 +192,7 @@ class _Rendered:
     knowledge: dict[str, str | None]
     decisions: dict[str, uuid.UUID]
     proposals: dict[str, uuid.UUID]
+    excerpts: dict[str, str]
 
 
 def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
@@ -277,6 +280,7 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
     context = inputs.context
     memories: dict[str, str] = {}
     knowledge: dict[str, str | None] = {}
+    excerpts: dict[str, str] = {}
     if context is None:
         lines.append("No search was made.")
     else:
@@ -286,6 +290,7 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
             memory = context.memories[i]
             approved = memory.id in inputs.approved_memories
             memories[f"M{n}"] = memory.id
+            excerpts[f"M{n}"] = memory.text
             lines.append(
                 f"- M{n}: "
                 + data(
@@ -297,10 +302,11 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
         for n, i in enumerate(parts.knowledge, start=1):
             hit = context.knowledge[i]
             knowledge[f"K{n}"] = hit.document_id
+            excerpts[f"K{n}"] = hit.text
             lines.append(f"- K{n}: " + data(hit.text, source="knowledge-base"))
         if not parts.memories and not parts.knowledge:
             lines.append("Nothing found.")
-    return _Rendered("\n".join(lines) + "\n", memories, knowledge, decisions, proposals)
+    return _Rendered("\n".join(lines) + "\n", memories, knowledge, decisions, proposals, excerpts)
 
 
 def _ranked(count: int) -> tuple[int, ...]:
@@ -360,4 +366,5 @@ def render_brief(inputs: BriefInputs, budget: int) -> Brief:
         decisions=out.decisions,
         proposals=out.proposals,
         dropped=tuple(dropped),
+        excerpts=out.excerpts,
     )

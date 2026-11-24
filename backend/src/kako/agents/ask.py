@@ -39,7 +39,8 @@ from kako.db.llm_log import DbLlmLog
 from kako.db.meko_log import DbCallLog
 from kako.db.models import LlmCall, Session
 from kako.db.number_checks import DbCheckLog
-from kako.db.plan_store import DbWhatIfStore, SavedAnswer, save_answer
+from kako.db.plan_store import SavedAnswer, save_answer
+from kako.health import safe_error
 from kako.meko.adapter import Meko, Turn
 from kako.meko.client import MekoError
 from kako.settings import Settings
@@ -184,7 +185,6 @@ async def run_turn(
         meko,
         conversation,
         checks=checks,
-        what_if_store=DbWhatIfStore(engine),
     )
     manager = ModelManager(settings, backend, DbLlmLog(engine))
     turn = manager.turn(
@@ -198,6 +198,7 @@ async def run_turn(
         session_id=session.session_id,
         calc_run_id=calc_run_id,
         conversation_id=session.conversation_id,
+        what_if_steps=turn.what_if_steps,
     )
     for check in answer.checks:  # each text as shown: passed, or with its numbers flagged
         await checks.write(record(check, check.result, saved.subject_id(check)))
@@ -207,7 +208,7 @@ async def run_turn(
         try:
             message_id = await meko.add_turn(conversation, meko_turn, agent_id=AGENT)
         except MekoError as exc:  # the answer is kept in Postgres; the caller is told
-            meko_error = str(exc)
+            meko_error = safe_error(exc)
     async with engine.connect() as conn:
         totals = (
             await conn.execute(
@@ -287,6 +288,12 @@ def trace_turn(
         "kako_calc_run_id": str(calc_run_id),
         "kako_what_if_runs": {ref: str(run) for ref, run in state.stored.items()},
     }
+    # Numbers the check couldn't match, by text: Meko keeps the texts as shown, so a reader of the
+    # trace (or Meko's own extraction) can tell which numbers no figure, fact or said amount backs.
+    checks = [*answer.checks, *(p.check for p in answer.proposals if p.check is not None)]
+    flagged = {c.label: [n.text for n in c.unmatched] for c in checks if c.unmatched}
+    if flagged:
+        metadata["kako_flagged"] = flagged
     if saved.plan_id is not None:
         metadata["kako_plan_id"] = str(saved.plan_id)
         metadata["kako_plan_version"] = saved.version

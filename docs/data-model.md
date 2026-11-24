@@ -366,7 +366,7 @@ What a recommendation stands on. One row per source.
 | `recommendation_id` | UUID PK, FK | |
 | `source_kind` | TEXT PK | `figure`, `fact`, `decision`, `memory`, `knowledge`, `conversation` |
 | `source_id` | TEXT PK | A Kako id, or a Meko memory id, document id or conversation id |
-| `quote` | TEXT, null | The excerpt used, for memories and documents; for `conversation` (the household's own words in the turn, `source_id` the session's conversation id), the message. At most 500 characters |
+| `quote` | TEXT, null | The excerpt used, for memories and documents (the words Meko gave, never the ref); a document Meko gave no id can't be cited; for `conversation` (the household's own words in the turn, `source_id` the session's conversation id), the message. At most 500 characters |
 
 ### `reconciliation`
 
@@ -391,7 +391,7 @@ A what-if: the snapshot plus hypothetical facts (`scenario_override`) that are n
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `household_id` | UUID FK | |
-| `name` | TEXT | "If Jun takes the Cebu job"; a turn's what-if is named by its ref and allocations ("debt1-W1: debt:credit-card ₱9,050.00 a month"), kept as it runs so its `agent_step` names its run |
+| `name` | TEXT | "If Jun takes the Cebu job"; a turn's what-if is named by its ref and allocations ("debt1-W1: debt:credit-card ₱9,050.00 a month"), kept with the turn (never by an agent's tool), and then the `agent_step` rows that ran it name its run |
 | `base_as_of` | DATE | |
 | `amp_branch_id` | TEXT, null | Set when the scenario is kept as an AMP branch (a Should, see the build plan) |
 
@@ -427,7 +427,7 @@ spans; this table is Kako's own copy, shaped for the screen and for the metrics.
 | `tool` | TEXT | Such as `get_figures`, `run_what_if`, `search_memory` |
 | `input_summary` | TEXT | Short, for display (never a full prompt) |
 | `result_summary` | TEXT | Short, for display; a what-if's result names its figures |
-| `calc_run_id` | UUID FK, null | The what-if run, when the tool ran the engine |
+| `calc_run_id` | UUID FK, null | The what-if run, when the tool ran the engine. Set when the turn is kept: the tools write nothing, so a turn that fails leaves the step with no run and no scenario |
 | `outcome` | TEXT | `ok`, `rejected` (a split the rules refused), `error` |
 | `created_at` | TIMESTAMPTZ | |
 

@@ -85,13 +85,15 @@ per MCP tool call with its conversation id, latency, outcome and parts (a `conte
 counts). It serves the log at `GET /api/v1/calls` (newest first, `before=<id>` for the next page; the
 web UI's Calls page reads the same), with no token from this machine. That is the local equivalent of
 the Observe hub's spans: `GET /api/v1/sessions/{id}/trace` reads it for one session's conversation
-(`meko/trace.py`, local Meko only, at most 20 pages back to the session's start). It is a read of
+(`meko/trace.py`, local Meko only, at most 20 pages and 15 seconds back to the session's start; a
+read cut short by either comes back with `truncated: true`). It is a read of
 Meko's own log, not a tool call, so no allowance is spent and it isn't counted in `meko_call`.
 
 **Each turn Kako keeps** (Phase 3, task 6): `input` the household's message, `output` the reply,
 `plan` the steps taken (2 to 4), `reasoning` the specialists' summaries and the resolution's reason,
 and `metadata` the turn seed, session, household and date, the turn's run, each what-if's run, and
-the plan, recommendation and reconciliation ids. `conversation_get` with `include_messages: true`
+the plan, recommendation and reconciliation ids, and `kako_flagged` (the numbers the check could not
+match, by text) when there are any, since Meko keeps the texts as shown. `conversation_get` with `include_messages: true`
 reads them back (`Meko.read_turns`, counted like any call). Meko makes a turn's `message_id` from its
 `seed` alone (the same seed in two conversations gave the same id, verified Nov 24), so Kako's seed
 for Meko is `<session id>:<turn seed>`.

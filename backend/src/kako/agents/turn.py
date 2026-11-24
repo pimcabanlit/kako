@@ -63,6 +63,8 @@ class TurnContext:
     session_id: uuid.UUID | None = None
     tokens_used: int = 0
     tokens_reserved: int = 0  # worst cases of calls in flight: parallel calls can't overspend
+    # The steps that ran each what-if, by its ref: they name its run once the turn is kept.
+    what_if_steps: dict[str, list[uuid.UUID]] = field(default_factory=dict)
     _seq: int = 0
 
     def next_seq(self) -> int:

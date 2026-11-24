@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from kako.engine.figures import Figure
 
 MIGRATIONS = Path(__file__).parent / "db" / "migrations"
+LOOPBACK = frozenset({"127.0.0.1", "localhost"})  # the API's Host check allows these
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,7 +29,9 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
 
     api = commands.add_parser("api", help="run the API on http://127.0.0.1:8000/api/v1")
-    api.add_argument("--host", default="127.0.0.1")
+    api.add_argument(
+        "--host", default="127.0.0.1", help="a loopback address only, until there is sign-in"
+    )
     api.add_argument("--port", type=int, default=8000)
     api.add_argument("--reload", action="store_true", help="restart on code changes")
 
@@ -129,6 +132,10 @@ def main(argv: list[str] | None = None) -> int:
 def _api(host: str, port: int, *, reload: bool) -> int:
     import uvicorn
 
+    if host not in LOOPBACK:
+        # No sign-in yet, and a turn spends money: never open the API to the network.
+        print(f"kako api: {host} isn't a loopback address; use 127.0.0.1", file=sys.stderr)
+        return 2
     uvicorn.run("kako.api.app:create_app", factory=True, host=host, port=port, reload=reload)
     return 0
 

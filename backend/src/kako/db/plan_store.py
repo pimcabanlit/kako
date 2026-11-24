@@ -1,8 +1,9 @@
 """A turn's answer in Postgres: its what-ifs as scenarios, and the plan it proposes.
 
 - Each what-if is a `scenario` with one `scenario_override` per allocation (`plan.allocation`,
-  never a fact), and its run is stored with the scenario. The tools keep each one as it runs, so
-  its `agent_step` names the run (`DbWhatIfStore`); the asks together are kept when the turn is.
+  never a fact), and its run is stored with the scenario. The tools run what-ifs in memory and
+  write nothing; every what-if of a turn is kept when the turn is, and the `agent_step` rows that
+  ran it are then given its run. A turn that fails leaves no scenario behind.
 - A turn that offers options, or found a conflict, proposes a `plan` (`save_answer`): the reply is
   its summary, each option's allocations are its `recommendation` rows with the option's cited
   sources, and each conflict is a `reconciliation` row. The plan stays `proposed` until the
@@ -14,6 +15,7 @@ Every write here is one transaction: a plan is never left half written.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import cast
@@ -27,6 +29,7 @@ from kako.agents.present import money
 from kako.agents.tools import TurnState, WhatIf
 from kako.db.calc_store import figure_ids, save_run
 from kako.db.models import (
+    AgentStep,
     Household,
     Plan,
     Recommendation,
@@ -38,6 +41,7 @@ from kako.db.models import (
 from kako.engine.figures import FigureRef
 from kako.planning.reconcile import OWNER
 
+AGENT_STEP = cast(Table, AgentStep.__table__)
 HOUSEHOLD = cast(Table, Household.__table__)
 PLAN = cast(Table, Plan.__table__)
 RECOMMENDATION = cast(Table, Recommendation.__table__)
@@ -54,17 +58,6 @@ class PlanStoreError(Exception):
 
 def allocations_text(allocations: tuple[Allocation, ...]) -> str:
     return "; ".join(f"{a.entity_ref} {money(a.centavos)} a month" for a in allocations)
-
-
-class DbWhatIfStore:
-    """`WhatIfStore` on `scenario`, `scenario_override` and `calc_run`."""
-
-    def __init__(self, engine: AsyncEngine) -> None:
-        self._engine = engine
-
-    async def save(self, what_if: WhatIf, *, on: date) -> uuid.UUID:
-        async with self._engine.begin() as conn:
-            return await save_what_if(conn, what_if, on=on)
 
 
 async def save_what_if(conn: AsyncConnection, what_if: WhatIf, *, on: date) -> uuid.UUID:
@@ -126,12 +119,22 @@ async def save_answer(
     session_id: uuid.UUID,
     calc_run_id: uuid.UUID,
     conversation_id: str,
+    what_if_steps: Mapping[str, Sequence[uuid.UUID]],
 ) -> SavedAnswer:
-    """Keep every what-if of the turn, then the plan the answer proposes, in one transaction."""
+    """Keep every what-if of the turn, name its run on the steps that ran it (`what_if_steps`, by
+    ref), then the plan the answer proposes, in one transaction."""
     async with engine.begin() as conn:
         for ref, what_if in state.what_ifs.items():
             if ref not in state.stored:
                 state.stored[ref] = await save_what_if(conn, what_if, on=state.snapshot.on)
+        for ref, step_ids in what_if_steps.items():
+            if ref not in state.stored:
+                raise PlanStoreError(f"a step ran {ref}, which isn't a what-if of this turn")
+            await conn.execute(
+                AGENT_STEP.update()
+                .where(AGENT_STEP.c.id.in_(list(step_ids)), AGENT_STEP.c.session_id == session_id)
+                .values(calc_run_id=state.stored[ref])
+            )
         if not answer.options and answer.resolution is None:
             return SavedAnswer(None, None)
         household_id = state.run.household_id

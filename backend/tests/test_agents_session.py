@@ -4,10 +4,12 @@ Session 2 with a scripted model; no database, no Meko."""
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 
 import pytest
 
 from kako.agents.ask import Started, trace_turn
+from kako.agents.checks import Number, TextCheck
 from kako.agents.orchestrator import answer_turn
 from kako.db.plan_store import SavedAnswer
 from tests.conftest import MakeSettings
@@ -74,3 +76,24 @@ async def test_the_trace_has_the_steps_the_reasons_and_the_ids(
     }
     nothing = SavedAnswer(None, None)
     assert {nothing.subject_id(c) for c in answer.checks} == {None}
+
+
+async def test_numbers_flagged_in_a_text_are_marked_in_meko(
+    house: Villanueva, make_settings: MakeSettings
+) -> None:
+    """Meko keeps the texts as shown, flagged numbers and all: the metadata names them, so the trace
+    (and Meko's own extraction) can tell which numbers nothing backs."""
+    manager, _ = _manager(make_settings, _session_2_script())
+    state = _state(house)
+    answer = await answer_turn(manager, manager.turn(SEED), state)
+    session = Started(uuid.uuid4(), uuid.uuid4(), "c1", "Session 2", SEP_15)
+    clean = trace_turn(
+        SESSION_2, answer, SavedAnswer(None, None), state, uuid.uuid4(), session, SEED
+    )
+    assert "kako_flagged" not in clean.metadata
+    wrong = TextCheck("reply", "the reply", "₱9,999.00", (Number("₱9,999.00", "money", None),))
+    flagged = replace(answer, checks=(wrong, *answer.checks[1:]))
+    turn = trace_turn(
+        SESSION_2, flagged, SavedAnswer(None, None), state, uuid.uuid4(), session, SEED
+    )
+    assert turn.metadata["kako_flagged"] == {"the reply": ["₱9,999.00"]}

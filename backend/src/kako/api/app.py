@@ -1,4 +1,10 @@
-"""The FastAPI app. Run it with `uv run kako api`."""
+"""The FastAPI app. Run it with `uv run kako api`.
+
+There is no sign-in yet, and a turn spends model tokens and Meko calls, so the app answers only on
+the loopback interface (`kako api` refuses any other `--host`) and only to a request addressed to
+it there: any other Host header is refused (400), which stops a page on another site from
+reaching it by DNS rebinding.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +16,7 @@ from dataclasses import dataclass
 import httpx
 from fastapi import APIRouter, FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncEngine
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from kako import __version__
 from kako.api.sessions import Services, services_from
@@ -20,6 +27,8 @@ from kako.meko.health import probe_meko
 from kako.settings import Settings, get_settings
 
 API_PREFIX = "/api/v1"
+# The only Host names the app answers to, until there is sign-in (REVIEW.md, the API surface).
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 
 
 @dataclass
@@ -87,6 +96,7 @@ def create_app(
         openapi_url=f"{API_PREFIX}/openapi.json",
         redoc_url=None,
     )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(LOOPBACK_HOSTS))
     app.include_router(router)
     app.include_router(sessions_router)
     return app

@@ -64,7 +64,7 @@ async def test_a_turn_through_the_api_on_local_meko(
         app = create_app(settings, probes=_probes(), services=services)
         app.state.services = services
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://kako") as api:
+        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:8000") as api:
             created = await api.post(
                 "/api/v1/sessions", json={"title": "Session 2", "household_date": "2026-09-15"}
             )
@@ -151,6 +151,16 @@ async def test_a_turn_through_the_api_on_local_meko(
         p=plan["id"],
     )
     assert dangling == 0
+    # A source other than a figure is quoted: the household's words for the conversation.
+    quotes = await _rows(
+        migrated,
+        "SELECT DISTINCT s.source_kind, s.source_id, s.quote FROM recommendation_source s "
+        "JOIN recommendation r ON r.id = s.recommendation_id "
+        "WHERE r.plan_id = :p AND s.source_kind <> 'figure'",
+        p=plan["id"],
+    )
+    assert ("conversation", conversation, SESSION_2) in quotes
+    assert all(quote for kind, _, quote in quotes if kind in ("memory", "knowledge"))
     [(kind, figure_count, rejected)] = await _rows(
         migrated,
         "SELECT kind, cardinality(figure_ids), rejected FROM reconciliation WHERE plan_id = :p",
@@ -194,6 +204,7 @@ async def test_a_turn_through_the_api_on_local_meko(
     # The trace: every Meko call made with the conversation, each a span, the same calls Kako
     # counted in meko_call for the session.
     assert trace["source"] == "local_call_log"
+    assert trace["truncated"] is False
     spans = trace["spans"]
     assert [s["tool"] for s in spans] == [
         "conversation_create",

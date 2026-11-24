@@ -3,6 +3,7 @@ spans. The call log is served by a mock; the integration test reads the real one
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -58,7 +59,9 @@ async def test_the_conversations_calls_oldest_first(make_settings: MakeSettings)
     ]
     seen: list[httpx.Request] = []
     async with httpx.AsyncClient(transport=_log(pages, seen)) as http:
-        spans = await local_trace(http, settings, "c1", since=SINCE)
+        trace = await local_trace(http, settings, "c1", since=SINCE)
+    assert not trace.truncated
+    spans = trace.spans
     assert [(s.call_id, s.tool) for s in spans] == [
         (6, "conversation_create"),
         (7, "context_search"),
@@ -77,15 +80,20 @@ async def test_reading_is_bounded_and_local_only(make_settings: MakeSettings) ->
     endless = [[_call(1000 - n, "other")] for n in range(MAX_PAGES + 5)]
     seen: list[httpx.Request] = []
     async with httpx.AsyncClient(transport=_log(endless, seen)) as http:
-        assert await local_trace(http, local, "c1", since=SINCE) == []
+        endless_trace = await local_trace(http, local, "c1", since=SINCE)
+    assert (endless_trace.spans, endless_trace.truncated) == ([], True)  # said, never silent
     assert len(seen) == MAX_PAGES
 
     cloud = make_settings(meko_mcp_url="https://mcp.mekodata.ai/mcp")
     with pytest.raises(MekoError, match="local Meko only"):
         calls_url(cloud)
 
-    for body in ({"data": {"calls": "x"}}, {"data": {"calls": [{"id": "x"}]}}):
-        transport = httpx.MockTransport(lambda _r, b=body: httpx.Response(200, json=b))
+    for body in ({"data": {"calls": "x"}}, {"data": {"calls": [{"id": "x"}]}}, "<html>"):
+        transport = httpx.MockTransport(
+            lambda _r, b=body: (
+                httpx.Response(200, json=b) if isinstance(b, dict) else httpx.Response(200, text=b)
+            )
+        )
         async with httpx.AsyncClient(transport=transport) as http:
             with pytest.raises(MekoProtocolError):
                 await local_trace(http, local, "c1", since=SINCE)
@@ -93,3 +101,22 @@ async def test_reading_is_bounded_and_local_only(make_settings: MakeSettings) ->
     async with httpx.AsyncClient(transport=transport) as http:
         with pytest.raises(MekoError, match="401"):
             await local_trace(http, local, "c1", since=SINCE)
+
+
+async def test_a_slow_log_is_cut_off_at_the_deadline(make_settings: MakeSettings) -> None:
+    local = make_settings(meko_mcp_url="http://127.0.0.1:7777/mcp")
+    pages = 0
+
+    async def answer(_request: httpx.Request) -> httpx.Response:
+        nonlocal pages
+        pages += 1
+        if pages > 1:
+            await asyncio.sleep(5)  # a log that stops answering after the first page
+        return httpx.Response(
+            200, json={"data": {"calls": [_call(100 - pages, "c1")], "more": True}}
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(answer)) as http:
+        trace = await local_trace(http, local, "c1", since=SINCE, deadline=0.2)
+    assert [s.call_id for s in trace.spans] == [99]  # what it read is kept
+    assert trace.truncated

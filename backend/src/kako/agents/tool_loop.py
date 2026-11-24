@@ -41,6 +41,8 @@ class ToolResult:
     summary: str  # agent_step.result_summary: short, for the screen
     outcome: StepOutcome = "ok"
     calc_run_id: uuid.UUID | None = None  # the what-if run, when the tool ran the engine
+    # A what-if this call ran, kept only with the turn: its step names the run then.
+    what_if: str | None = None
     value: Any = None  # a final tool's checked answer
 
 
@@ -160,19 +162,20 @@ async def run_agent(
         answer: Any = None
         answered = False
         for (call, tool, _), result in zip(plan, done, strict=True):
-            await turn.steps.write(
-                StepRecord(
-                    session_id=turn.session_id,
-                    meko_turn_seed=turn.meko_turn_seed,
-                    agent=agent,
-                    seq=turn.next_seq(),
-                    tool=call.name,
-                    input_summary=short(call.arguments or "{}"),
-                    result_summary=result.summary,
-                    calc_run_id=result.calc_run_id,
-                    outcome=result.outcome,
-                )
+            step = StepRecord(
+                session_id=turn.session_id,
+                meko_turn_seed=turn.meko_turn_seed,
+                agent=agent,
+                seq=turn.next_seq(),
+                tool=call.name,
+                input_summary=short(call.arguments or "{}"),
+                result_summary=result.summary,
+                calc_run_id=result.calc_run_id,
+                outcome=result.outcome,
             )
+            await turn.steps.write(step)
+            if result.what_if is not None:
+                turn.what_if_steps.setdefault(result.what_if, []).append(step.id)
             messages.append(Message("tool", result.content, tool_call_id=call.id))
             if tool is not None and tool.final and result.outcome == "ok" and not answered:
                 answer, answered = result.value, True

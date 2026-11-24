@@ -6,11 +6,14 @@ MCP tool call with the conversation id, its latency and its parts (`steps`), and
 web UI's Calls page at `/api/v1/calls`. `local_trace` reads that log for one conversation.
 
 It reads local Meko only, and refuses any other host. It is a read of Meko's own log, not an MCP
-tool call: no allowance is spent, so it isn't counted in `meko_call`.
+tool call: no allowance is spent, so it isn't counted in `meko_call`. It is bounded twice, by pages
+(`MAX_PAGES`) and by time (`DEADLINE_SECONDS` for the whole read); a read cut short by either says
+so (`Trace.truncated`) and keeps what it found.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final
@@ -22,6 +25,7 @@ from kako.meko.client import MekoError, MekoProtocolError
 from kako.settings import Settings
 
 MAX_PAGES: Final = 20  # the call log is read newest first, a page at a time; never unbounded
+DEADLINE_SECONDS: Final = 15.0  # the whole read, every page together
 
 
 @dataclass(frozen=True)
@@ -45,6 +49,12 @@ class Span:
     parts: tuple[Part, ...]
 
 
+@dataclass(frozen=True)
+class Trace:
+    spans: list[Span]  # oldest first
+    truncated: bool  # the page or time bound was reached before the session's start
+
+
 def calls_url(settings: Settings) -> str:
     """Local Meko's call log, next to its MCP endpoint."""
     if settings.meko_target != "local":
@@ -54,33 +64,51 @@ def calls_url(settings: Settings) -> str:
 
 
 async def local_trace(
-    http: httpx.AsyncClient, settings: Settings, conversation_id: str, *, since: datetime
-) -> list[Span]:
+    http: httpx.AsyncClient,
+    settings: Settings,
+    conversation_id: str,
+    *,
+    since: datetime,
+    deadline: float = DEADLINE_SECONDS,
+) -> Trace:
     """The conversation's calls in local Meko's log, oldest first. Pages are read back to `since`
-    (the session's start), at most `MAX_PAGES` of them."""
+    (the session's start), at most `MAX_PAGES` of them and for at most `deadline` seconds."""
     url = calls_url(settings)
     headers = {}
     if settings.meko_api_key is not None:
         headers["Authorization"] = f"Bearer {settings.meko_api_key.get_secret_value()}"
     found: list[Span] = []
-    before: int | None = None
-    for _ in range(MAX_PAGES):
-        params = {} if before is None else {"before": str(before)}
-        response = await http.get(url, params=params, headers=headers)
-        if response.status_code != 200:
-            raise MekoError(f"local Meko's call log answered {response.status_code}")
-        page = _page(response.json())
-        calls, more = page
-        for call in calls:
-            span = _span(call)
-            if span.at < since:
-                return sorted(found, key=lambda s: s.call_id)
-            if call.get("conversation_id") == conversation_id:
-                found.append(span)
-        if not more or not calls:
-            break
-        before = _span(calls[-1]).call_id
-    return sorted(found, key=lambda s: s.call_id)
+
+    async def read() -> bool:
+        """Read back to `since`: True when it got there (or to the log's start)."""
+        before: int | None = None
+        for _ in range(MAX_PAGES):
+            params = {} if before is None else {"before": str(before)}
+            response = await http.get(url, params=params, headers=headers)
+            if response.status_code != 200:
+                raise MekoError(f"local Meko's call log answered {response.status_code}")
+            try:
+                body = response.json()
+            except ValueError:
+                raise MekoProtocolError("local Meko's call log isn't JSON") from None
+            calls, more = _page(body)
+            for call in calls:
+                span = _span(call)
+                if span.at < since:
+                    return True
+                if call.get("conversation_id") == conversation_id:
+                    found.append(span)
+            if not more or not calls:
+                return True
+            before = _span(calls[-1]).call_id
+        return False
+
+    try:
+        async with asyncio.timeout(deadline):
+            complete = await read()
+    except TimeoutError:
+        complete = False
+    return Trace(sorted(found, key=lambda s: s.call_id), truncated=not complete)
 
 
 def _page(body: Any) -> tuple[list[dict[str, Any]], bool]:

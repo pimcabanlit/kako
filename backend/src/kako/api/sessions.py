@@ -214,6 +214,7 @@ class TraceOut(BaseModel):
     source: Literal["local_call_log", "cloud_trace_page", "none"]
     trace_url: str | None
     spans: list[SpanOut]
+    truncated: bool = False  # the call log was read only in part (its page or time bound)
 
 
 def _session_out(services: Services, s: Started) -> SessionOut:
@@ -438,7 +439,7 @@ async def read_trace(session_id: uuid.UUID, request: Request) -> TraceOut:
             spans=[],
         )
     try:
-        spans = await local_trace(services.http, settings, conversation, since=started_at)
+        trace = await local_trace(services.http, settings, conversation, since=started_at)
     except (MekoError, httpx.HTTPError) as exc:
         raise HTTPException(502, f"Meko: {safe_error(exc)}") from None
     return TraceOut(
@@ -456,8 +457,9 @@ async def read_trace(session_id: uuid.UUID, request: Request) -> TraceOut:
                 error_code=s.error_code,
                 parts=[PartOut(step=p.step, ms=p.ms, n=p.n) for p in s.parts],
             )
-            for s in spans
+            for s in trace.spans
         ],
+        truncated=trace.truncated,
     )
 
 
