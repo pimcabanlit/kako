@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "kako"
-PURE_PACKAGES = ("facts", "engine", "planning")
+PURE_PACKAGES = ("facts", "engine", "planning", "decisions")
 
 BANNED_MODULES = (
     "sqlalchemy",

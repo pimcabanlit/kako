@@ -1,4 +1,4 @@
-# Kako data model v0.6
+# Kako data model v0.7
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -24,6 +24,9 @@ in the same change once agreed.
   the `ended` label and says which facts count as a change. v0.6 is the demo household (task 5): its
   files and how they load, the car loan's Oct and Nov statements, and how a run is stored. The Meko
   adapter (task 6) says how `meko_call` counts and refuses calls, and how documents are uploaded.
+  v0.7 (Nov 24) is proposals and approvals (Phase 4, task 1): the payloads of a life event and a
+  decision, the idempotency key's shape, what V-09 counts as the same number, the facts a decision
+  rests on, and the guard on decided proposals, decisions and life events (migration 0005).
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -226,10 +229,12 @@ same change.
 | `occurs_on` | DATE | When it takes effect (can be in the future) |
 | `recorded_at` | TIMESTAMPTZ | |
 | `source_ref` | TEXT | The session turn that reported it |
-| `proposal_id` | UUID FK | The approved proposal (every life event has one, V-08) |
+| `proposal_id` | UUID FK | The approved proposal (every life event has one, V-08). Unique: a proposal writes one life event at most |
 
 Facts caused by the event point to it with `life_event_id`, so the replan can say "these four values
-changed because of the new job".
+changed because of the new job". A life event is written only with an approved `life_event` proposal of
+its household, and never changes (migration 0005). Its id is chosen when it is proposed, so the fact
+proposals it causes can name it; they are approved with it, the event first.
 
 ### Reading facts: the snapshot
 
@@ -450,7 +455,14 @@ Unique on (`session_id`, `meko_turn_seed`, `seq`).
 | `status` | TEXT | `active`, `revised`, `reversed` |
 | `replaced_by` | UUID FK, null | The decision that revised or reversed it |
 | `outcome` | TEXT, null | Filled in later: what happened |
-| `proposal_id` | UUID FK | The approved proposal (V-08) |
+| `proposal_id` | UUID FK | The approved proposal (V-08). Unique: a proposal writes one decision at most |
+
+A decision is written only with an approved `decision` proposal of its household, with its options and
+assumptions in the same transaction. Afterwards it changes only by being revised or reversed once
+(`status`, `valid_to` and `replaced_by` together, when a later decision names it in `revises`) or by
+its `outcome` being written once; options and assumptions never change and are never deleted
+(migration 0005). A decision that accepts a plan (`plan_id` in its payload) marks the plan `accepted`
+and the household's earlier accepted plan `replaced`.
 
 ### `decision_option`
 
@@ -467,6 +479,11 @@ Unique on (`session_id`, `meko_turn_seed`, `seq`).
 
 The facts a decision rested on. When one of these facts is replaced, the replan lists the decision as
 **to revisit**.
+
+Which facts (`kako/decisions/assumptions.py`): every fact in the snapshot on the decision's date, as
+known when it was made, except those that move as the plan works: `debt.balance`, `account.balance`,
+`goal.saved_amount` and `plan.allocation` (the decision itself). So a new statement doesn't send a
+decision back to the household, and a new job does.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -501,11 +518,17 @@ Everything dreaming or an agent wants to add to household knowledge waits here f
 | `status` | TEXT | `pending`, `approved`, `rejected`, `expired` |
 | `decided_by_person_id` | UUID FK, null | |
 | `decided_at` | TIMESTAMPTZ, null | |
-| `idempotency_key` | TEXT | Unique. The source turn seed plus the kind and target, so a rerun can't double-propose |
+| `idempotency_key` | TEXT | Unique. `<source>\|<kind>\|<target>`: the source turn (`<session id>:<turn seed>`), the kind (`fact` for the three kinds that write a fact, so one value can't be proposed as two kinds) and the target (`<entity id or household>/<attribute>/<valid_from>` for a fact, `fact/<id>` for a retraction, `<kind>/<occurs_on>` for a life event, `plan/<id>` for a decision on a plan), so a rerun of the turn, or dreaming over it, can't propose it twice. The same key with a different payload is refused |
 | `created_at` | TIMESTAMPTZ | |
 
 Checks: a `pending` proposal has no decision yet; an `approved` one names the person who approved it and
-when; a `rejected` or `expired` one has `decided_at`.
+when; a `rejected` or `expired` one has `decided_at`. Only an adult of the household decides. A proposal
+is decided once: its status moves from `pending` to `approved`, `rejected` or `expired` and never again,
+and what it proposes (household, kind, payload, explanation, key, run, creation time) never changes; a
+database trigger refuses any other update (migration 0005). Approving an approved proposal again
+changes nothing. Several proposals can be approved together, in one transaction (a life event before
+its facts, a retraction before the facts, the facts before a decision); if any write is refused, none
+is made. The store is `kako/db/proposal_store.py`; the API is `/api/v1/proposals`.
 
 **Proposal payloads.** A proposal that writes a fact carries the write itself, and the fact store writes
 only that, once (V-08; REVIEW.md rule 4). A write that differs in any field is refused, and so is a
@@ -517,10 +540,15 @@ second write with the same proposal.
 | `replace_fact` | The same, plus `replaces`: the open fact it replaces. `valid_to` is null |
 | `preference_pattern` | Either of the two above |
 | `retract_fact` | `fact_id`, `reason` |
+| `life_event` | `id` (chosen when proposed, so its facts can name it), `kind`, `description` (in the household's words), `occurs_on`, `source_ref` (the turn that reported it) |
+| `decision` | `id`, `session_id`, `question`, `reasoning`, `valid_from`, `chosen` (the chosen option's label), `options` (each `id`, `label`, `calc_run_id` or null, `rejected_reason`, null only for the chosen one, and `tags` from the fixed list), `assumptions` (fact ids), `plan_id` (the plan it accepts, or null), `revises` (the active decision it revises, or null) |
+| `promote` | Comes with task 4: approving one is refused until promotion has its second confirmation |
 
 Values are JSON: money and whole numbers as integers (money in centavos), a rate as a decimal string
-such as `"0.035"` (never a float), a date as `"YYYY-MM-DD"`, ids as UUID strings. The other kinds
-(`life_event`, `decision`, `promote`) write their own tables; their payloads are defined with them.
+such as `"0.035"` (never a float), a date as `"YYYY-MM-DD"`, ids as UUID strings. Every row a payload
+names must be the household's. A fact written on approval takes its source from the proposal: `dreaming`
+when dreaming made it, otherwise `session`, with the turn it was said in as `source_ref`, and it is
+recorded at the approval's time.
 
 ### `proposal_evidence`
 
@@ -534,7 +562,17 @@ such as `"0.035"` (never a float), a date as `"YYYY-MM-DD"`, ids as UUID strings
 | `quote` | TEXT | The words the proposal rests on |
 
 A number in a proposal must appear in its quoted evidence (see [Validation rules](#validation-rules)):
-dreaming copies what the household said; it never works a number out.
+dreaming copies what the household said; it never works a number out. The check
+(`kako/facts/evidence.py`) runs before a proposal is stored. The numbers are a fact's value (money,
+rate, whole number or date), its `valid_from` and `valid_to`, a life event's `occurs_on`, and every
+number in the free text it writes (a text value, a description, a retraction's reason, a decision's
+reasoning). They are read the way the number check reads text (`kako/facts/reading.py`), and match
+when they are the same amount (₱68,000, 68,000 pesos, 68000, and in the household's words 68k or 68
+thousand), the same rate (3.5% or 0.035), the same whole number (or months for years), or the same day
+in any form; a day with no year (Dec 1) counts within a year of the household's date, a month with its
+year (December 2026) counts for its first day, and a start date may be the household's date itself
+(a statement of how things are now). A decision's options come from a stored plan whose texts passed
+the number check (V-10); its reasoning is checked here.
 
 ## Self-learning
 
@@ -733,7 +771,7 @@ Checked by code before a write, and as a suite over the whole database in CI.
 | V-06 | `valid_from` is on or after the entity's `opened_on`, and before its `closed_on` |
 | V-07 | Money facts are never negative (a debt is a positive balance). Rates are between 0 and 1 |
 | V-08 | Every non-seed fact, decision and life event has an approved proposal; a fact is exactly the write its proposal names, and a proposal writes one fact at most. A seed fact has no proposal and replaces nothing |
-| V-09 | Every number in a proposal appears in its quoted evidence |
+| V-09 | Every number in a proposal appears in its quoted evidence (checked before a proposal is stored; what counts as the same number is under `proposal_evidence`) |
 | V-10 | Every number in a reply, recommendation, summary or reconciliation text matches a figure of the plan's run or of one of its turn's what-ifs, a fact in its snapshot, a what-if's allocation, or a number the household wrote in the turn (the number check, `agents/numbers.py`). Dates (in any common form, each read as one date), months, years, percentages, counts and spelled-out numbers with a unit ("nine months") are checked too; a value written at a lower precision is the figure rounded half up to it, and a negative figure matches its amount. Other spelled-out numbers aren't checked. Never a match: a number run into letters, one with a multiplier (`150k`, `₱2M`, "12 thousand") or more than 6 decimals. A bare number from the household's message is a count, and an amount only from ₱100. A specialist's summary (read by the orchestrator, and shown in the agents' steps) may name the turn's own refs exactly; the reply, the options and the reason may not |
 | V-11 | Every recommendation has at least one `figure` source and one non-figure source (a fact, memory, decision or document) |
 | V-12 | `plan.unallocated` is not negative |

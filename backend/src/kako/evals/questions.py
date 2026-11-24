@@ -14,7 +14,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Final, Literal
 
-from kako.agents.numbers import scan
+from kako.facts.reading import scan
 
 TEST_SET: Final = Path(__file__).resolve().parents[4] / "data" / "test-set" / "questions.toml"
 ID: Final = re.compile(r"^q\d{2}$")

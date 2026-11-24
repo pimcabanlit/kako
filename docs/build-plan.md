@@ -141,6 +141,9 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
 
 1. **Proposals and approvals.** The API and the rules (V-08, V-09), with idempotency keys.
    Done when: approving a proposal twice changes nothing the second time.
+   Built Nov 24: `db/proposal_store.py` (propose with V-09 and the idempotency key; approve one or
+   several together, exactly once; reject), the payloads of every kind, the facts a decision rests
+   on, the guard in migration 0005, `/api/v1/proposals` and `kako proposals`.
 2. **Life-event replan.** In-session proposals, approval, what the event touches, the new plan, the diff
    and the decisions to revisit.
    Done when: the worked example's session 4 runs end to end on local Meko and shows the three-part

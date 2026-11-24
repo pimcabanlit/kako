@@ -24,7 +24,7 @@ from kako.db.fact_store import (
 )
 from kako.db.models import Entity, Household, LifeEvent, Person, Proposal
 from kako.demo.files import Change, DemoHousehold
-from kako.facts.proposals import fact_payload
+from kako.facts.proposals import fact_payload, life_event_payload
 
 HOUSEHOLD = cast(Table, Household.__table__)
 PERSON = cast(Table, Person.__table__)
@@ -153,13 +153,15 @@ async def _apply(
     if change.kind == "life_event":
         if change.life_event is None:
             raise DemoLoadError(f"life event {change.seq} has no key")
-        payload = {
-            "kind": change.attribute,
-            "description": change.value,
-            "occurs_on": change.valid_from.isoformat(),
-        }
-        proposal_id = await _proposal(conn, household_id, change, "life_event", payload, decided_by)
         events[change.life_event] = uuid.uuid4()
+        payload = life_event_payload(
+            event_id=events[change.life_event],
+            kind=change.attribute,
+            description=str(change.value),
+            occurs_on=change.valid_from,
+            source_ref=change.source_ref,
+        )
+        proposal_id = await _proposal(conn, household_id, change, "life_event", payload, decided_by)
         await conn.execute(
             LIFE_EVENT.insert().values(
                 id=events[change.life_event],

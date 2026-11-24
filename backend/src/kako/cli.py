@@ -134,7 +134,34 @@ def main(argv: list[str] | None = None) -> int:
         help="write the report to data/test-set/results/<architecture>.json (whole set only)",
     )
 
+    proposals = commands.add_parser(
+        "proposals", help="what waits for the household's yes or no, and their decision"
+    )
+    proposal_commands = proposals.add_subparsers(dest="proposal_command", required=True)
+    listed = proposal_commands.add_parser("list", help="the household's proposals")
+    listed.add_argument(
+        "--status",
+        choices=("pending", "approved", "rejected", "expired", "all"),
+        default="pending",
+    )
+    listed.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+    for action in ("approve", "reject"):
+        decide = proposal_commands.add_parser(
+            action,
+            help=f"{action} proposals by id"
+            + (" and write what each names, together" if action == "approve" else ""),
+        )
+        decide.add_argument("ids", nargs="+", type=uuid.UUID, help="the proposals' ids")
+        decide.add_argument("--by", required=True, help="the adult who decides, by name")
+        decide.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+
     args = parser.parse_args(argv)
+    if args.command == "proposals":
+        if args.proposal_command == "list":
+            return asyncio.run(_proposals(args.status, args.household))
+        return asyncio.run(
+            _decide(args.proposal_command, args.ids, by=args.by, household_id=args.household)
+        )
     if args.command == "api":
         return _api(args.host, args.port, reload=args.reload)
     if args.command == "migrate":
@@ -421,6 +448,74 @@ async def _household(conn: AsyncConnection, household_id: uuid.UUID | None) -> u
         names = ", ".join(f"{r.name} ({r.id})" for r in rows)
         print(f"Several households; choose one with --household: {names}", file=sys.stderr)
     return None
+
+
+async def _proposals(status: str, household_id: uuid.UUID | None) -> int:
+    from kako.api.proposals import describe
+    from kako.db.fact_store import load_entities, load_facts
+    from kako.db.proposal_store import list_proposals
+
+    async def work(conn: AsyncConnection) -> int:
+        chosen = await _household(conn, household_id)
+        if chosen is None:
+            return 1
+        views = await list_proposals(
+            conn,
+            chosen,
+            status=None if status == "all" else status,  # type: ignore[arg-type]
+        )
+        entities, facts = await load_entities(conn, chosen), await load_facts(conn, chosen)
+        for v in views:
+            decided = (
+                f", {v.status} by {v.decided_by} on {v.decided_at:%Y-%m-%d %H:%M %Z}"
+                if (v.decided_at is not None and v.decided_by)
+                else (f", {v.status}" if v.status != "pending" else "")
+            )
+            print(f"{v.id} {v.kind}{decided}")
+            print(f"  {describe(v, entities, facts)}")
+            print(f"  Why: {v.explanation}")
+            for e in v.evidence:
+                who = f"{e.said_by}: " if e.said_by else ""
+                print(f'  Evidence ({e.kind} {e.ref}): {who}"{e.quote}"')
+        print(f"{len(views)} proposal(s)." if views else "No proposals.")
+        return 0
+
+    return await _connected(work)
+
+
+async def _decide(
+    action: str, ids: Sequence[uuid.UUID], *, by: str, household_id: uuid.UUID | None
+) -> int:
+    from kako.api.proposals import people
+    from kako.db.proposal_store import ProposalError, approve, list_proposals, reject
+
+    async def work(conn: AsyncConnection) -> int:
+        chosen = await _household(conn, household_id)
+        if chosen is None:
+            return 1
+        person = (await people(conn, chosen)).get(by.strip().lower())
+        if person is None:
+            print(f"No one called {by} in the household.", file=sys.stderr)
+            return 1
+        mine = await list_proposals(conn, chosen, proposal_ids=ids)
+        if len(mine) != len(set(ids)):
+            print("Not every id is a proposal of this household.", file=sys.stderr)
+            return 1
+        decide = approve if action == "approve" else reject
+        try:
+            decided = await decide(conn, ids, person_id=person, decided_at=datetime.now(UTC))
+            await conn.commit()
+        except ProposalError as exc:
+            await conn.rollback()
+            print(f"Nothing was {action}d: {exc}", file=sys.stderr)
+            return 1
+        for d in decided:
+            wrote = ", ".join(f"{w.table} {w.row_id}" for w in d.written)
+            state = f"already {d.status}; nothing changed" if d.already else d.status
+            print(f"{d.proposal_id} {d.kind}: {state}" + (f" ({wrote})" if wrote else ""))
+        return 0
+
+    return await _connected(work)
 
 
 async def _validate(household_id: uuid.UUID | None) -> int:

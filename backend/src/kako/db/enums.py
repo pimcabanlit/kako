@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Final
 
+from kako.decisions.tags import DECISION_TAGS as TAGS
+
 AGENTS: Final = ("orchestrator", "budget", "debt", "savings", "goals", "dreaming")
 SPECIALISTS: Final = ("budget", "debt", "savings", "goals")
 AREAS: Final = ("budget", "debt", "savings", "goals")
@@ -98,5 +100,5 @@ ENUMS: Final[dict[tuple[str, str], tuple[str, ...]]] = {
     ("number_check", "result"): ("pass", "fail", "regenerated"),
 }
 
-# The fixed list of decision option tags (V-15); kako/decisions/tags.py will re-export it.
-DECISION_TAGS: Final = ("favours_flexibility", "favours_speed")
+# The fixed list of decision option tags (V-15) lives with the decisions.
+DECISION_TAGS: Final = TAGS
