@@ -219,3 +219,33 @@ async def test_a_session_that_proposes_nothing_cant_approve(
         await replay_session(
             migrated, settings, demo, session, household_id, backend=ScriptedBackend(script)
         )
+
+
+async def test_demo_record_refuses_before_it_could_spend(
+    migrated: AsyncEngine,
+    demo_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """Recording calls Foundry, so it is asked for by name, never overwrites a past run, and needs
+    an empty database; none of these refusals reaches a model."""
+    assert await asyncio.to_thread(_main, ["demo", "record", "session-4"]) == 1
+    assert "set KAKO_MODEL_MODE=record" in capsys.readouterr().err
+    monkeypatch.setenv("KAKO_MODEL_MODE", "record")
+    past = tmp_path / "session-4.json"
+    past.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("KAKO_RECORDED_RESPONSES", str(past))
+    get_settings.cache_clear()
+    assert await asyncio.to_thread(_main, ["demo", "record", "session-9"]) == 1
+    assert "No session 'session-9'" in capsys.readouterr().err
+    assert await asyncio.to_thread(_main, ["demo", "record", "session-4"]) == 1
+    assert "exists: move it aside first" in capsys.readouterr().err
+    monkeypatch.setenv("KAKO_RECORDED_RESPONSES", str(tmp_path / "new.json"))
+    get_settings.cache_clear()
+    async with migrated.connect() as conn:
+        await load_demo(conn, read_demo(), through=datetime(2026, 9, 15, 9, tzinfo=MANILA))
+        await conn.commit()
+    assert await asyncio.to_thread(_main, ["demo", "record", "session-4"]) == 1
+    assert "this database holds" in capsys.readouterr().err
+    assert not (tmp_path / "new.json").exists()
