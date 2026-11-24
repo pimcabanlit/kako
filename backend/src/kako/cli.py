@@ -72,6 +72,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     figures.add_argument("--save", action="store_true", help="store the run and its figures")
 
+    ask = commands.add_parser(
+        "ask",
+        help="one planning turn: the orchestrator and specialists answer a message "
+        "(KAKO_MODEL_MODE: live, record or replay)",
+    )
+    ask.add_argument("message", help="what the household says")
+    ask.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+    ask.add_argument(
+        "--on", type=date.fromisoformat, help="the date (default: the household's as-of date)"
+    )
+    ask.add_argument(
+        "--known-at",
+        type=datetime.fromisoformat,
+        help="as Kako knew it then, such as 2026-09-15T09:00+08:00 (default: everything)",
+    )
+    ask.add_argument("--title", default="Planning session", help="the session's title")
+    ask.add_argument(
+        "--seed",
+        default="ask:t1",
+        help="the turn's seed, which keys recorded responses (default: ask:t1)",
+    )
+    ask.add_argument("--no-meko", action="store_true", help="no Meko search for this turn")
+
     args = parser.parse_args(argv)
     if args.command == "api":
         return _api(args.host, args.port, reload=args.reload)
@@ -87,6 +110,18 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_validate(args.household))
     if args.command == "figures":
         return asyncio.run(_figures(args.household, args.on, args.known_at, save=args.save))
+    if args.command == "ask":
+        return asyncio.run(
+            _ask(
+                args.message,
+                household_id=args.household,
+                on=args.on,
+                known_at=args.known_at,
+                title=args.title,
+                seed=args.seed,
+                use_meko=not args.no_meko,
+            )
+        )
     parser.error(f"unknown command {args.command}")
     return 2
 
@@ -278,6 +313,76 @@ async def _figures(
         return 0
 
     return await _connected(work)
+
+
+async def _ask(
+    message: str,
+    *,
+    household_id: uuid.UUID | None,
+    on: date | None,
+    known_at: datetime | None,
+    title: str,
+    seed: str,
+    use_meko: bool,
+) -> int:
+    from contextlib import AsyncExitStack
+
+    from sqlalchemy import select
+
+    from kako.agents.ask import ask, render_answer
+    from kako.agents.brief_store import BriefStoreError
+    from kako.agents.chat import ModelError
+    from kako.agents.model_manager import chat_backend
+    from kako.agents.orchestrator import OrchestratorError
+    from kako.db.engine import make_engine
+    from kako.db.meko_log import DbCallLog
+    from kako.db.models import Household
+    from kako.meko.client import MekoError
+    from kako.meko.mcp import open_meko
+
+    settings = get_settings()
+    if settings.database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    if known_at is not None and known_at.tzinfo is None:
+        print("--known-at needs its time zone, such as +08:00.", file=sys.stderr)
+        return 1
+    engine = make_engine(settings.database_url)
+    try:
+        async with engine.connect() as conn:
+            chosen = await _household(conn, household_id)
+            if chosen is None:
+                return 1
+            table = Household.__table__
+            as_of = (
+                await conn.execute(select(table.c.as_of_date).where(table.c.id == chosen))
+            ).scalar_one()
+        async with AsyncExitStack() as stack:
+            # The brief's search, a conversation, and one extra search per specialist ask.
+            meko = (
+                await stack.enter_async_context(open_meko(settings, DbCallLog(engine), max_calls=8))
+                if use_meko
+                else None
+            )
+            asked = await ask(
+                engine,
+                meko,
+                settings,
+                chat_backend(settings),
+                household_id=chosen,
+                message=message,
+                on=on or as_of,
+                known_at=known_at,
+                title=title,
+                seed=seed,
+            )
+        print(render_answer(asked))
+        return 0
+    except (ModelError, MekoError, BriefStoreError, OrchestratorError) as exc:
+        print(f"The turn stopped: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
 
 
 def _shown(figure: Figure) -> str:

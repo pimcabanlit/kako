@@ -6,6 +6,7 @@ go back, and so on. The loop is where the architecture's bounds are kept in code
 - at most `max_tool_calls` counted tool calls (4 for a specialist); after that only the agent's
   final tool is offered, and the model must call it;
 - at most `max_tool_calls + 2` model calls, so a model that keeps talking still stops;
+- the final tool only on its own in a reply, so an answer rests on results the model has read;
 - every tool call is an `agent_step` (the agent, the tool, a short input and result, the what-if
   run if any, the outcome), written as it happens.
 
@@ -131,6 +132,9 @@ async def run_agent(
                 refusal = f"{call.name} isn't available now"
                 if finals:
                     refusal += f": call {finals[0].spec.name}"
+            elif tool is not None and tool.final and len(reply.tool_calls) > 1:
+                # An answer must rest on results the model has read: never beside other calls.
+                refusal = f"call {call.name} on its own, after the other calls' results"
             elif tool is not None and tool.counted:
                 if counted >= max_tool_calls:
                     refusal = f"the limit of {max_tool_calls} tool calls is reached"

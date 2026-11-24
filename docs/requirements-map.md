@@ -42,7 +42,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Objective | Status | How Kako meets it | Phase |
 | --- | --- | --- | --- |
 | **Remember the person:** goals, preferences, constraints and life events as long-term memory | In progress | Goals, preferences, constraints and life events are facts with a validity window and a replacement chain in Postgres, and memories in Meko; durable preferences are promoted to shared knowledge ([data-model.md](data-model.md#facts)). Built so far: the fact store, with replace, retract, snapshots on a date and as known at a time, and a database guard that allows nothing else (Phase 2) | 2, 4 |
-| **Plan across areas:** specialist agents (budget, debt, savings, goals) share one financial context | Not started | One orchestrator calls four specialists as tools; all start from the same brief and the same engine run, and conflicts between them are found in code and resolved in the open ([architecture.md](architecture.md#agents)) | 3 |
+| **Plan across areas:** specialist agents (budget, debt, savings, goals) share one financial context | In progress | One orchestrator calls four specialists as tools; all start from the same brief and the same engine run, and conflicts between them are found in code and resolved in the open ([architecture.md](architecture.md#agents)). Built: the brief, the agents' tools, the four specialists and the orchestrator, tested on the worked example's session 2 with a scripted model (Phase 3, tasks 2 and 3); reconciliation is task 4 | 3 |
 | **Adapt over time:** the plan updates when a life event happens | In progress | Life-event replan: the old fact closed and replaced, the decisions that rested on it marked to revisit, a new plan, and a diff that says what changed and why ([architecture.md](architecture.md#how-a-life-event-replans)). Built: replace and retract (Phase 2, task 2) and the diff with the decisions to revisit (task 4); the replan itself is Phase 4 | 4 |
 | **Explain the advice:** every recommendation traces to the memories and data behind it | Not started | Each recommendation stores its figures, facts, decisions, memories and documents, and its Meko turn; the "why" view shows them and links the Meko trace. The number check blocks any figure the engine did not produce | 3, 5 |
 
@@ -61,7 +61,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Outcome | Status | How | Phase |
 | --- | --- | --- | --- |
 | A synthetic household or small-business financial profile | In progress | The Villanueva household: two adults, one child, pesos, statements and reference documents ([data-model.md](data-model.md#demo-dataset)). Its seed and 18 approved changes load through the fact store (`kako demo load`), pass every validation rule, and give the worked example's figures; the session scripts come with the sessions | 2 |
-| A planning agent system connected to Meko | Not started | Orchestrator, four specialists and dreaming, through one Meko adapter | 3–4 |
+| A planning agent system connected to Meko | In progress | Orchestrator, four specialists and dreaming, through one Meko adapter. Built: the orchestrator and specialists, with the brief's one `context_search` and one extra search per specialist (Phase 3, tasks 2 and 3); dreaming is Phase 4 | 3–4 |
 | 3 or more sessions showing memory carrying over and the plan adapting to a life event | Not started | Sessions in August, September and October, then the new job in session 4 | 4–5 |
 | Trace-backed explanations for the key recommendations | Not started | The "why" view and the Meko trace for every recommendation | 3, 5 |
 | Encouraged: a what-if scenario planner | In progress | What-ifs in the engine (Must for the engine, screen is a Should); a kept scenario as an AMP branch (Should). The engine takes hypothetical values (`Override`) in place of facts and cites them (Phase 2, task 3) | 3, 5 |
@@ -127,6 +127,6 @@ Phases refer to [build-plan.md](build-plan.md).
 | AMP availability and connectivity on our account | Phase 1 spike; Neon as the fallback |
 | Context Gaps (self-learning tools) may not be available on Free | Phase 1 spike; a Must if available, otherwise documented as the production path |
 | Meko Cloud extracts memories before the household approves them | Phase 1 spike (can it be turned off?); dreaming treats extracted memories as candidates either way (V-14) |
-| Judges may not have an Azure account | Demo mode with recorded responses (Phase 3). Recording and replay with no network are built (task 1); the one-command demo mode is task 9 |
+| Judges may not have an Azure account | Demo mode with recorded responses (Phase 3). Recording and replay with no network are built (task 1), and session 2 is recorded from Foundry (`data/recorded/session-2.json`, replayed with `kako ask`); the one-command demo mode is task 9 |
 | "Why four specialists, not one agent?" | Single-agent baseline on the agent test set (Phase 3), both scores published |
 | Full terms not published | Check before submission |

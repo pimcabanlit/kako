@@ -234,8 +234,9 @@ async def gather_brief(
     budget: int,
     search_limit: int = 5,
     run: Run | None = None,
-) -> tuple[Brief, Run]:
-    """The brief for one turn, and the engine run it describes. At most one Meko call: a
+) -> tuple[Brief, BriefInputs]:
+    """The brief for one turn, and what it was rendered from (the snapshot, the engine run it
+    describes, the decisions), which the agents' tools read. At most one Meko call: a
     `context_search` on the household's message (none when there is no message, no Meko, or a
     search limit of 0)."""
     if budget not in BUDGET_RANGE or search_limit not in SEARCH_LIMIT_RANGE:
@@ -294,4 +295,4 @@ async def gather_brief(
         context=context,
         approved_memories=approved,
     )
-    return render_brief(inputs, budget), run
+    return render_brief(inputs, budget), inputs

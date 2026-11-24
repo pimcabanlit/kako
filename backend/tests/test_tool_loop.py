@@ -232,3 +232,22 @@ async def test_tool_names_must_be_unique(make_settings: MakeSettings) -> None:
             tools=[figures_tool([]), figures_tool([])],
             max_output_tokens=100,
         )
+
+
+async def test_the_final_tool_runs_only_on_its_own(make_settings: MakeSettings) -> None:
+    """An answer beside other calls would rest on results the model hasn't read: refused."""
+    result, _, turn = await run(
+        make_settings,
+        {
+            "s2:t1/debt#1/1": calls(("run_what_if", {}), ("submit_proposal", {"text": "A"})),
+            "s2:t1/debt#1/2": calls(("submit_proposal", {"text": "B"})),
+        },
+        [],
+    )
+    assert result.answer == {"text": "B"}
+    assert steps(turn) == [
+        (1, "debt", "run_what_if", "ok"),
+        (2, "debt", "submit_proposal", "error"),
+        (3, "debt", "submit_proposal", "ok"),
+    ]
+    assert turn.steps.steps[1].result_summary.startswith("call submit_proposal on its own")  # type: ignore[attr-defined]
