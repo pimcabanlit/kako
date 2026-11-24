@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -26,8 +25,8 @@ from kako.agents.brief_store import gather_brief
 from kako.cli import main as _main
 from kako.db.meko_log import DbCallLog
 from kako.db.proposal_store import approve, reject
-from kako.demo.files import DecisionOptionFile, read_demo
-from kako.demo.load import _decide, load_demo
+from kako.demo.files import read_demo
+from kako.demo.load import load_demo
 from kako.dreaming.job import end_session, run_dream
 from kako.dreaming.promotion import propose_patterns, propose_promotions
 from kako.meko.fake import FakeMeko
@@ -51,17 +50,10 @@ PREFERENCE = (
 )
 
 
-def _options(chosen: str, turned_down: str, why: str) -> tuple[DecisionOptionFile, ...]:
-    return (
-        DecisionOptionFile(label=turned_down, rejected_reason=why, tags=("favours_speed",)),
-        DecisionOptionFile(label=chosen, rejected_reason=None, tags=("favours_flexibility",)),
-    )
-
-
 async def _story(conn: Any) -> tuple[uuid.UUID, dict[str, uuid.UUID], dict[str, uuid.UUID]]:
-    """The demo household up to Oct 20, without the preference dreaming found then, and with the
-    decisions of Sessions 1 and 3 beside Session 2's. Returns the household, its people by name
-    and its sessions by title."""
+    """The demo household up to Oct 20, without the preference dreaming found then: the decisions of
+    Sessions 1, 2 and 3 are the story's own. Returns the household, its people by name and its
+    sessions by title."""
     demo = read_demo()
     household_id = await load_demo(conn, demo, through=BEFORE_THE_PATTERN, skip={6})
     people = {
@@ -71,35 +63,6 @@ async def _story(conn: Any) -> tuple[uuid.UUID, dict[str, uuid.UUID], dict[str, 
             {"h": household_id},
         )
     }
-    september = demo.decisions[0]
-    august = replace(
-        september,
-        recorded_at=datetime(2026, 8, 15, 10, tzinfo=MANILA),
-        session="Session 1",
-        session_date=date(2026, 8, 15),
-        decided_by="jun",
-        question="Should we pay the car loan early or keep a bigger buffer?",
-        reasoning="We'd rather have a bigger cash buffer.",
-        quote="Let's keep the bigger buffer. We'd rather have a bigger cash buffer.",
-        chosen="B: bigger buffer",
-        valid_from=date(2026, 8, 15),
-        options=_options("B: bigger buffer", "A: car loan early", "We'd rather have cash."),
-    )
-    october = replace(
-        august,
-        recorded_at=datetime(2026, 10, 18, 10, tzinfo=MANILA),
-        session="Session 3",
-        session_date=date(2026, 10, 18),
-        question="Should the bonus go to the card or the family trip?",
-        reasoning="Keep cash for the family trip.",
-        quote="Keep cash for the family trip.",
-        chosen="B: keep it for the trip",
-        valid_from=date(2026, 10, 18),
-        options=_options("B: keep it for the trip", "A: all on the card", "The trip matters."),
-    )
-    await _decide(conn, household_id, 101, august, people)
-    await _decide(conn, household_id, 103, october, people)
-    await conn.commit()
     sessions = {
         title: session_id
         for title, session_id in await conn.execute(

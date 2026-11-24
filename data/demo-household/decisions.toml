@@ -2,7 +2,33 @@
 # example"). Each decision is written after the change it follows, at the same moment, through the
 # proposal store: a `decision` proposal with the household's words as evidence, approved by the
 # person named. Its assumptions are the facts of that day as known then (kako/decisions/assumptions.py),
-# so a later new job sends it back to the household as "to revisit".
+# so a later new job sends it back to the household as "to revisit". A decision with no `after` is
+# written in its own moment, in time order with the changes.
+#
+# Three times, in three sessions, the household kept cash on hand rather than paying debt off faster:
+# Jun in sessions 1 and 3, Mara in session 2. That is the pattern dreaming finds after session 3
+# (changes.csv row 6, which demo mode leaves to dreaming: docs/build-plan.md, Phase 4, task 4).
+
+# Session 1 (Aug 15, 2026): Jun keeps a bigger buffer rather than paying the car loan early.
+[[decision]]
+recorded_at = 2026-08-15T10:00:00+08:00
+session = "Session 1"
+session_date = 2026-08-15
+decided_by = "jun"
+question = "Should we pay the car loan early or keep a bigger buffer?"
+reasoning = "We'd rather have a bigger cash buffer."
+quote = "Let's keep the bigger buffer. We'd rather have a bigger cash buffer."
+chosen = "B: bigger buffer"
+valid_from = 2026-08-15
+
+[[decision.option]]
+label = "A: car loan early"
+rejected_reason = "We'd rather have a bigger cash buffer."
+tags = ["favours_speed"]
+
+[[decision.option]]
+label = "B: bigger buffer"
+tags = ["favours_flexibility"]
 
 # Session 2 (Sep 15, 2026): the debt question. The household chose option B that evening; plan v2's
 # allocations are changes.csv rows 1 and 2.
@@ -25,4 +51,26 @@ tags = ["favours_speed"]
 
 [[decision.option]]
 label = "B: split"
+tags = ["favours_flexibility"]
+
+# Session 3 (Oct 18, 2026): Jun keeps the bonus as cash for the family trip rather than putting it
+# all on the card. Dreaming runs over this session that evening.
+[[decision]]
+recorded_at = 2026-10-18T10:00:00+08:00
+session = "Session 3"
+session_date = 2026-10-18
+decided_by = "jun"
+question = "Should the bonus go to the card or the family trip?"
+reasoning = "Keep cash for the family trip."
+quote = "Keep cash for the family trip."
+chosen = "B: keep it for the trip"
+valid_from = 2026-10-18
+
+[[decision.option]]
+label = "A: all on the card"
+rejected_reason = "Keep cash for the family trip."
+tags = ["favours_speed"]
+
+[[decision.option]]
+label = "B: keep it for the trip"
 tags = ["favours_flexibility"]

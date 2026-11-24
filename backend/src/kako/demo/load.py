@@ -2,10 +2,11 @@
 
 The seed goes in as seed facts. Each later change becomes a proposal an adult approved, and then the
 write that proposal names, so V-08 holds for every fact after the seed (Pim, Nov 17). Each decision
-of the story (`decisions.toml`) follows the change it names, in a session row of its own, proposed
-and approved through the proposal store like any other decision. `through` stops the replay at a
-point in the story; without it, only the seed is loaded. `skip` leaves out changes a scripted
-session makes itself in demo mode (`demo/mode.py`).
+of the story (`decisions.toml`) follows the change it names, or comes in its own moment in time
+order with the changes, in a session row of its own, proposed and approved through the proposal
+store like any other decision. `through` stops the replay at a point in the story; without it, only
+the seed is loaded. `skip` leaves out changes a scripted session makes itself in demo mode
+(`demo/mode.py`).
 """
 
 from __future__ import annotations
@@ -128,14 +129,23 @@ async def load_demo(
                 recorded_at=seed_time(demo),
             )
         events: dict[str, uuid.UUID] = {}
+        # Decisions in their own moment (no `after`), by time, each before the next change.
+        own = sorted(
+            ((n, d) for n, d in enumerate(demo.decisions, start=1) if d.after is None),
+            key=lambda nd: nd[1].recorded_at,
+        )
         for change in demo.changes if through is not None else ():
             if change.recorded_at > through:  # type: ignore[operator]
                 break
+            while own and own[0][1].recorded_at < change.recorded_at:
+                await _decide(conn, household_id, *own.pop(0), people)
             if change.seq not in skip:
                 await _apply(conn, household_id, change, people, entities, events)
             for n, decision in enumerate(demo.decisions, start=1):
                 if decision.after == change.seq:
                     await _decide(conn, household_id, n, decision, people)
+        while through is not None and own and own[0][1].recorded_at <= through:
+            await _decide(conn, household_id, *own.pop(0), people)
         return household_id
 
 

@@ -240,27 +240,30 @@ async def test_dreaming_proposes_what_is_new_once_with_its_quote_and_speaker(
     assert run.counts["proposals"] == {"life_event": 1, "replace_fact": 2}
     assert run.counts["outcomes"] == {"new": 1, "refused": 1, "replace": 2}
     assert run.counts["claims"] == 3
-    # Steps 4 and 5: no new pattern (the household holds its preference for flexibility), and
-    # that preference, approved from a pattern, is offered for sharing once (task 4).
+    # Steps 4 and 5: no new pattern (the household holds its preference for flexibility); that
+    # preference, approved from a pattern, is offered for sharing once (task 4), and so are the
+    # decisions of Sessions 1 and 2, each held since by two sessions that ended after it.
     assert [p.status for p in report.patterns] == []
-    (offer,) = report.promotions
-    assert run.counts["promotions"] == [str(offer)]
+    assert run.counts["promotions"] == [str(p) for p in report.promotions]
     async with migrated.connect() as conn:
-        shared = (
+        offers = list(
             await conn.execute(
                 text(
-                    "SELECT p.status, p.payload, f.attribute, e.kind FROM proposal p "
-                    "JOIN fact f ON f.id = (p.payload->>'fact_id')::uuid "
-                    "JOIN proposal_evidence e ON e.proposal_id = p.id WHERE p.id = :p"
+                    "SELECT p.status, p.payload, e.kind, coalesce(f.attribute, s.title) AS what "
+                    "FROM proposal p JOIN proposal_evidence e ON e.proposal_id = p.id "
+                    "LEFT JOIN fact f ON f.id = (p.payload->>'fact_id')::uuid "
+                    "LEFT JOIN decision d ON d.id = (p.payload->>'decision_id')::uuid "
+                    "LEFT JOIN session s ON s.id = d.session_id WHERE p.id = ANY(:p)"
                 ),
-                {"p": offer},
+                {"p": list(report.promotions)},
             )
-        ).one()
-    assert (shared.status, shared.attribute, shared.kind) == (
-        "pending",
-        "preference.debt_vs_flexibility",
-        "fact",
-    )
+        )
+    assert {o.status for o in offers} == {"pending"}
+    assert sorted((o.what, o.kind) for o in offers) == [
+        ("Session 1", "decision"),
+        ("Session 2", "decision"),
+        ("preference.debt_vs_flexibility", "fact"),
+    ]
 
     # A rerun does nothing: the run is done.
     again = await _dream(migrated, settings, run_id, ScriptedBackend({}))
@@ -365,8 +368,8 @@ async def test_a_failed_run_says_why_and_runs_again(
     assert "ModelError" in run.counts["error"]
     report = await _dream(migrated, settings, run_id, ScriptedBackend(script()))
     assert report.status == "done"
-    assert len(report.proposed) == 3 + 1  # and the preference offered for sharing
-    assert len(report.promotions) == 1
+    assert len(report.proposed) == 3 + 3  # and the preference and two decisions offered to share
+    assert len(report.promotions) == 3
 
 
 async def test_the_labelled_set_scores_full_marks_with_a_careful_extraction(

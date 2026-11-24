@@ -99,7 +99,9 @@ class DecisionOptionFile:
 class DemoDecision:
     """A decision the household made in a session of the story (`decisions.toml`)."""
 
-    after: int  # written after this change (its seq), in the same moment
+    # Written after this change (its seq), in the same moment; None: in its own moment, in time
+    # order with the changes.
+    after: int | None
     recorded_at: datetime
     session: str  # the session's title
     session_date: date
@@ -239,7 +241,7 @@ def _change(row: dict[str, str]) -> Change:
 
 
 DECISION_FIELDS: Final = {
-    "after", "recorded_at", "session", "session_date", "decided_by", "question", "reasoning",
+    "recorded_at", "session", "session_date", "decided_by", "question", "reasoning",
     "quote", "chosen", "valid_from", "option",
 }  # fmt: skip
 
@@ -268,8 +270,10 @@ def _decisions(path: Path) -> tuple[DemoDecision, ...]:
 
 
 def _decision(raw: Any) -> DemoDecision:
-    if not isinstance(raw, dict) or set(raw) != DECISION_FIELDS:
-        raise ValueError(f"a [[decision]] has exactly {', '.join(sorted(DECISION_FIELDS))}")
+    if not isinstance(raw, dict) or not DECISION_FIELDS <= set(raw) <= DECISION_FIELDS | {"after"}:
+        raise ValueError(
+            f"a [[decision]] has exactly {', '.join(sorted(DECISION_FIELDS))}, and may have after"
+        )
     recorded_at, session_date, valid_from = (
         raw["recorded_at"],
         raw["session_date"],
@@ -280,7 +284,8 @@ def _decision(raw: Any) -> DemoDecision:
     for name, value in (("session_date", session_date), ("valid_from", valid_from)):
         if not isinstance(value, date) or isinstance(value, datetime):
             raise ValueError(f"{name} must be a date")
-    if not isinstance(raw["after"], int) or isinstance(raw["after"], bool):
+    after = raw.get("after")
+    if after is not None and (not isinstance(after, int) or isinstance(after, bool)):
         raise ValueError("after must be a change's seq")
     options = []
     for option in raw["option"] if isinstance(raw["option"], list) else [None]:
@@ -308,7 +313,7 @@ def _decision(raw: Any) -> DemoDecision:
     if chosen not in {o.label for o in options}:
         raise ValueError(f"the chosen option {chosen!r} isn't one of the options")
     return DemoDecision(
-        after=raw["after"],
+        after=after,
         recorded_at=recorded_at,
         session=_text(raw, "session"),
         session_date=session_date,
@@ -349,15 +354,21 @@ def _check_references(demo: DemoHousehold) -> None:
             raise DemoDataError(f"changes.csv: change {change.seq} names a later life event")
     seqs = {c.seq: c for c in demo.changes}
     for n, decision in enumerate(demo.decisions, start=1):
-        after = seqs.get(decision.after)
-        if after is None:
-            raise DemoDataError(
-                f"decisions.toml: decision {n} follows unknown change {decision.after}"
-            )
-        if after.recorded_at != decision.recorded_at:
-            raise DemoDataError(
-                f"decisions.toml: decision {n} is recorded with the change it follows"
-            )
+        if decision.after is None:
+            if any(c.recorded_at == decision.recorded_at for c in demo.changes):
+                raise DemoDataError(
+                    f"decisions.toml: decision {n} is recorded with a change: name it in after"
+                )
+        else:
+            after = seqs.get(decision.after)
+            if after is None:
+                raise DemoDataError(
+                    f"decisions.toml: decision {n} follows unknown change {decision.after}"
+                )
+            if after.recorded_at != decision.recorded_at:
+                raise DemoDataError(
+                    f"decisions.toml: decision {n} is recorded with the change it follows"
+                )
         if decision.decided_by not in people:
             raise DemoDataError(f"decisions.toml: decision {n} decided by unknown person")
 

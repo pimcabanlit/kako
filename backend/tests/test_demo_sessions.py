@@ -15,6 +15,7 @@ from kako.demo.sessions import (
     Approval,
     DemoSessionError,
     check_writes,
+    read_learning,
     read_sessions,
 )
 
@@ -121,3 +122,45 @@ def test_what_a_session_writes_is_checked_against_the_story() -> None:
             check_writes((session,), demo)
     with pytest.raises(DemoSessionError, match="another session writes change 10"):
         check_writes((four, replace(four, name="again")), demo)
+
+
+LEARNING = """session = "Session 3"
+dreamt_at = 2026-10-20T20:30:00+08:00
+writes = 6
+promote = { by = "jun", at = 2026-10-20T21:30:00+08:00 }
+"""
+
+
+def test_the_storys_learning_step() -> None:
+    """Dreaming over Session 3 finds the preference (changes.csv row 6), Mara approves it at the
+    row's time, and Jun confirms its sharing an hour and a half later."""
+    learning = read_learning(demo=read_demo())
+    assert learning is not None
+    assert (learning.session, learning.writes) == ("Session 3", 6)
+    assert learning.dreamt_at == datetime(2026, 10, 20, 20, 30, tzinfo=MANILA)
+    assert learning.promote == Approval("jun", datetime(2026, 10, 20, 21, 30, tzinfo=MANILA))
+    assert learning.at == learning.promote.at
+
+
+def test_no_learning_file_means_no_step(tmp_path: Path) -> None:
+    assert read_learning(tmp_path / "learning.toml", demo=read_demo()) is None
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "error"),
+    [
+        ("writes = 6", "writes = 3", "writes names a preference_pattern row"),
+        ("writes = 6", "writes = 6\nextra = 1", "it has exactly session"),
+        ('by = "jun"', 'by = "lia"', "promote.by must be an adult"),
+        ('"Session 3"', '"Session 9"', "session names a session of decisions.toml"),
+        ("2026-10-20T20:30:00+08:00", "2026-10-20T20:30:00", "times with their zone"),
+        ("2026-10-20T20:30:00+08:00", "2026-10-21T20:30:00+08:00", "dreaming runs after"),
+        ("2026-10-20T21:30:00+08:00", "2026-10-20T20:45:00+08:00", "sharing is confirmed after"),
+        ("writes = 6", "writes = [", "learning.toml"),
+    ],
+)
+def test_a_broken_learning_step_says_what(tmp_path: Path, old: str, new: str, error: str) -> None:
+    path = tmp_path / "learning.toml"
+    path.write_text(LEARNING.replace(old, new, 1), encoding="utf-8")
+    with pytest.raises(DemoSessionError, match=error):
+        read_learning(path, demo=read_demo())

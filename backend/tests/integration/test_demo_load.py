@@ -75,7 +75,8 @@ async def test_the_demo_loads_and_every_rule_passes(migrated: AsyncEngine) -> No
             .where(proposals.c.household_id == household_id)
             .group_by(proposals.c.status)
         )
-        assert dict(statuses.all()) == {"approved": 19}  # the 18 changes and session 2's decision
+        # The 18 changes and the decisions of Sessions 1, 2 and 3.
+        assert dict(statuses.all()) == {"approved": 21}
         new_job = next(f for f in later if f.attribute == "income.monthly_net")
         assert new_job.life_event_id is not None
         assert new_job.replaces is not None
@@ -98,7 +99,8 @@ async def test_session_2s_decision_rests_on_the_days_facts(migrated: AsyncEngine
                         "s.household_date, o.label AS chosen, p.decided_at "
                         "FROM decision d JOIN session s ON s.id = d.session_id "
                         "JOIN decision_option o ON o.id = d.chosen_option_id "
-                        "JOIN proposal p ON p.id = d.proposal_id WHERE d.household_id = :h"
+                        "JOIN proposal p ON p.id = d.proposal_id "
+                        "WHERE d.household_id = :h AND s.title = 'Session 2'"
                     ),
                     {"h": household_id},
                 )

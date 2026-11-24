@@ -79,10 +79,25 @@ async def _demo_run_twice(migrated: AsyncEngine, capsys: pytest.CaptureFixture[s
     assert "== Session 4, turn s4:t1 ==" in out
     assert "replace_fact: Mara's salary: income.monthly_net = ₱68,000.00 from Dec 1, 2026" in out
     assert "== Session 4, turn s4:t2 ==\nThe new plan:" in out
-    assert "What changed since the decision of Sep 15, 2026 in Session 2 (B: split):" in out
+    assert (
+        "What changed since the decision of Oct 18, 2026 in Session 3 (B: keep it for the trip):"
+        in out
+    )
     assert "- Take-home pay a month, all incomes: ₱100,000.00 → ₱116,000.00" in out
     assert "\nWhy:\n" in out
-    assert "- To revisit: “How hard should we pay down the credit card?”" in out
+    for question in (
+        "Should we pay the car loan early or keep a bigger buffer?",
+        "How hard should we pay down the credit card?",
+        "Should the bonus go to the card or the family trip?",
+    ):
+        assert f"- To revisit: “{question}”" in out
+    # Before session 4, dreaming over Session 3 finds the preference (Phase 4, task 4): Mara
+    # approves it, Jun confirms its sharing and Session 1's decision record's, and both are shared.
+    assert (
+        "Dreaming over Session 3: proposed the preference it found, approved as the story has it; "
+        "2 promotion(s) confirmed, 2 shared in Meko."
+    ) in out
+    assert out.index("Dreaming over Session 3") < out.index("== Session 4, turn s4:t1 ==")
     assert "US$0.0000." in out  # replayed, so nothing spent
     # The test set replays on this database to the score its saved run reports.
     saved = json.loads((RESULTS / "specialists.json").read_text(encoding="utf-8"))
@@ -109,6 +124,17 @@ async def _demo_run_twice(migrated: AsyncEngine, capsys: pytest.CaptureFixture[s
             await conn.execute(text("SELECT count(*) FROM fact WHERE status <> 'retracted'"))
         ).scalar_one()
     assert events == 1  # written by session 4's approval, not by loading
+    async with migrated.connect() as conn:
+        shared = list(
+            await conn.execute(
+                text(
+                    "SELECT kako_table, meko_kind FROM meko_link "
+                    "WHERE meko_kind IN ('promoted_memory', 'document') "
+                    "AND kako_table <> 'document' ORDER BY kako_table"
+                )
+            )
+        )
+    assert [tuple(r) for r in shared] == [("decision", "document"), ("fact", "promoted_memory")]
 
     # After the sessions, Meko upkeep keeps every fact; a memory search for Mara's salary finds
     # the new one and the old one in the past tense (Phase 4, task 5), and V-13 passes.
@@ -142,6 +168,7 @@ async def _demo_run_twice(migrated: AsyncEngine, capsys: pytest.CaptureFixture[s
     assert "== Session 2, turn s2:t1 ==" in out
     assert any(x.startswith("Session 2: ") for x in out.splitlines())  # matched, or reported
     assert "Session 4: the changes it approves are in this database already" in out
+    assert "Dreaming over Session 3: learned in an earlier run, nothing to do." in out
     assert "== Session 4" not in out
     assert "Meko upkeep: 0 memories added, 0 rewritten, 0 deleted." in out
 
@@ -234,7 +261,9 @@ async def test_session_4_approves_what_it_proposed_and_writes_the_story(
     told, replanned = replayed.asked
     assert [p.kind for p in told.proposed] == ["life_event", "replace_fact"]
     assert replanned.replan is not None
-    assert replanned.replan.since == "the decision of Sep 15, 2026 in Session 2 (B: split)"
+    assert replanned.replan.since == (
+        "the decision of Oct 18, 2026 in Session 3 (B: keep it for the trip)"
+    )
     found = await written(migrated, demo, session, household_id)
     assert all(key and key.startswith(str(told.session_id)) for key in found.values())
     async with migrated.connect() as conn:
