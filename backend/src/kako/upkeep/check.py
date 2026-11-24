@@ -57,10 +57,17 @@ async def check_links(engine: AsyncEngine, meko: Meko, household_id: uuid.UUID) 
     """What is wrong between the household's rows and Meko (empty: V-13 holds, nothing owed)."""
     problems: list[str] = []
     async with engine.connect() as conn:
-        name = (
-            await conn.execute(select(HOUSEHOLD.c.name).where(HOUSEHOLD.c.id == household_id))
-        ).scalar_one()
+        household = (
+            await conn.execute(
+                select(HOUSEHOLD.c.name, HOUSEHOLD.c.meko_datapack_id).where(
+                    HOUSEHOLD.c.id == household_id
+                )
+            )
+        ).one()
         owed = await plan_for(conn, household_id)
+    name = household.name
+    if household.meko_datapack_id is not None and meko.datapack_id != household.meko_datapack_id:
+        return [*problems, "Meko isn't on this household's datapack: nothing to compare"]
     for step in owed:
         problems.append(
             f"fact {step.fact.id} ({step.fact.attribute}): upkeep owes a {step.kind} "
