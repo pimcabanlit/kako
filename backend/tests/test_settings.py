@@ -141,3 +141,12 @@ def test_blank_recording_and_effort_mean_unset(make_settings: MakeSettings) -> N
     settings = make_settings(recorded_responses=" ", reasoning_effort_strong="")
     assert settings.recorded_responses is None
     assert settings.reasoning_effort("strong") is None
+
+
+def test_the_brief_budget_has_bounds(make_settings: MakeSettings) -> None:
+    assert make_settings().brief_token_budget == 3_000
+    assert make_settings().brief_search_limit == 5
+    with pytest.raises(ValidationError):
+        make_settings(brief_token_budget=100)
+    with pytest.raises(ValidationError):
+        make_settings(brief_search_limit=11)

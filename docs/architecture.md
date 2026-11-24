@@ -99,7 +99,12 @@ flowchart LR
    figures, the active decisions with their reasons, approved preferences and constraints, pending
    proposals, and the results of **one** `context_search` on the household's message (memories, shared
    knowledge and documents, past conversations). Specialists start from this brief instead of searching
-   on their own, which keeps the answer grounded and the Meko call count low.
+   on their own, which keeps the answer grounded and the Meko call count low. Agents see stable refs, never
+   database ids (`debt:credit-card`, `figure:debt.payoff_months@debt:credit-card`, `M1` for a
+   memory), so a recorded turn replays anywhere. Approved preferences come from the fact store, with
+   who approved them and when, and are marked promoted once Meko holds them as collective memory.
+   Over budget, code drops what agents can fetch again: Meko results (lowest ranked first), the
+   rejected options of decisions, older pending proposals, then the facts list.
 4. **The orchestrator** reads the brief and calls the specialists it needs as tools, in parallel. It can
    also propose a fact or a life event the household just stated (see the next section).
 5. **Each specialist** is a short, bounded loop (at most 4 tool calls) over read-only tools:

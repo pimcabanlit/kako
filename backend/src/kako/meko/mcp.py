@@ -54,6 +54,10 @@ class McpMeko:
         self._uploads = uploads
         self._datapack_id = datapack_id
 
+    @property
+    def datapack_id(self) -> str | None:
+        return self._datapack_id
+
     async def _call(
         self, tool: str, agent_id: str, arguments: dict[str, Any], *, agent: bool = True
     ) -> Any:

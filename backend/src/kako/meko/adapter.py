@@ -93,6 +93,11 @@ class Meko(Protocol):
     """Every Meko call Kako makes. Each one raises a `MekoError` subclass when it can't be done,
     and `MekoQuotaError` when the call counter refuses it."""
 
+    @property
+    def datapack_id(self) -> str | None:
+        """The datapack every call goes to; None: the account's default one."""
+        ...
+
     async def create_conversation(
         self, *, agent_id: str, title: str, session_key: str | None = None
     ) -> str:

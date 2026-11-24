@@ -90,6 +90,10 @@ class Settings(BaseSettings):
     turn_token_budget: int = Field(default=200_000, ge=1_000, le=2_000_000)
     # US dollars of real model calls per UTC day, summed from `llm_call`. Replays cost nothing.
     daily_spend_cap_usd: Decimal = Field(default=Decimal(3), ge=0, le=50)
+    # The brief every agent starts a turn from (docs/architecture.md, step 3), in estimated tokens.
+    brief_token_budget: int = Field(default=3_000, ge=500, le=20_000)
+    # Results the brief's one context_search asks Meko for.
+    brief_search_limit: int = Field(default=5, ge=0, le=10)
     # Retries after a failed attempt that may pass next time (rate limit, timeout, server error).
     model_max_retries: int = Field(default=2, ge=0, le=3)
     model_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
