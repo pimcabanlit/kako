@@ -153,6 +153,35 @@ def test_the_columns_are_checked(folder: Path) -> None:
         read_demo(folder)
 
 
+def test_the_story_holds_three_decisions_in_time_order() -> None:
+    """Jun in Sessions 1 and 3, Mara in Session 2, each choosing flexibility (Phase 4, task 4)."""
+    decisions = read_demo().decisions
+    assert [(d.session, d.decided_by, d.after) for d in decisions] == [
+        ("Session 1", "jun", None),
+        ("Session 2", "mara", 2),
+        ("Session 3", "jun", None),
+    ]
+    for d in decisions:
+        (chosen,) = [o for o in d.options if o.label == d.chosen]
+        assert chosen.tags == ("favours_flexibility",)
+
+
+def test_a_decision_in_its_own_moment_cant_share_a_changes_time(folder: Path) -> None:
+    _edit(
+        folder / "decisions.toml",
+        "recorded_at = 2026-08-15T10:00:00+08:00",
+        "recorded_at = 2026-09-15T10:00:00+08:00",
+    )
+    with pytest.raises(DemoDataError, match="decision 1 is recorded with a change: name it"):
+        read_demo(folder)
+
+
+def test_a_decision_with_an_unknown_field_is_refused(folder: Path) -> None:
+    _edit(folder / "decisions.toml", 'session = "Session 1"', 'session = "Session 1"\nmood = 1')
+    with pytest.raises(DemoDataError, match="and may have after"):
+        read_demo(folder)
+
+
 def test_only_the_command_line_loads_the_demo() -> None:
     """The loader writes approved proposals with no person behind them, safe only because it
     creates its own household. So nothing but the `kako` command may import it: not the API, the

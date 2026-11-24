@@ -7,13 +7,16 @@ are the ones recorded on Foundry. It:
 
 1. loads the demo household with its whole story (`prepare`), unless this database holds it already;
 2. uploads the demo's documents to Meko's knowledge base (each file once: a second run adds none);
-3. replays each session in `data/demo-household/sessions/` that has its recording, each turn kept
+3. plays what dreaming learns in the story (`learning.toml`, `learn`) before the first session that
+   starts after it: the dreaming run over session 3 proposes the preference, Mara approves it, Jun
+   confirms its sharing, and the preference and a decision record are shared in Meko;
+4. replays each session in `data/demo-household/sessions/` that has its recording, each turn kept
    like any other: the plan in Postgres, the turn in a new Meko conversation. A turn with an
    `approve` step has what it proposed approved, at its time in the story, by the adult it names.
    The rows of `changes.csv` such a session writes are left out when the story is loaded, and
    checked against what it wrote; on a database where they are written already, the session isn't
    replayed again;
-4. with `--test-set`, replays the agent test set for each architecture that has its recording.
+5. with `--test-set`, replays the agent test set for each architecture that has its recording.
 
 Each reply is found by its call's key (turn seed, agent, call number). A request can differ from the
 one recorded when this machine's Meko ranks the brief's search results differently (the scores of
@@ -35,22 +38,28 @@ from sqlalchemy import Table, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kako.agents.ask import MEKO_CALLS, Asked, run_turn, start_session
+from kako.agents.chat import ChatReply, ChatRequest, ModelError
 from kako.agents.recorded import ChatBackend, ReplayBackend
 from kako.api.proposals import people
 from kako.db.meko_log import DbCallLog
-from kako.db.models import Entity, Household, Proposal
+from kako.db.models import Entity, Household, Proposal, Session
 from kako.db.proposal_store import ProposalError, approve
 from kako.demo.files import Change, DemoHousehold
 from kako.demo.kb import AGENT, upload_demo_documents
 from kako.demo.load import load_demo
-from kako.demo.sessions import DemoSession
+from kako.demo.sessions import DemoLearning, DemoSession
+from kako.dreaming import job as dreaming
+from kako.dreaming.promotion import propose_promotions
 from kako.facts.proposals import FACT_KINDS, PayloadError, parse_fact, parse_life_event
 from kako.meko.mcp import open_meko
 from kako.settings import Settings
+from kako.upkeep import sync as upkeep
+from kako.upkeep.promote import SHARE_CALLS, share, shares_owed
 
 HOUSEHOLD = cast(Table, Household.__table__)
 ENTITY = cast(Table, Entity.__table__)
 PROPOSAL = cast(Table, Proposal.__table__)
+SESSION = cast(Table, Session.__table__)
 STATUS_CHECKS: Final = 10
 
 
@@ -263,3 +272,135 @@ def _is(change: Change, entity_id: uuid.UUID | None, kind: str, payload: object)
         change.value,
         change.valid_from,
     )
+
+
+@dataclass(frozen=True)
+class Learned:
+    already: bool  # an earlier run played it: nothing done
+    pattern: uuid.UUID | None = None  # the preference proposal dreaming made, now approved
+    promoted: int = 0  # promotions approved with their second confirmation
+    shared: int = 0  # of them, shared in Meko
+
+
+class _NoModel:
+    """Dreaming over a session of the story calls no model: its session has no conversation."""
+
+    @property
+    def replays(self) -> bool:
+        return True
+
+    async def chat(self, request: ChatRequest, *, deployment: str, key: str) -> ChatReply:
+        raise ModelError("a session of the story has no turns to read: no model call is made")
+
+
+async def learn(
+    engine: AsyncEngine,
+    settings: Settings,
+    demo: DemoHousehold,
+    learning: DemoLearning,
+    household_id: uuid.UUID,
+) -> Learned:
+    """What dreaming learns in the story, played as it would happen: the dreaming run over the
+    session proposes the pattern, which must be `changes.csv` row `learning.writes`; the row's adult
+    approves it at the row's time; what that offers for sharing (and what the run offered) is
+    approved with its second confirmation by `learning.promote.by`; then each is shared in Meko."""
+    change = next(c for c in demo.changes if c.seq == learning.writes)
+    async with engine.connect() as conn:
+        by_name = await people(conn, household_id)
+        session_id = (
+            await conn.execute(
+                select(SESSION.c.id).where(
+                    SESSION.c.household_id == household_id, SESSION.c.title == learning.session
+                )
+            )
+        ).scalar_one_or_none()
+        done = (
+            await conn.execute(
+                select(PROPOSAL.c.payload).where(
+                    PROPOSAL.c.household_id == household_id,
+                    PROPOSAL.c.kind == change.kind,
+                    PROPOSAL.c.status == "approved",
+                )
+            )
+        ).all()
+    if any(_is(change, None, change.kind, row.payload) for row in done):
+        return Learned(already=True)
+    if session_id is None:
+        raise DemoModeError(f"no {learning.session} in this database to dream over")
+    ids = {p.key: by_name[p.display_name.lower()] for p in demo.people}
+    calls = DbCallLog(engine)
+    run_id = await dreaming.end_session(engine, session_id, learning.dreamt_at)
+    async with open_meko(settings, calls, max_calls=dreaming.MEKO_CALLS) as meko:
+        report = await dreaming.run_dream(
+            engine, meko, settings, _NoModel(), run_id, now=learning.dreamt_at
+        )
+    found = [o.proposal_id for o in report.patterns if o.status == "proposed" and o.proposal_id]
+    if report.status != "done" or len(found) != 1:
+        raise DemoModeError(
+            f"dreaming over {learning.session} didn't propose one pattern "
+            f"({report.status}, {len(found)} proposed): check decisions.toml"
+        )
+    (pattern,) = found
+    try:
+        async with engine.connect() as conn:
+            payload = (
+                await conn.execute(select(PROPOSAL.c.payload).where(PROPOSAL.c.id == pattern))
+            ).scalar_one()
+            if not _is(change, None, change.kind, payload):
+                raise DemoModeError(
+                    f"dreaming over {learning.session} proposed a preference that isn't "
+                    f"changes.csv row {change.seq}: fix the row or decisions.toml"
+                )
+            await approve(
+                conn, [pattern], person_id=ids[change.decided_by], decided_at=change.recorded_at
+            )
+            await conn.commit()
+            await propose_promotions(conn, household_id, now=change.recorded_at)
+            await conn.commit()
+            offered = list(
+                (
+                    await conn.execute(
+                        select(PROPOSAL.c.id)
+                        .where(
+                            PROPOSAL.c.household_id == household_id,
+                            PROPOSAL.c.kind == "promote",
+                            PROPOSAL.c.status == "pending",
+                        )
+                        .order_by(PROPOSAL.c.created_at, PROPOSAL.c.id)
+                    )
+                ).scalars()
+            )
+            if offered:
+                await approve(
+                    conn,
+                    offered,
+                    person_id=ids[learning.promote.by],
+                    decided_at=learning.promote.at,
+                    confirm_promotion=True,
+                )
+                await conn.commit()
+            owed = await shares_owed(conn, household_id)
+    except (ProposalError, PayloadError) as exc:
+        raise DemoModeError(f"what dreaming learned in {learning.session}: {exc}") from None
+    bound = 1 + sum(SHARE_CALLS[item.target] for item in owed)
+    async with engine.connect() as conn:
+        name = (
+            await conn.execute(select(HOUSEHOLD.c.name).where(HOUSEHOLD.c.id == household_id))
+        ).scalar_one()
+    async with open_meko(settings, calls, max_calls=bound) as meko:
+        conversation_id = await meko.create_conversation(
+            agent_id=upkeep.AGENT,
+            title=f"Kako's memory of the {name}",
+            session_key=upkeep.session_key(household_id),
+        )
+        for item in owed:
+            await share(
+                engine,
+                meko,
+                household_id,
+                conversation_id,
+                item,
+                agent=upkeep.AGENT,
+                now=learning.promote.at,
+            )
+    return Learned(False, pattern, len(offered), len(owed))

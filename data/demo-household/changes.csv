@@ -4,7 +4,7 @@ seq,recorded_at,kind,entity,attribute,value,valid_from,source_kind,source_ref,li
 3,2026-10-16T09:00:00+08:00,replace_fact,card,debt.balance,81000.00,2026-10-15,statement,statements/card-2026-10.csv,,jun,The October card statement
 4,2026-10-16T09:00:00+08:00,replace_fact,car,debt.balance,410750.00,2026-10-15,statement,statements/car-2026-10.csv,,jun,The October car loan statement
 5,2026-10-16T09:00:00+08:00,replace_fact,fund,account.balance,155050.00,2026-10-15,statement,statements/fund-2026-10.csv,,jun,The October emergency fund statement
-6,2026-10-20T21:00:00+08:00,preference_pattern,,preference.debt_vs_flexibility,flexibility,2026-10-20,dreaming,session-3:dreaming,,mara,"Three times (August, September, October) the household kept cash on hand rather than paying debt faster"
+6,2026-10-20T21:00:00+08:00,preference_pattern,,preference.debt_vs_flexibility,flexibility,2026-10-18,dreaming,session-3:dreaming,,mara,"Three times (August, September, October) the household kept cash on hand rather than paying debt faster"
 7,2026-11-16T09:00:00+08:00,replace_fact,card,debt.balance,76880.00,2026-11-15,statement,statements/card-2026-11.csv,,jun,The November card statement
 8,2026-11-16T09:00:00+08:00,replace_fact,car,debt.balance,401430.63,2026-11-15,statement,statements/car-2026-11.csv,,jun,The November car loan statement
 9,2026-11-16T09:00:00+08:00,replace_fact,fund,account.balance,160100.00,2026-11-15,statement,statements/fund-2026-11.csv,,jun,The November emergency fund statement

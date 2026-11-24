@@ -108,6 +108,19 @@ def test_the_split_decision_is_to_revisit(v2_to_v3: Diff) -> None:
     assert _labels(revisit.facts) == {("replaced", "income.monthly_net", 5_200_000, 6_800_000)}
 
 
+def test_decisions_to_revisit_keep_the_order_they_were_given(house: Villanueva) -> None:
+    """In the caller's order (the brief's, by date), never by id: ids sort differently on every
+    database, and a recording must replay on any of them."""
+    v2 = compute(
+        take_snapshot(HOUSEHOLD, house.facts, SEP_15, at("2026-09-15", 18)), house.entities
+    )
+    v3 = compute(take_snapshot(HOUSEHOLD, house.facts, DEC_1, at("2026-12-01", 18)), house.entities)
+    salary = _fact(house, "mara_salary", "income.monthly_net", 5_200_000).id
+    ids = [uuid.UUID(f"00000000-0000-4000-8000-00000000000{n}") for n in (9, 1, 5)]
+    found = diff(v2, v3, house.facts, {i: [salary] for i in ids}).decisions
+    assert [r.decision_id for r in found] == ids
+
+
 def test_the_fact_changes_once_each(v2_to_v3: Diff) -> None:
     every = _labels(v2_to_v3.fact_changes)
     assert every >= {

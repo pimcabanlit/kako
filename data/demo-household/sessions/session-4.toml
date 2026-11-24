@@ -1,8 +1,11 @@
 # Session 4 (Nov 20, 2026): the life event. Mara tells Kako about her new job; the turn proposes the
 # life event and her new take-home pay, and she approves both that evening (changes.csv rows 10 and
 # 11, which this session writes: demo mode loads the story without them and checks what it wrote).
-# Jun then asks what it changes, and that turn is a replan as of Dec 1 against the September decision,
-# answered in three parts: the new plan, what changed and why.
+# Jun then asks what it changes, and that turn is a replan as of Dec 1 against the household's latest
+# decision (Session 3's, Oct 18), with the decisions of Sessions 1 to 3 to revisit, answered in three
+# parts: the new plan, what changed and why. By then dreaming has learned the preference for
+# flexibility from those three decisions and it is shared in Meko (learning.toml): the debt
+# specialist sees it in the brief, marked promoted, and nobody tells it to cite it.
 
 title = "Session 4"
 on = 2026-11-20

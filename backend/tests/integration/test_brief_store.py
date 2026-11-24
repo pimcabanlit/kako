@@ -105,7 +105,7 @@ async def test_the_worked_examples_brief_from_postgres_and_local_meko(
 
     assert brief.tokens <= 3_000
     assert (
-        "- preference.debt_vs_flexibility = flexibility (since Oct 20, 2026); proposed by "
+        "- preference.debt_vs_flexibility = flexibility (since Oct 18, 2026); proposed by "
         "dreaming, approved by Mara on Oct 20, 2026"
     ) in brief.text
     assert "- cashflow.monthly_surplus = ₱25,050.00:" in brief.text
@@ -146,10 +146,18 @@ async def test_no_message_means_no_search(migrated: AsyncEngine) -> None:
                 budget=3_000,
             )
     assert "No search was made." in brief.text
-    assert (
-        "Active decisions (cite as decision:<ref>)\n- D1: How hard should we pay down the credit "
-        "card? Chose 'B: split' on Sep 15, 2026 (Session 2)."
-    ) in brief.text
+    assert "Active decisions (cite as decision:<ref>)\n- D1: Should we pay the car loan early" in (
+        brief.text
+    )
+    for line in (
+        "- D1: Should we pay the car loan early or keep a bigger buffer? Chose 'B: bigger buffer' "
+        "on Aug 15, 2026 (Session 1).",
+        "- D2: How hard should we pay down the credit card? Chose 'B: split' on Sep 15, 2026 "
+        "(Session 2).",
+        "- D3: Should the bonus go to the card or the family trip? Chose 'B: keep it for the trip' "
+        "on Oct 18, 2026 (Session 3).",
+    ):
+        assert line in brief.text
 
 
 @pytest.mark.parametrize(
@@ -175,8 +183,10 @@ async def test_decisions_as_kako_knew_them(
             conversation_id=None,
             budget=3_000,
         )
-    assert bool(inputs.decisions) is shown
-    assert ("D1: How hard should we pay down the credit card?" in brief.text) is shown
+    september = [d for d in inputs.decisions if d.question.startswith("How hard")]
+    assert bool(september) is shown
+    assert ("D2: How hard should we pay down the credit card?" in brief.text) is shown
+    assert "D1: Should we pay the car loan early" in brief.text  # Session 1's, in August
     assert inputs.proposals == ()  # the decision was never pending at a time Kako looks from
 
 

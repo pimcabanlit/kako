@@ -1,0 +1,13 @@
+# What dreaming learns in the story (docs/build-plan.md, Phase 4, task 4). Session 3 ended on Oct 18
+# with Jun's third choice of cash on hand (decisions.toml); dreaming runs over it on Oct 20 and finds
+# the pattern across sessions 1 to 3. Demo mode loads the story without changes.csv row `writes` and
+# plays this instead: the dreaming run proposes the preference, the adult the row names approves it at
+# the row's time (demo mode checks it is what the row says), and what is then offered for sharing is
+# approved with its second confirmation by `promote.by`, then shared in Meko: the preference to
+# collective memory, a decision record to the knowledge base. Mara approves the preference; Jun, who
+# didn't, confirms the sharing. Played before the first scripted session that starts after it.
+
+session = "Session 3"
+dreamt_at = 2026-10-20T20:30:00+08:00
+writes = 6
+promote = { by = "jun", at = 2026-10-20T21:30:00+08:00 }

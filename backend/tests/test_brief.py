@@ -108,7 +108,7 @@ def test_the_worked_examples_brief_is_under_budget_with_the_preference(
     assert brief.dropped == ()
     text = brief.text
     assert (
-        "- preference.debt_vs_flexibility = flexibility (since Oct 20, 2026); proposed by "
+        "- preference.debt_vs_flexibility = flexibility (since Oct 18, 2026); proposed by "
         'dreaming, approved by Mara on Oct 20, 2026 <data source="proposal">Three times'
     ) in text
     assert "- preference.debt_strategy = avalanche (since Mar 1, 2026)" in text

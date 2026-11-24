@@ -122,6 +122,37 @@ async def test_a_plain_answer_ends_the_loop_without_an_answer(make_settings: Mak
     assert steps(turn) == []
 
 
+async def test_an_empty_reply_is_sent_back_once_for_the_final_tool(
+    make_settings: MakeSettings,
+) -> None:
+    """No words and no tool call (seen once on Foundry, finish reason "stop"): the model is told,
+    and only its final tool is offered, which it must call."""
+    result, backend, turn = await run(
+        make_settings,
+        {
+            "s2:t1/debt#1/1": says(""),
+            "s2:t1/debt#1/2": calls(("submit_proposal", {"text": "Option A"})),
+        },
+    )
+    assert result == AgentRun({"text": "Option A"}, "", 0, 2)
+    assert steps(turn) == [(1, "debt", "submit_proposal", "ok")]
+    again = backend.requests[1][2]
+    assert [m.role for m in again.messages] == ["system", "user", "user"]
+    assert again.messages[-1].content == "Your reply was empty. Answer with submit_proposal."
+    assert [t.name for t in again.tools] == ["submit_proposal"]
+    assert again.tool_choice == "required"
+
+
+async def test_a_second_empty_reply_ends_the_loop_without_an_answer(
+    make_settings: MakeSettings,
+) -> None:
+    result, _, turn = await run(
+        make_settings, {"s2:t1/debt#1/1": says(""), "s2:t1/debt#1/2": says(" ")}
+    )
+    assert result == AgentRun(None, " ", 0, 2)
+    assert steps(turn) == []
+
+
 async def test_refused_arguments_go_back_to_the_model(make_settings: MakeSettings) -> None:
     result, backend, turn = await run(
         make_settings,

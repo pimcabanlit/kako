@@ -2,8 +2,9 @@
 
 Mara tells Kako about her new job; the turn proposes the life event and her new salary, pending.
 She approves both. Jun asks what it changes, and that turn is a replan as of Dec 1 against the
-decision of Sep 15: the new plan, what changed (written by code from F-DIFF-1) and why, with the
-September decision to revisit because it rested on her old salary. Every text passes the number
+household's latest decision, Session 3's of Oct 18: the new plan, what changed (written by code from
+F-DIFF-1) and why, with the decisions of Sessions 1, 2 and 3 to revisit because each rested on her
+old salary. Every text passes the number
 check against the turn's run, and the run it was compared with is stored.
 """
 
@@ -269,25 +270,29 @@ async def test_session_4_proposes_the_new_job_then_replans_in_three_parts(
     assert [(r[0], r[2], r[3], r[4]) for r in rows] == [("approved", QUOTE, turn_ref, "Mara")] * 2
     assert all(r[1].startswith(f"{session.session_id}:{T1}|") for r in rows)
 
-    # Turn 2: a replan as of Dec 1 against the decision of Sep 15, with that decision to revisit.
+    # Turn 2: a replan as of Dec 1 against the latest decision (Oct 18), with the three decisions
+    # that rested on Mara's old salary to revisit, in the order they were made.
     replan = replanned.replan
     assert replan is not None
     assert replanned.state is not None
     assert replanned.state.snapshot.on == date(2026, 12, 1)
-    assert replan.since == "the decision of Sep 15, 2026 in Session 2 (B: split)"
+    assert replan.since == "the decision of Oct 18, 2026 in Session 3 (B: keep it for the trip)"
     assert replan.areas == ("budget", "debt", "savings")
-    (revisit,) = replan.revisit
-    assert (revisit.question, revisit.chosen) == (
-        "How hard should we pay down the credit card?",
-        "B: split",
-    )
-    assert [
-        (f.label, f.old and f.old.value_money, f.new and f.new.value_money) for f in revisit.facts
-    ] == [("replaced", 5_200_000, 6_800_000)]
+    assert [(r.session_title, r.chosen) for r in replan.revisit] == [
+        ("Session 1", "B: bigger buffer"),
+        ("Session 2", "B: split"),
+        ("Session 3", "B: keep it for the trip"),
+    ]
+    for revisit in replan.revisit:
+        assert [
+            (f.label, f.old and f.old.value_money, f.new and f.new.value_money)
+            for f in revisit.facts
+        ] == [("replaced", 5_200_000, 6_800_000)]
     shown = render_answer(replanned)
     # The three parts: the new plan, what changed (from the diff), why (the agent's, then code's).
     plan, _, rest = shown.partition(
-        "\nWhat changed since the decision of Sep 15, 2026 in Session 2 (B: split):\n"
+        "\nWhat changed since the decision of Oct 18, 2026 in Session 3 "
+        "(B: keep it for the trip):\n"
     )
     changed, _, why = rest.partition("\nWhy:\n")
     assert plan.startswith("The new plan:\nThe new job leaves a lot more each month.")
@@ -308,7 +313,7 @@ async def test_session_4_proposes_the_new_job_then_replans_in_three_parts(
         "chose B: split) rested on Mara's salary income.monthly_net"
     ) in why
 
-    # The run it was compared with is stored (Sep 15, as Kako knew it at the decision), and every
+    # The run it was compared with is stored (Oct 18, as Kako knew it at the decision), and every
     # text of both turns passed the number check against its turn's run.
     async with migrated.connect() as conn:
         before = (
@@ -323,7 +328,7 @@ async def test_session_4_proposes_the_new_job_then_replans_in_three_parts(
                 {"s": session.session_id},
             )
         )
-    assert before == date(2026, 9, 15)
+    assert before == date(2026, 10, 18)
     assert [r for (r,) in results] == ["pass"]
 
     # Meko keeps the three parts, the replan's ids and what was proposed.
@@ -340,11 +345,13 @@ async def test_session_4_proposes_the_new_job_then_replans_in_three_parts(
         replanned.proposed,
         replanned.before_run_id,
     )
-    assert kept.plan[1].startswith("Replanned as of 2026-12-01 against the decision of Sep 15")
+    assert kept.plan[1].startswith("Replanned as of 2026-12-01 against the decision of Oct 18")
     assert kept.output.count("\n\n") >= 2
     assert "Why: Mara's salary" in kept.output
     assert kept.metadata["kako_replan_before_run_id"] == str(replanned.before_run_id)
-    assert kept.metadata["kako_revisit_decision_ids"] == [str(revisit.decision_id)]
+    assert kept.metadata["kako_revisit_decision_ids"] == [
+        str(r.decision_id) for r in replan.revisit
+    ]
     assert kept.metadata["kako_replan_since_decision_id"] == str(replan.since_decision)
 
 
@@ -409,7 +416,7 @@ async def test_session_4_through_the_api(
     answer = asked.json()
     assert answer["changes"] == []
     replan = answer["replan"]
-    assert replan["since"] == "the decision of Sep 15, 2026 in Session 2 (B: split)"
+    assert replan["since"] == "the decision of Oct 18, 2026 in Session 3 (B: keep it for the trip)"
     assert replan["what_changed"][0] == (
         "Take-home pay a month, all incomes: ₱100,000.00 → ₱116,000.00"
     )
@@ -418,8 +425,8 @@ async def test_session_4_through_the_api(
         "Mara's salary income.monthly_net: ₱52,000.00 → ₱68,000.00 from Dec 1, 2026 (replaced)"
         in replan["because"]
     )
-    assert replan["because"][-1].startswith("To revisit: “How hard should we pay down")
-    assert len(replan["revisit_decision_ids"]) == 1
+    assert replan["because"][-1].startswith("To revisit: “Should the bonus go to the card")
+    assert len(replan["revisit_decision_ids"]) == 3
     assert replan["before_run_id"]
     assert [o["label"] for o in answer["options"]] == ["A: all extra on the card", "B: split"]
     assert answer["flagged"] == []

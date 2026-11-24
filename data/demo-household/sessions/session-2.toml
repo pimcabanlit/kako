@@ -1,7 +1,7 @@
 # Session 2 (Sep 15, 2026): the debt question. Mara and Jun want different things, the specialists'
 # proposals over-allocate the surplus, and the household is shown options A and B to choose from.
 # Demo mode replays it from data/recorded/session-2.json (recorded on Foundry, docs/tuning-log.md
-# entry 7). The household chose B that evening (plan v2: changes.csv rows 1 and 2).
+# entry 12). The household chose B that evening (plan v2: changes.csv rows 1 and 2).
 
 title = "Session 2"
 on = 2026-09-15

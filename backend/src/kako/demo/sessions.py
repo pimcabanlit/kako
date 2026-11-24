@@ -8,7 +8,8 @@ approves what the turn proposed, at a time in the story.
 
 A session whose approval writes rows of `changes.csv` names them in `writes`: demo mode loads the
 story without them, the session writes them through its own proposals, and code checks that what
-it wrote is what those rows say (`check_writes`). Pure: no database, Meko or clock.
+it wrote is what those rows say (`check_writes`). `learning.toml` is what dreaming learns in the
+story between sessions (`read_learning`). Pure: no database, Meko or clock.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from typing import Any, Final
 from kako.demo.files import DEMO_DIR, DemoHousehold
 
 SESSIONS_DIR: Final = DEMO_DIR / "sessions"
+LEARNING: Final = DEMO_DIR / "learning.toml"
 RECORDED_DIR: Final = DEMO_DIR.parent / "recorded"
 SEED: Final = re.compile(r"^[a-z0-9][a-z0-9:_-]{0,39}$")  # as the session API takes it
 RECORDING: Final = re.compile(r"^[a-z0-9][a-z0-9_-]*\.json$")  # a file name, never a path
@@ -187,3 +189,57 @@ def check_writes(sessions: tuple[DemoSession, ...], demo: DemoHousehold) -> None
                     f"{session.name}: change {change.seq} belongs to a life event it writes, so "
                     "it writes that change too"
                 )
+
+
+@dataclass(frozen=True)
+class DemoLearning:
+    """Dreaming over a session of the story, its pattern approved and what it offers shared."""
+
+    session: str  # the session's title (a decision's session in decisions.toml)
+    dreamt_at: datetime
+    writes: int  # the changes.csv row the pattern is: approved by its decided_by, at its time
+    promote: Approval  # who confirms the sharing, and when
+
+    @property
+    def at(self) -> datetime:
+        """When the step is over: the sharing's approval."""
+        return self.promote.at
+
+
+def read_learning(path: Path = LEARNING, *, demo: DemoHousehold) -> DemoLearning | None:
+    """The story's learning step, checked against the story; None when there is no file."""
+    if not path.exists():
+        return None
+
+    def fail(what: str) -> DemoSessionError:
+        return DemoSessionError(f"{path.name}: {what}")
+
+    try:
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise fail(str(exc)) from None
+    if set(raw) != {"session", "dreamt_at", "writes", "promote"}:
+        raise fail("it has exactly session, dreamt_at, writes and promote")
+    promote = raw["promote"]
+    if not isinstance(promote, dict) or set(promote) != {"by", "at"}:
+        raise fail("promote has exactly by and at")
+    times = (raw["dreamt_at"], promote["at"])
+    if any(not isinstance(t, datetime) or t.tzinfo is None for t in times):
+        raise fail("dreamt_at and promote.at are times with their zone")
+    writes = raw["writes"]
+    change = next((c for c in demo.changes if c.seq == writes), None)
+    if change is None or change.kind != "preference_pattern":
+        raise fail("writes names a preference_pattern row of changes.csv")
+    adults = {p.key for p in demo.people if p.role == "adult"}
+    if promote["by"] not in adults:
+        raise fail("promote.by must be an adult")
+    sessions = {d.session: d for d in demo.decisions}
+    if raw["session"] not in sessions:
+        raise fail("session names a session of decisions.toml")
+    if not sessions[raw["session"]].recorded_at <= raw["dreamt_at"] <= change.recorded_at:
+        raise fail("dreaming runs after its session ends and before the row's approval")
+    if promote["at"] < change.recorded_at:
+        raise fail("the sharing is confirmed after the preference is approved")
+    return DemoLearning(
+        raw["session"], raw["dreamt_at"], writes, Approval(promote["by"], promote["at"])
+    )

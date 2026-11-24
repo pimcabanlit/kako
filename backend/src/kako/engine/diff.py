@@ -204,7 +204,8 @@ def _to_revisit(
     by_id = {f.id: f for f in rows}
     current = take_snapshot(new.household_id, rows, new.as_of, new.known_at)
     found: list[ToRevisit] = []
-    for decision_id in sorted(assumptions, key=str):
+    # In the caller's order (the brief's: by date), never by id, so a recording replays anywhere.
+    for decision_id in assumptions:
         changes: list[FactChange] = []
         for fact_id in sorted(set(assumptions[decision_id]), key=str):
             fact = by_id.get(fact_id)
