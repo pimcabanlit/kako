@@ -266,11 +266,16 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `specialists.py` (the four specialists and `submit_proposal`), `orchestrator.py` (`answer_turn`:
   the `ask_*` tools, at most 4 a turn, and `submit_answer`), `reconciling.py` (the orchestrator's
   side of reconciliation: the rules' note on the proposals together, at most 3 splits each checked
-  by the rules, and the resolution with the option rejected), `ask.py` (one turn for `kako ask`: a
-  session, the brief, the answer and what it cost) and `prompts/` (the shared rules, then one file
-  per role; every system prompt is the shared rules, the brief, then the role). Recorded real runs
+  by the rules, and the resolution with the option rejected), `numbers.py` (the number check, V-10:
+  every number in a text read out and matched to a figure, fact, what-if allocation or the
+  household's words; used by `submit_answer` and `submit_proposal`, one regeneration, then
+  flagged) with `checks.py` (what it finds and logs), `ask.py` (one turn for `kako ask`: a
+  session, the brief, the turn's run stored, the answer and its checks, and what it cost) and
+  `prompts/` (the shared rules, then one file per role; every system prompt is the shared rules,
+  the brief, then the role). Recorded real runs
   live in `data/recorded/`, and each is logged in `docs/tuning-log.md`.
-  `db/llm_log.py` and `db/agent_steps.py` write those two tables, each row committed on its own.
+  `db/llm_log.py`, `db/agent_steps.py` and `db/number_checks.py` write those three tables, each row
+  committed on its own.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
   `tests/support/data_model.py` reads the tables out of `docs/data-model.md`: `test_schema_doc.py`
@@ -279,7 +284,11 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_reconcile.py` tests the reconciliation rules on the worked example (the asks together,
   over-allocation, opposite moves, missed goal dates, one split), and `test_agents_reconcile.py`
   the what-if loop with a scripted model: session 2's over-allocation caught, splits tried and
-  logged, the resolution checked in code and shown with the rejected option.
+  logged, the resolution checked in code and shown with the rejected option. `test_numbers.py`
+  tests the number check on session 2's figures (what matches, what fails, rounding,
+  multipliers, dates in any common form, spelled-out numbers with a unit, refs, names),
+  and `test_agents_numbers.py` in a scripted turn (sent back once, then flagged; every text; the
+  specialists'; an answer kept when the model stops).
   `test_facts_*.py` test the fact rules on rows in memory (`tests/support/facts.py` builds them);
   `test_engine_worked_example.py` checks every worked-example figure to the centavo
   (`tests/support/villanueva.py` builds that household's history in memory from the demo files), `test_engine_rules.py` the flags,
@@ -303,7 +312,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   options A and B with the worked example's figures, cited, what each agent was sent, and the
   parallel turn recorded and replayed strictly; `tests/integration/test_agents_turn.py` runs the same
   turn on the demo household in Postgres and local Meko (the brief's search and a specialist's), and
-  `tests/integration/test_ask.py` records a turn through `ask` and replays it with `kako ask`.
+  `tests/integration/test_ask.py` records a turn through `ask` and replays it with `kako ask`, with
+  every text's `number_check` row against the stored run, and a planted wrong number regenerated and
+  logged.
   `test_brief.py` builds the worked example's brief in memory (under budget, with the approved
   preference; Meko results wrapped; trimming in order), and `tests/integration/test_brief_store.py`
   gathers it from the demo household in Postgres and local Meko, with its one search counted.

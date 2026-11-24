@@ -122,8 +122,8 @@ it led to.
 - **Prediction (written before the run):** the same conflict and the same resolution (left to the
   household, `recommended` empty, 0 or 1 splits); the reason has no `figure:`, `fact:` or `said`
   ref in it. Cost US$0.02 to US$0.04.
-- **Run:** the same command, recorded to `data/recorded/session-2.json` (it replaces run 2's
-  recording, which the new note no longer replays; run 2's is in the git history). 8 model calls,
+- **Run:** the same command, recorded to `data/recorded/session-2.json`, now
+  `session-2-run4.json` (it replaced run 2's recording, which the new note no longer replays; run 2's is in the git history). 8 model calls,
   36,857 tokens in (30,720 cached), 3,292 out, **US$0.0308**. 9 agent steps. Replayed strictly
   afterwards with `KAKO_MODEL_MODE=replay`: the same answer, US$0.
 - **Result:**
@@ -140,3 +140,101 @@ it led to.
   stands alone; nothing in this change touched it.
 - **Change made:** none now. The agent test set (task 7) will show whether the citation refusals
   are frequent enough to tune. Spend so far: US$0.126 of the US$1 Pim approved.
+
+### 5. Session 2 with the number check (Nov 24, 2026)
+
+- **Change tested:** Phase 3, task 5. Every number in the reply, the options' labels and summaries,
+  the resolution's reason and each specialist's summary must match a figure, fact, what-if
+  allocation or the household's words; a miss is sent back once, then flagged. The shared rules gain
+  a paragraph saying so ("a difference, a total or a rounded guess is not").
+- **Prediction (written before the run):**
+  - The same conflict and resolution as run 4 (over-allocation left to the household).
+  - Every text passes on its first try: the prompts already say to copy figures as shown, and runs
+    2 to 4 had no worked-out numbers in what the household reads. The most likely miss is one
+    specialist summary sent back once for a difference or a percentage it derived.
+  - Every text gets a `number_check` row against the turn's stored run: 2 specialist summaries,
+    the reply, 2 labels, 2 summaries and the reason, so 8 rows, all `pass`.
+  - Cost US$0.025 to US$0.04.
+- **Run:** the same command, recorded to `data/recorded/session-2-run5.json`. 9 model calls, 46,435
+  tokens in (24,192 cached), 5,883 out, **US$0.0576**. 13 agent steps.
+- **Result:**
+  - Off the prediction, the turn went another way: both specialists proposed Jun's split this
+    time (each also ran all-on-the-card), so the rules found they fit together and no conflict
+    was reported. The orchestrator offered the asks together (`rec-W1`) as option A and ran
+    all-on-the-card itself as B. The figures were right (17 months, ₱24,303.62, 12 months; 9 months,
+    ₱12,460.10), and `recommended` was empty.
+  - The number check worked as designed. Every text the household reads passed on its first try:
+    the reply, both labels and both summaries (6 `pass` rows). The savings specialist's summary
+    ended "I propose the split (savings1-W1)". It was sent back (`regenerated`), still had the ref,
+    and was kept with it flagged (`fail`). The orchestrator reads that summary; the household
+    doesn't.
+  - Two other misses. The refusal named the number as `'1'`, which doesn't tell the model what to
+    take out. And the orchestrator's first `submit_answer` passed a resolution with empty
+    `what_if` and `rejected` when there was no conflict, which was refused and cost one more
+    strong-model call. With that and the cache missing the first calls, the cost was above the
+    range.
+- **Root cause:** a number run into letters was reported as the digit alone. Refusing an empty
+  resolution with no conflict was stricter than it needed to be: it carries nothing.
+- **Change made:**
+  - The check names the whole word a number is run into (`'savings1-W1' in the savings
+    specialist's summary`).
+  - With no conflict, a resolution that names no what-if is taken as null.
+  - See entry 6.
+
+### 6. Session 2, whole refs named and an empty resolution accepted (Nov 24, 2026)
+
+- **Change tested:** the two code changes above; no prompt change.
+- **Prediction (written before the run):**
+  - Every `number_check` row ends `pass`. If a specialist writes a ref, the refusal names it in
+    full and the second summary leaves it out.
+  - There is no refused `submit_answer` for an empty resolution.
+  - The options carry the same figures as runs 2 to 5.
+  - Cost US$0.025 to US$0.05.
+- **Run:** the same command, recorded to `data/recorded/session-2-run6.json`. 10 model calls,
+  48,642 tokens in (35,456 cached), 4,633 out, **US$0.0334**. 13 agent steps.
+- **Result:**
+  - Right: every text the household reads passed on its first try (the reply, two labels, two
+    summaries and the reason: 6 `pass` rows), with the worked example's figures (A: 9 months,
+    ₱12,460.10; B: 17 months, ₱24,303.62, the fund's target in 12 months). No refused
+    `submit_answer`; `recommended` empty. The proposals fit together, as in run 5.
+  - Miss: both specialists' first summaries named what-ifs (`debt1-W1`, `figure:…` refs) and were
+    sent back. The refusal said "numbers that match no figure", so each model "fixed" it by
+    swapping the numbers themselves for figure refs. The savings summary then passed (its numbers
+    were gone); the debt summary still had refs and was kept flagged (`fail`), now made only of
+    refs ("pays it off in figure:debt1-W1:debt.payoff_months@debt:credit-card").
+  - Also: each ref was listed twice in `numbers` (once for each digit run in the word), and the
+    savings specialist passed a fact ref to `get_facts` as an entity, refused with a clear message.
+- **Root cause:** a specialist's summary is read by the orchestrator, which resolves refs from the
+  proposal's citations; refusing refs there cost a call and pushed the model the wrong way. The
+  refusal lumped refs in with worked-out numbers, so the model couldn't tell what was wrong.
+- **Change made:** in a specialist's summary a ref of this turn (a what-if, or a `figure:` or
+  `fact:` ref) is a ref, not a number (`match` "ref"); the household's texts still allow none. The
+  refusal names worked-out numbers and refs separately, each with its own instruction. A word with
+  two digit runs is one code. See entry 7.
+
+### 7. Session 2, refs allowed in a specialist's summary (Nov 24, 2026)
+
+- **Change tested:** the three code changes above; no prompt change.
+- **Prediction (written before the run):**
+  - No specialist summary is sent back for a ref; if one is sent back, it is for a worked-out
+    number, and the second try passes.
+  - Every household text passes on its first try, with the same figures as runs 2 to 6.
+  - Whether the specialists' proposals fit together or conflict is a coin flip (runs 3 and 4
+    conflicted, 5 and 6 didn't); either way the answer is taken with no refused `submit_answer`.
+  - 8 or 9 model calls, US$0.025 to US$0.04.
+- **Run:** the same command, recorded to `data/recorded/session-2.json` (run 4's recording, which
+  the number check's new prompt paragraph no longer replays, is now `session-2-run4.json`).
+  6 model calls, 28,466 tokens in (25,344 cached), 2,996 out, **US$0.0242**. 9 agent steps, no
+  refused call. Replayed strictly with `KAKO_MODEL_MODE=replay`: the same answer, US$0.
+- **Result:** as predicted, and the cleanest run so far.
+  - No text was sent back: 8 `number_check` rows, all `pass` on the first try (2 specialist
+    summaries, the reply, 2 labels, 2 summaries, the reason). Neither specialist wrote a ref this
+    time, so the ref rule wasn't exercised by the model; the unit tests cover it.
+  - The proposals conflicted, as in runs 3 and 4: debt proposed all on the card, savings Jun's split.
+    Code caught the over-allocation (₱9,050 + ₱5,050 against ₱9,050, `rec-W1` unallocated
+    -₱5,050.00) and the orchestrator left it to the household with a plain-words reason.
+  - Options A (9 months, ₱12,460.10) and B (17 months, the fund's target in 12 months) carry the
+    worked example's figures. `recommended` empty.
+  - Cost just under the predicted range: no refusals, so 6 calls instead of 8 or 9.
+- **Root cause:** none.
+- **Change made:** none. Real spend for the session-2 question so far: US$0.241 of the US$1 approved.

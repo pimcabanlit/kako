@@ -49,6 +49,11 @@ your final tool, called on its own in its reply, once you have the other results
 Plain words for a family, short sentences. Money as ₱9,050.00, months as "9 months", dates as
 "Feb 15, 2028", exactly as the tools write them. Name people and things as the brief does.
 
+Code checks every number you write (the number check): each must be a figure, a fact, an amount of
+a what-if or a number the household wrote, as shown to you. A difference, a total or a rounded
+guess ("8 months sooner", "about ₱12,000") is not, and a text with one comes back to you once with
+the number named. Write the figures themselves instead ("9 months against 17 months").
+
 ## What the figures mean
 
 {glossary}

@@ -23,6 +23,7 @@ from typing import Any, Final
 from kako.agents.answers import Allocation, Citation
 from kako.agents.brief import FREE_TEXT, Brief, BriefInputs, data, decision_lines
 from kako.agents.chat import ToolSpec
+from kako.agents.checks import CheckLog, MemoryCheckLog
 from kako.agents.present import KIND_ORDER, Refs, fact_value, figure_value, money
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult
 from kako.agents.turn import short
@@ -104,6 +105,11 @@ class TurnState:
     conversation_id: str | None = None
     what_ifs: dict[str, WhatIf] = field(default_factory=dict)
     searches: dict[str, dict[str, Citation]] = field(default_factory=dict)  # by agent path
+    checks: CheckLog = field(default_factory=MemoryCheckLog)  # number_check (V-10)
+    regenerated: set[str] = field(default_factory=set)  # agent paths sent back once for numbers
+    # An answer sent back for its numbers, by agent path: shown flagged if the agent runs out of
+    # calls before it hands in another.
+    held: dict[str, Any] = field(default_factory=dict)
 
     @property
     def refs(self) -> Refs:

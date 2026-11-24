@@ -70,7 +70,7 @@ How the tables are used at run time is in [architecture.md](architecture.md); th
 | Dreaming | `dream_run`, `proposal`, `proposal_evidence` | The dreaming job; the household's approvals |
 | Self-learning | `context_gap` | The Meko adapter (from Meko's self-learning tools); the household's answers |
 | Meko links | `meko_link` | The Meko adapter |
-| System | `llm_call`, `meko_call`, `number_check` | The model manager and the Meko adapter |
+| System | `llm_call`, `meko_call`, `number_check` | The model manager, the Meko adapter and the number check |
 
 ## Household
 
@@ -633,17 +633,20 @@ An index on (`target`, `tool`) serves the counter.
 
 ### `number_check`
 
-Every text checked against the figures and facts (V-10).
+Every text checked against the figures and facts (V-10). A text that fails is sent back to its agent
+once, with the unmatched numbers named: that check is a `regenerated` row. The text finally shown is a
+`pass` row, or a `fail` row when it failed again, and its unmatched numbers are flagged where it is
+shown. Each write commits on its own (`db/number_checks.py`).
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `session_id` | UUID FK, null | |
-| `calc_run_id` | UUID FK | The run whose figures and snapshot the text was checked against |
-| `subject` | TEXT | `reply`, `recommendation`, `summary`, `reconciliation` |
-| `subject_id` | UUID, null | The recommendation, plan or reconciliation, once stored |
+| `calc_run_id` | UUID FK | The turn's run: its figures and snapshot, with the turn's what-ifs (runs of the same snapshot) |
+| `subject` | TEXT | `reply`; `recommendation` (an option's label or summary, or a specialist's summary); `summary` (a plan's summary, when it isn't the reply); `reconciliation` (a resolution's reason) |
+| `subject_id` | UUID, null | The recommendation, plan or reconciliation, once stored; null for a check made before the row exists and for a specialist's summary |
 | `checked_text` | TEXT | |
-| `numbers` | JSONB | Each number found, and the figure or fact it matched (or none) |
+| `numbers` | JSONB | Each number found, as `{text, kind, match}`: `kind` is `money`, `months`, `percent`, `date`, `month`, `number`, `code` (a number run into letters, such as a ref) or `scaled` (a number with a multiplier); `match` is what it matched (`figure:<ref>`, `figure:<what-if>:<ref>`, `fact:<ref>`, `allocation:<what-if>:<entity>`, `said`, `date:today`), `ref` for a ref of the turn in a specialist's summary (only the orchestrator reads it, and resolves it from the proposal's citations; the household's texts allow none), or null. A word with two numbers in it (`debt1-W1`) is one `code` |
 | `result` | TEXT | `pass`, `fail`, `regenerated` |
 | `created_at` | TIMESTAMPTZ | |
 
@@ -727,7 +730,7 @@ Checked by code before a write, and as a suite over the whole database in CI.
 | V-07 | Money facts are never negative (a debt is a positive balance). Rates are between 0 and 1 |
 | V-08 | Every non-seed fact, decision and life event has an approved proposal; a fact is exactly the write its proposal names, and a proposal writes one fact at most. A seed fact has no proposal and replaces nothing |
 | V-09 | Every number in a proposal appears in its quoted evidence |
-| V-10 | Every number in a recommendation, summary or reconciliation text matches a figure of the plan's run or a fact in its snapshot (the number check). Dates and counts are checked too |
+| V-10 | Every number in a reply, recommendation, summary or reconciliation text matches a figure of the plan's run or of one of its turn's what-ifs, a fact in its snapshot, a what-if's allocation, or a number the household wrote in the turn (the number check, `agents/numbers.py`). Dates (in any common form, each read as one date), months, years, percentages, counts and spelled-out numbers with a unit ("nine months") are checked too; a value written at a lower precision is the figure rounded half up to it, and a negative figure matches its amount. Other spelled-out numbers aren't checked. Never a match: a number run into letters, one with a multiplier (`150k`, `₱2M`, "12 thousand") or more than 6 decimals. A bare number from the household's message is a count, and an amount only from ₱100. A specialist's summary (read by the orchestrator, and shown in the agents' steps) may name the turn's own refs exactly; the reply, the options and the reason may not |
 | V-11 | Every recommendation has at least one `figure` source and one non-figure source (a fact, memory, decision or document) |
 | V-12 | `plan.unallocated` is not negative |
 | V-13 | Each `meko_link` to a memory points to a memory that exists (checked against Meko in the nightly test, not on every write) |

@@ -4,6 +4,7 @@ with no network. The recording comes from the scripted model, never Foundry."""
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from kako.demo.files import read_demo
 from kako.demo.load import load_demo
 from kako.settings import get_settings
 from tests.conftest import MakeSettings
-from tests.support.models import ScriptedBackend
+from tests.support.models import ScriptedBackend, calls
 from tests.support.villanueva import SEP_15
 from tests.test_agents_turn import SEED, SESSION_2
 from tests.test_agents_turn import _session_2_script as script
@@ -68,6 +69,26 @@ async def test_ask_records_and_the_command_replays(
             )
         ).scalar_one()
     assert steps == 8
+    async with migrated.connect() as conn:
+        checks = list(
+            await conn.execute(
+                text(
+                    "SELECT n.subject, n.result, n.calc_run_id = r.id FROM number_check n "
+                    "JOIN calc_run r ON r.id = n.calc_run_id "
+                    "WHERE n.session_id = :s ORDER BY n.created_at"
+                ),
+                {"s": asked.session_id},
+            )
+        )
+    # Every text checked against the turn's stored run: the two specialists' summaries, then the
+    # reply, each option's label and summary, and the resolution's reason. All pass.
+    assert [tuple(r) for r in checks] == [
+        ("recommendation", "pass", True),
+        ("recommendation", "pass", True),
+        ("reply", "pass", True),
+        *[("recommendation", "pass", True)] * 4,
+        ("reconciliation", "pass", True),
+    ]
 
     # The command answers the same turn from the recording, with no model and no Meko.
     monkeypatch.setenv("KAKO_DATABASE_URL", test_database_url)
@@ -79,6 +100,56 @@ async def test_ask_records_and_the_command_replays(
     out = capsys.readouterr().out
     assert "B: split: Card paid off in 17 months" in out
     assert "US$0.0000." in out  # a replay costs nothing
+
+
+async def test_a_planted_wrong_number_is_regenerated_and_logged(
+    migrated: AsyncEngine, make_settings: MakeSettings
+) -> None:
+    """Phase 3, task 5, done when: a planted wrong number is caught, regenerated, and logged in
+    `number_check`. The reply first says A is "8 months faster" (17 minus 9, worked out, not a
+    figure); the check sends it back naming that number, and the second reply passes."""
+    async with migrated.connect() as conn:
+        household_id = await load_demo(
+            conn, read_demo(), through=datetime(2026, 9, 15, 9, tzinfo=MANILA)
+        )
+        await conn.commit()
+    turn = script()
+    good = json.loads(turn[f"{SEED}/orchestrator/2"].tool_calls[0].arguments)
+    planted = {**good, "reply": "A clears the card 8 months faster than B."}
+    turn[f"{SEED}/orchestrator/2"] = calls(("submit_answer", planted))
+    turn[f"{SEED}/orchestrator/3"] = calls(("submit_answer", good))
+    backend = ScriptedBackend(turn)
+    settings = make_settings(model_strong="kako-strong", model_fast="kako-fast")
+    asked = await ask(
+        migrated,
+        None,
+        settings,
+        backend,
+        household_id=household_id,
+        message=SESSION_2,
+        on=SEP_15,
+        known_at=None,
+        title="Session 2",
+        seed=SEED,
+    )
+    assert asked.answer.reply == good["reply"]
+    told = next(r for k, _, r in backend.requests if k == f"{SEED}/orchestrator/3")
+    assert "'8 months' in the reply" in (told.messages[-1].content or "")
+    async with migrated.connect() as conn:
+        rows = list(
+            await conn.execute(
+                text(
+                    "SELECT checked_text, numbers, result FROM number_check "
+                    "WHERE session_id = :s AND subject = 'reply' ORDER BY created_at"
+                ),
+                {"s": asked.session_id},
+            )
+        )
+    assert [(r.checked_text, r.result) for r in rows] == [
+        (planted["reply"], "regenerated"),
+        (good["reply"], "pass"),
+    ]
+    assert rows[0].numbers == [{"text": "8 months", "kind": "months", "match": None}]
 
 
 def _main(args: list[str]) -> int:
