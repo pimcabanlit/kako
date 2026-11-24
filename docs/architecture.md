@@ -97,8 +97,10 @@ flowchart LR
    reused. The engine is pure: same snapshot in, same figures out.
 3. **The brief.** Code builds a context brief within a size budget (about 3,000 tokens): the key
    figures, the active decisions with their reasons, approved preferences and constraints, pending
-   proposals, and the results of **one** `context_search` on the household's message (memories, shared
-   knowledge and documents, past conversations). Specialists start from this brief instead of searching
+   proposals, the household's last 5 life events, in a replan what changed (see "How a life event
+   replans"), and the results of **one** `context_search` on the household's message (memories, shared
+   knowledge and documents, past conversations). A turn as known at a time (demo mode, the test set)
+   sees the decisions, proposals and life events as Kako knew them then. Specialists start from this brief instead of searching
    on their own, which keeps the answer grounded and the Meko call count low. Agents see stable refs, never
    database ids (`debt:credit-card`, `figure:debt.payoff_months@debt:credit-card`, `M1` for a
    memory), so a recorded turn replays anywhere. Approved preferences come from the fact store, with
@@ -166,20 +168,43 @@ flowchart LR
 This is the centre of the live demo.
 
 1. Mara says she has a new job from Dec 1 at ₱68,000 take-home. The orchestrator calls
-   `propose_life_event` and `propose_fact_change`; the backend creates **pending proposals** with the
-   quoted words as evidence, and the session shows an approval card at once. (Dreaming would find the
-   same thing after the session; proposals have an idempotency key, so it can't be proposed twice.)
-2. The household approves. The fact store inserts the new fact, closes the old one (`valid_to` = Dec 1,
-   `status` = `replaced`, `replaced_by` = the new one) and records the life event. The Meko adapter adds
-   the new memory and rewrites the old one in the past tense.
-3. The fact store lists what the event touches: the facts it changed, the calculation inputs that read
-   them, and the **decisions whose assumptions** included a replaced fact ("to revisit").
-4. The engine computes a new run. The orchestrator asks every specialist whose figures moved to reassess,
-   with the decisions to revisit and the preferences in the brief.
-5. Kako answers in three parts: **the new plan**; **what changed** (the diff between the last accepted
-   plan's run and the new run, each change labelled replaced, retracted, new or allocation, rule
-   F-DIFF-1); and **why**, citing the facts, the promoted preference, the earlier decision and the
-   session it came from. The plan report is kept as a Meko artifact.
+   `propose_change` once: the `new_job` life event and the facts it changes (here Mara's salary), each
+   value copied from her words, with the words as `quote`. Code checks it before holding it
+   (`agents/proposing.py`): the quote is in her message, every number is in the quote (V-09), the
+   entity and attribute exist, and a change replaces the fact Kako holds now and starts after it; a
+   value Kako already holds, a life event it already has, or `plan.allocation` (chosen by accepting a
+   plan) is refused. The turn keeps what it holds as **pending proposals** with her words as evidence
+   and her as the speaker, a life event with its facts in one transaction, and the answer says what
+   waits for a yes. Nothing changes until then. (Dreaming would find the same thing after the session;
+   proposals have an idempotency key, so it can't be proposed twice.)
+2. The household approves (`/api/v1/proposals/approve`, `kako proposals approve`). The fact store
+   inserts the new fact, closes the old one (`valid_to` = Dec 1, `status` = `replaced`, `replaced_by` =
+   the new one) and records the life event. (Rewriting the old memory in Meko in the past tense comes
+   with dreaming and promotion, Phase 4, tasks 3 and 4.)
+3. The session's next turn is a **replan** (`agents/replan_store.py`): code finds the changes approved
+   from this session's turns, as known at the turn, and takes the turn as of the latest day one of them
+   takes effect (Dec 1). It recomputes the run the household last decided on, from the facts as Kako
+   knew them when it decided (the decision of Sep 15, Session 2; with no decision, the session before
+   its changes), and F-DIFF-1 gives what changed between the two runs, the facts behind it, and the
+   **decisions whose assumptions** included a replaced or retracted fact ("to revisit"). Both runs are
+   stored, so each figure in the diff traces.
+4. The brief has a replan section with the figures before and now, the facts behind them and the
+   decisions to revisit, all by ref; code tells the orchestrator which specialists' figures moved, and
+   it asks them to reassess, with the decisions to revisit and the preferences in the brief. The
+   number check also knows the figures and facts the household last decided on, so "₱9,050 before" is
+   a number it can match.
+5. Kako answers in three parts: **the new plan** (the reply and its options); **what changed**, written
+   by code from the diff (each figure that moved, old and new, by its meaning); and **why**: the
+   orchestrator's `why`, number-checked like any text and required in a replan, then the facts behind
+   the change (each labelled replaced, retracted, new or allocation) and the decisions to revisit with
+   the session they came from, written by code. The turn kept in Meko carries all three parts, the run
+   it was compared with, the decision it was compared against and the decisions to revisit
+   (`kako_replan_*` metadata). The session API returns them as `replan` and the pending changes as
+   `changes`.
+
+Session 4 (`data/demo-household/sessions/session-4.toml`) shows it on the demo household: Mara's news,
+her approval at 8 PM on Nov 20 (which writes changes.csv rows 10 and 11, checked against the story),
+and Jun's question answered as the replan.
 
 ## How dreaming works
 
@@ -260,7 +285,7 @@ never import the database, Meko or the model SDK.
 
 | Agent | Job | Tools | Writes |
 | --- | --- | --- | --- |
-| Orchestrator | Reads the brief, decides which specialists to ask, resolves conflicts, writes the answer, proposes facts and events the household stated | The four specialists, `get_figures`, `get_facts`, `get_decisions`, `propose_fact_change`, `propose_life_event`, `propose_decision` | Pending proposals only |
+| Orchestrator | Reads the brief, decides which specialists to ask, resolves conflicts, writes the answer, proposes facts and events the household stated | The four specialists, `get_figures`, `get_facts`, `get_decisions`, `propose_change` (a life event and the facts it changes), `propose_decision` | Pending proposals only |
 | Budget | Spending against income; where the surplus comes from | Read tools, `run_what_if` | Nothing |
 | Debt | Payoff order and extra payments, respecting preferences | Read tools, `run_what_if` | Nothing |
 | Savings | Emergency runway and target | Read tools, `run_what_if` | Nothing |

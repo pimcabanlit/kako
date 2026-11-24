@@ -283,6 +283,7 @@ async def test_the_single_agent_answers_alone_with_the_same_checks(
         "get_decisions",
         "search_memory",
         "run_what_if",
+        "propose_change",
         "submit_answer",
     }
 

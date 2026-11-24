@@ -3,7 +3,8 @@
 - `POST /api/v1/sessions` starts a session: its Meko conversation and its row.
 - `POST /api/v1/sessions/{id}/turns` answers the household's message (`agents.ask.run_turn`): the
   options with their figures and sources, any conflict and how it ended, the numbers the check
-  flagged, the plan it stored and the turn Meko kept.
+  flagged, the plan it stored and the turn Meko kept; the changes the household stated, pending
+  for a yes (`person_id` names who wrote the message); and in a replan, what changed and why.
 - `GET /api/v1/sessions/{id}/trace` is the session's Meko calls as spans: local Meko's call log,
   or Meko Cloud's trace page.
 
@@ -45,9 +46,10 @@ from kako.agents.orchestrator import OrchestratorError
 from kako.agents.present import money
 from kako.agents.reconciling import LABELS
 from kako.agents.recorded import ChatBackend
+from kako.agents.replan import changes_lines, why_lines
 from kako.agents.tools import MESSAGE_CHARS
 from kako.db.meko_log import DbCallLog
-from kako.db.models import Household, LlmCall, Session
+from kako.db.models import Household, LlmCall, Person, Session
 from kako.health import safe_error
 from kako.meko.adapter import Meko
 from kako.meko.client import MekoError
@@ -55,6 +57,7 @@ from kako.meko.trace import local_trace
 from kako.settings import Settings
 
 HOUSEHOLD = cast(Table, Household.__table__)
+PERSON = cast(Table, Person.__table__)
 SESSION = cast(Table, Session.__table__)
 LLM_CALL = cast(Table, LlmCall.__table__)
 SEED: Final = re.compile(r"[a-z0-9][a-z0-9:_-]{0,39}")
@@ -100,6 +103,9 @@ class NewTurn(_In):
     ]
     known_at: AwareDatetime | None = None
     seed: str | None = Field(default=None, description="The turn's id in the session; t1, t2…")
+    person_id: uuid.UUID | None = Field(
+        default=None, description="Who wrote the message: a person of the household"
+    )
 
 
 class SessionOut(BaseModel):
@@ -157,6 +163,25 @@ class ProposalOut(BaseModel):
     summary: str
 
 
+class ChangeOut(BaseModel):
+    """A change the household stated, pending until a person approves it (`/api/v1/proposals`)."""
+
+    proposal_id: uuid.UUID
+    kind: str
+    shown: str
+
+
+class ReplanOut(BaseModel):
+    """A replan's other two parts: what changed (from code's diff) and why."""
+
+    since: str
+    what_changed: list[str]
+    why: str | None  # the orchestrator's, number-checked
+    because: list[str]  # the facts behind it and the decisions to revisit, from code
+    before_run_id: uuid.UUID | None
+    revisit_decision_ids: list[uuid.UUID]
+
+
 class PlanOut(BaseModel):
     id: uuid.UUID
     version: int
@@ -186,6 +211,9 @@ class TurnOut(BaseModel):
     resolution: ResolutionOut | None
     flagged: list[FlaggedOut]
     proposals: list[ProposalOut]
+    changes: list[ChangeOut]  # waiting for the household's yes
+    not_proposed: list[str]  # changes the store refused, with why
+    replan: ReplanOut | None
     plan: PlanOut | None
     calc_run_id: uuid.UUID | None
     meko: MekoTurnOut
@@ -286,6 +314,8 @@ async def take_turn(session_id: uuid.UUID, body: NewTurn, request: Request) -> T
         raise HTTPException(429, "a turn is already running; try again when it ends")
     async with services.turn_lock:
         seed = await _seed(services.engine, session_id, body.seed)
+        if body.person_id is not None:
+            await _person(services.engine, session.household_id, body.person_id)
         try:
             async with services.open_meko(
                 DbCallLog(services.engine, session_id), MEKO_CALLS
@@ -301,12 +331,26 @@ async def take_turn(session_id: uuid.UUID, body: NewTurn, request: Request) -> T
                     message=body.message,
                     known_at=body.known_at,
                     seed=seed,
+                    speaker=body.person_id,
                 )
         except SessionError as exc:
             raise HTTPException(409, str(exc)) from None
         except (ModelError, MekoError, BriefStoreError, OrchestratorError) as exc:
             raise HTTPException(502, f"the turn stopped: {safe_error(exc)}") from None
     return _turn_out(services, asked)
+
+
+async def _person(engine: AsyncEngine, household_id: uuid.UUID, person_id: uuid.UUID) -> None:
+    async with engine.connect() as conn:
+        found = (
+            await conn.execute(
+                select(PERSON.c.id).where(
+                    PERSON.c.id == person_id, PERSON.c.household_id == household_id
+                )
+            )
+        ).first()
+    if found is None:
+        raise HTTPException(422, "person_id: no such person in this household")
 
 
 async def _seed(engine: AsyncEngine, session_id: uuid.UUID, asked: str | None) -> str:
@@ -372,6 +416,17 @@ def _turn_out(services: Services, asked: AskedTurn) -> TurnOut:
     plan = None
     if saved is not None and saved.plan_id is not None and saved.version is not None:
         plan = PlanOut(id=saved.plan_id, version=saved.version, status="proposed")
+    replan = None
+    if asked.replan is not None and asked.state is not None:
+        entities = asked.state.entities
+        replan = ReplanOut(
+            since=asked.replan.since,
+            what_changed=[line[2:] for line in changes_lines(asked.replan, entities)[1:]],
+            why=answer.why,
+            because=[line[2:] for line in why_lines(asked.replan, entities)[1:]],
+            before_run_id=asked.before_run_id,
+            revisit_decision_ids=[r.decision_id for r in asked.replan.revisit],
+        )
     conversation = asked.conversation_id
     in_meko = conversation is not None and not conversation.startswith(LOCAL_PREFIX)
     return TurnOut(
@@ -386,6 +441,11 @@ def _turn_out(services: Services, asked: AskedTurn) -> TurnOut:
             ProposalOut(specialist=p.specialist, what_if=p.what_if, summary=p.summary)
             for p in answer.proposals
         ],
+        changes=[
+            ChangeOut(proposal_id=p.proposal_id, kind=p.kind, shown=p.shown) for p in asked.proposed
+        ],
+        not_proposed=list(asked.proposal_errors),
+        replan=replan,
         plan=plan,
         calc_run_id=asked.calc_run_id,
         meko=MekoTurnOut(

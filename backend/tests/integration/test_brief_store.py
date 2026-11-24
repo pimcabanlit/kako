@@ -146,7 +146,38 @@ async def test_no_message_means_no_search(migrated: AsyncEngine) -> None:
                 budget=3_000,
             )
     assert "No search was made." in brief.text
-    assert "Active decisions (cite as decision:<ref>)\nNone." in brief.text
+    assert (
+        "Active decisions (cite as decision:<ref>)\n- D1: How hard should we pay down the credit "
+        "card? Chose 'B: split' on Sep 15, 2026 (Session 2)."
+    ) in brief.text
+
+
+@pytest.mark.parametrize(
+    ("known_at", "shown"),
+    [
+        (datetime(2026, 9, 15, 1, tzinfo=UTC), False),  # 9:00 in Manila: before it was decided
+        (datetime(2026, 9, 15, 2, tzinfo=UTC), True),  # 10:00 in Manila: decided then
+        (None, True),
+    ],
+)
+async def test_decisions_as_kako_knew_them(
+    migrated: AsyncEngine, known_at: datetime | None, shown: bool
+) -> None:
+    household_id = await _demo(migrated)
+    async with migrated.connect() as conn:
+        brief, inputs = await gather_brief(
+            conn,
+            None,
+            household_id=household_id,
+            on=date(2026, 9, 15),
+            known_at=known_at,
+            message="",
+            conversation_id=None,
+            budget=3_000,
+        )
+    assert bool(inputs.decisions) is shown
+    assert ("D1: How hard should we pay down the credit card?" in brief.text) is shown
+    assert inputs.proposals == ()  # the decision was never pending at a time Kako looks from
 
 
 async def test_the_search_stays_in_the_household(

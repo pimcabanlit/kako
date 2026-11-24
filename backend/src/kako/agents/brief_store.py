@@ -25,17 +25,20 @@ from kako.agents.brief import (
     Brief,
     BriefInputs,
     DecisionView,
+    LifeEventView,
     OptionView,
     ProposalView,
     is_preference,
     render_brief,
 )
+from kako.agents.replan_store import SessionChanges, gather_replan
 from kako.db.fact_store import load_entities, snapshot
 from kako.db.models import (
     Decision,
     DecisionOption,
     Fact,
     Household,
+    LifeEvent,
     MekoLink,
     Person,
     Proposal,
@@ -51,6 +54,8 @@ DECISION = cast(Table, Decision.__table__)
 OPTION = cast(Table, DecisionOption.__table__)
 SESSION = cast(Table, Session.__table__)
 MEKO_LINK = cast(Table, MekoLink.__table__)
+LIFE_EVENT = cast(Table, LifeEvent.__table__)
+MAX_LIFE_EVENTS = 5  # the most recent ones the brief shows
 FACT = cast(Table, Fact.__table__)
 BUDGET_RANGE = range(500, 20_001)  # KAKO_BRIEF_TOKEN_BUDGET's bounds
 SEARCH_LIMIT_RANGE = range(0, 11)  # KAKO_BRIEF_SEARCH_LIMIT's bounds
@@ -147,22 +152,35 @@ async def _approved_memories(
 
 
 async def _decisions(
-    conn: AsyncConnection, household_id: uuid.UUID, on: date
+    conn: AsyncConnection, household_id: uuid.UUID, on: date, known_at: datetime | None
 ) -> tuple[DecisionView, ...]:
-    """Active decisions in force on `on`, each with its options."""
-    rows = list(
-        await conn.execute(
-            select(DECISION, SESSION.c.title)
-            .join(SESSION, SESSION.c.id == DECISION.c.session_id)
-            .where(
-                DECISION.c.household_id == household_id,
-                DECISION.c.status == "active",
-                DECISION.c.valid_from <= on,
-                or_(DECISION.c.valid_to.is_(None), DECISION.c.valid_to > on),
-            )
-            .order_by(DECISION.c.valid_from, DECISION.c.id)
-        )
+    """Decisions in force on `on`, as Kako knew them at `known_at` (now, when None), each with its
+    options: approved by then, and not yet revised or reversed by a decision approved by then."""
+    made = PROPOSAL.alias("made")
+    later = DECISION.alias("later")
+    later_made = PROPOSAL.alias("later_made")
+    revised_later = (
+        select(later_made.c.decided_at)
+        .join(later, later.c.proposal_id == later_made.c.id)
+        .where(later.c.id == DECISION.c.replaced_by)
+        .scalar_subquery()
     )
+    in_force = and_(
+        DECISION.c.status == "active",
+        or_(DECISION.c.valid_to.is_(None), DECISION.c.valid_to > on),
+    )
+    query = (
+        select(DECISION, SESSION.c.title)
+        .join(SESSION, SESSION.c.id == DECISION.c.session_id)
+        .join(made, made.c.id == DECISION.c.proposal_id)
+        .where(DECISION.c.household_id == household_id, DECISION.c.valid_from <= on)
+        .order_by(DECISION.c.valid_from, DECISION.c.id)
+    )
+    if known_at is None:
+        query = query.where(in_force)
+    else:
+        query = query.where(made.c.decided_at <= known_at, or_(in_force, revised_later > known_at))
+    rows = list(await conn.execute(query))
     if not rows:
         return ()
     options = list(
@@ -190,13 +208,41 @@ async def _decisions(
     return tuple(views)
 
 
-async def _pending(conn: AsyncConnection, household_id: uuid.UUID) -> tuple[ProposalView, ...]:
-    rows = await conn.execute(
+async def _pending(
+    conn: AsyncConnection, household_id: uuid.UUID, known_at: datetime | None
+) -> tuple[ProposalView, ...]:
+    """Proposals waiting for a person at `known_at` (now, when None): made by then and not yet
+    decided then."""
+    query = (
         select(PROPOSAL.c.id, PROPOSAL.c.kind, PROPOSAL.c.explanation, PROPOSAL.c.created_at)
-        .where(and_(PROPOSAL.c.household_id == household_id, PROPOSAL.c.status == "pending"))
+        .where(PROPOSAL.c.household_id == household_id)
         .order_by(PROPOSAL.c.created_at, PROPOSAL.c.id)
     )
+    if known_at is None:
+        query = query.where(PROPOSAL.c.status == "pending")
+    else:
+        query = query.where(
+            PROPOSAL.c.created_at <= known_at,
+            or_(PROPOSAL.c.status == "pending", PROPOSAL.c.decided_at > known_at),
+        )
+    rows = await conn.execute(query)
     return tuple(ProposalView(r.id, r.kind, r.explanation, r.created_at) for r in rows)
+
+
+async def _life_events(
+    conn: AsyncConnection, household_id: uuid.UUID, known_at: datetime | None
+) -> tuple[LifeEventView, ...]:
+    """The household's most recent life events, as known at `known_at`, oldest first."""
+    query = (
+        select(LIFE_EVENT.c.kind, LIFE_EVENT.c.description, LIFE_EVENT.c.occurs_on)
+        .where(LIFE_EVENT.c.household_id == household_id)
+        .order_by(LIFE_EVENT.c.occurs_on.desc(), LIFE_EVENT.c.recorded_at.desc())
+        .limit(MAX_LIFE_EVENTS)
+    )
+    if known_at is not None:
+        query = query.where(LIFE_EVENT.c.recorded_at <= known_at)
+    rows = list(await conn.execute(query))
+    return tuple(LifeEventView(r.kind, r.description, r.occurs_on) for r in reversed(rows))
 
 
 async def _check_meko_scope(
@@ -234,11 +280,14 @@ async def gather_brief(
     budget: int,
     search_limit: int = 5,
     run: Run | None = None,
+    changes: SessionChanges | None = None,
+    session_on: date | None = None,
 ) -> tuple[Brief, BriefInputs]:
     """The brief for one turn, and what it was rendered from (the snapshot, the engine run it
     describes, the decisions), which the agents' tools read. At most one Meko call: a
     `context_search` on the household's message (none when there is no message, no Meko, or a
-    search limit of 0)."""
+    search limit of 0). With `changes` approved in the session (dated `session_on`), the brief
+    says what they changed against the plan the household last decided on (`agents.replan`)."""
     if budget not in BUDGET_RANGE or search_limit not in SEARCH_LIMIT_RANGE:
         raise ValueError("the brief's budget or search limit is out of its settings' bounds")
     household = (
@@ -280,6 +329,19 @@ async def gather_brief(
             conversation_id, message, agent_id=SEARCH_AGENT, limit=search_limit
         )
         approved = await _approved_memories(conn, household_id, [m.id for m in context.memories])
+    decisions = await _decisions(conn, household_id, on, known_at)
+    replan = None
+    if changes is not None:
+        replan = await gather_replan(
+            conn,
+            household_id=household_id,
+            entities=entities,
+            run=run,
+            changes=changes,
+            session_on=session_on or on,
+            decisions=decisions,
+            known_at=known_at,
+        )
     inputs = BriefInputs(
         household_name=household.name,
         people=people,
@@ -289,8 +351,10 @@ async def gather_brief(
         approvals=await _approvals(
             conn, household_id, preferences, dreamed, ZoneInfo(household.timezone)
         ),
-        decisions=await _decisions(conn, household_id, on),
-        proposals=await _pending(conn, household_id),
+        decisions=decisions,
+        proposals=await _pending(conn, household_id, known_at),
+        life_events=await _life_events(conn, household_id, known_at),
+        replan=replan,
         message=message,
         context=context,
         approved_memories=approved,

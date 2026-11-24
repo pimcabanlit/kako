@@ -74,6 +74,13 @@ def main(argv: list[str] | None = None) -> int:
         "replayed and the difference reported)",
     )
 
+    record = demo_commands.add_parser(
+        "record",
+        help="record one scripted session on Foundry, on an empty database and local Meko "
+        "(KAKO_MODEL_MODE=record: it spends; log a prediction in docs/tuning-log.md first)",
+    )
+    record.add_argument("session", help="the session file's name, such as session-4")
+
     validate = commands.add_parser(
         "validate", help="rules V-01 to V-08 and V-16 over a household's facts; exit 1 on any"
     )
@@ -113,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         help="the turn's seed, which keys recorded responses (default: ask:t1)",
     )
     ask.add_argument("--no-meko", action="store_true", help="no Meko search for this turn")
+    ask.add_argument("--by", help="who says it, by name: named on any change it proposes")
 
     test_set = commands.add_parser(
         "test-set",
@@ -177,6 +185,21 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Demo mode can't start: {exc}", file=sys.stderr)
             return 1
         return _migrate() or asyncio.run(_demo_run(test_set=args.test_set, strict=args.strict))
+    if args.command == "demo" and args.demo_command == "record":
+        from kako.demo.mode import DemoModeError, check_target
+
+        settings = get_settings()
+        try:
+            check_target(settings)
+        except DemoModeError as exc:
+            print(f"Can't record: {exc}", file=sys.stderr)
+            return 1
+        if settings.model_mode != "record":
+            print(
+                "Recording calls Foundry and spends: set KAKO_MODEL_MODE=record.", file=sys.stderr
+            )
+            return 1
+        return _migrate() or asyncio.run(_demo_record(args.session))
     if args.command == "demo" and args.demo_command == "upload":
         return asyncio.run(_demo_upload(args.data))
     if args.command == "demo":
@@ -195,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
                 title=args.title,
                 seed=args.seed,
                 use_meko=not args.no_meko,
+                by=args.by,
             )
         )
     if args.command == "test-set":
@@ -329,8 +353,15 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
     from kako.db.engine import make_engine
     from kako.demo.files import DemoDataError, read_demo
     from kako.demo.load import DemoLoadError
-    from kako.demo.mode import DemoModeError, check_target, prepare, replay_session
-    from kako.demo.sessions import RECORDED_DIR, DemoSessionError, read_sessions
+    from kako.demo.mode import (
+        DemoModeError,
+        check_target,
+        prepare,
+        replay_session,
+        written,
+        written_by_sessions,
+    )
+    from kako.demo.sessions import RECORDED_DIR, DemoSessionError, check_writes, read_sessions
     from kako.evals.questions import TestSetError, read_test_set
     from kako.evals.runner import run_test_set
     from kako.meko.client import MekoError
@@ -340,6 +371,7 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
         check_target(settings)
         demo = read_demo()
         sessions = read_sessions(people=frozenset(p.key for p in demo.people))
+        check_writes(sessions, demo)
     except (DemoModeError, DemoDataError, DemoSessionError) as exc:
         print(f"Demo mode can't start: {exc}", file=sys.stderr)
         return 1
@@ -348,7 +380,7 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
         return 1
     engine = make_engine(database_url)
     try:
-        prepared = await prepare(engine, settings, demo)
+        prepared = await prepare(engine, settings, demo, skip=written_by_sessions(sessions))
         print(
             f"{demo.household.name}: "
             + ("loaded with its whole story" if prepared.loaded else "already loaded")
@@ -360,13 +392,27 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
             if not session.recording.exists():
                 print(f"{session.title}: no recording yet ({session.recording.name}), skipped.\n")
                 continue
+            if session.writes:
+                found = await written(engine, demo, session, prepared.household_id)
+                if all(found.values()):
+                    print(
+                        f"{session.title}: the changes it approves are in this database already "
+                        "(an earlier run), so it isn't replayed again; use an empty database to "
+                        "replay it.\n"
+                    )
+                    continue
+                if any(found.values()):
+                    raise DemoModeError(
+                        f"{session.title}: this database holds part of what it writes; use an "
+                        "empty database"
+                    )
 
             def show(asked: Any, title: str = session.title) -> None:
                 print(f"== {title}, turn {asked.seed} ==")
                 print(render_answer(asked, settings) + "\n")
 
             replayed = await replay_session(
-                engine, settings, session, prepared.household_id, strict=strict, shown=show
+                engine, settings, demo, session, prepared.household_id, strict=strict, shown=show
             )
             print(_drift(session.title, replayed.calls, replayed.drifted))
             played += 1
@@ -584,6 +630,7 @@ async def _ask(
     title: str,
     seed: str,
     use_meko: bool,
+    by: str | None = None,
 ) -> int:
     from contextlib import AsyncExitStack
 
@@ -594,6 +641,7 @@ async def _ask(
     from kako.agents.chat import ModelError
     from kako.agents.model_manager import chat_backend
     from kako.agents.orchestrator import OrchestratorError
+    from kako.api.proposals import people
     from kako.db.engine import make_engine
     from kako.db.meko_log import DbCallLog
     from kako.db.models import Household
@@ -617,6 +665,12 @@ async def _ask(
             as_of = (
                 await conn.execute(select(table.c.as_of_date).where(table.c.id == chosen))
             ).scalar_one()
+            speaker = None
+            if by is not None:
+                speaker = (await people(conn, chosen)).get(by.strip().lower())
+                if speaker is None:
+                    print(f"No one called {by} in the household.", file=sys.stderr)
+                    return 1
         async with AsyncExitStack() as stack:
             calls = DbCallLog(engine)
             meko = (
@@ -636,11 +690,83 @@ async def _ask(
                 title=title,
                 seed=seed,
                 call_log=calls,
+                speaker=speaker,
             )
         print(render_answer(asked, settings))
         return 0
     except (ModelError, MekoError, BriefStoreError, OrchestratorError) as exc:
         print(f"The turn stopped: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+
+
+async def _demo_record(name: str) -> int:
+    """One scripted session on Foundry, recorded: on an empty database, the story loaded without
+    the rows the session writes, each turn and approval as demo mode plays them."""
+    from kako.agents.ask import render_answer
+    from kako.agents.brief_store import BriefStoreError
+    from kako.agents.chat import ModelError
+    from kako.agents.model_manager import chat_backend
+    from kako.agents.orchestrator import OrchestratorError
+    from kako.db.engine import make_engine
+    from kako.demo.files import DemoDataError, read_demo
+    from kako.demo.load import DemoLoadError
+    from kako.demo.mode import DemoModeError, prepare, replay_session
+    from kako.demo.sessions import DemoSessionError, check_writes, read_sessions
+    from kako.meko.client import MekoError
+
+    settings = get_settings()
+    try:
+        demo = read_demo()
+        sessions = read_sessions(people=frozenset(p.key for p in demo.people))
+        check_writes(sessions, demo)
+    except (DemoDataError, DemoSessionError) as exc:
+        print(f"Can't record: {exc}", file=sys.stderr)
+        return 1
+    session = next((s for s in sessions if s.name == name), None)
+    if session is None:
+        print(f"No session {name!r} in data/demo-household/sessions/.", file=sys.stderr)
+        return 1
+    path = settings.recorded_responses or session.recording
+    if path.exists():
+        print(f"{path} exists: move it aside first (keep it as a past run).", file=sys.stderr)
+        return 1
+    database_url = settings.database_url
+    if database_url is None:
+        return 1
+    engine = make_engine(database_url)
+    try:
+        prepared = await prepare(engine, settings, demo, skip=session.writes)
+        if not prepared.loaded:
+            print("Record on an empty database: this one holds the household.", file=sys.stderr)
+            return 1
+        recording = settings.model_copy(update={"recorded_responses": path})
+
+        def show(asked: Any) -> None:
+            print(f"== {session.title}, turn {asked.seed} ==")
+            print(render_answer(asked, settings) + "\n")
+
+        await replay_session(
+            engine,
+            recording,
+            demo,
+            session,
+            prepared.household_id,
+            shown=show,
+            backend=chat_backend(recording),
+        )
+        print(f"Recorded to {path}.")
+        return 0
+    except (
+        DemoModeError,
+        DemoLoadError,
+        ModelError,
+        MekoError,
+        BriefStoreError,
+        OrchestratorError,
+    ) as exc:
+        print(f"Recording stopped: {exc}", file=sys.stderr)
         return 1
     finally:
         await engine.dispose()

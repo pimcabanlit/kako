@@ -39,6 +39,7 @@ from datetime import date, datetime
 
 from kako.agents.chat import estimate_text_tokens
 from kako.agents.present import GLOSSARY, Refs, day, fact_value, figure_value
+from kako.agents.replan import Replan, brief_lines
 from kako.engine.figures import Run
 from kako.facts.attributes import CATALOG
 from kako.facts.model import EntityRow
@@ -91,6 +92,13 @@ class DecisionView:
 
 
 @dataclass(frozen=True)
+class LifeEventView:
+    kind: str
+    description: str  # the household's words: data
+    occurs_on: date
+
+
+@dataclass(frozen=True)
 class ProposalView:
     id: uuid.UUID
     kind: str
@@ -108,6 +116,8 @@ class BriefInputs:
     approvals: dict[uuid.UUID, Approval] = field(default_factory=dict)  # by fact id
     decisions: tuple[DecisionView, ...] = ()
     proposals: tuple[ProposalView, ...] = ()
+    life_events: tuple[LifeEventView, ...] = ()  # approved, as known then, oldest first
+    replan: Replan | None = None  # after a change approved in this session (`agents.replan`)
     message: str = ""
     context: Context | None = None
     # Meko memory ids that meko_link ties to this household's facts or decisions.
@@ -225,6 +235,11 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
         about = f" [{names[fig.entity_id]}]" if fig.entity_id in names else ""
         lines.append(f"- {refs.figure(fig)} = {figure_value(fig)}: {meaning}{about}")
 
+    decision_refs = {d.id: f"D{n}" for n, d in enumerate(inputs.decisions, start=1)}
+    if inputs.replan is not None:
+        lines += ["", "## A replan: what changed, worked out in code"]
+        lines += brief_lines(inputs.replan, refs, decision_refs)
+
     lines += ["", "## Preferences and constraints the household approved (cite as fact:<ref>)"]
     preferences = [f for f in snap.facts if is_preference(f.attribute)]
     if not preferences:
@@ -256,6 +271,15 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
                 f"- {refs.fact(fact)} = {fact_value(fact)} "
                 f"(since {day(fact.valid_from)}; {fact.source_kind})"
             )
+
+    lines += ["", "## Life events the household approved"]
+    if not inputs.life_events:
+        lines.append("None.")
+    for event in inputs.life_events:
+        lines.append(
+            f"- {event.kind} on {day(event.occurs_on)}: "
+            + data(event.description, source="household")
+        )
 
     lines += ["", "## Active decisions (cite as decision:<ref>)"]
     if not inputs.decisions:

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from kako.facts.attributes import VALUE_COLUMN, Attribute
+from kako.facts.attributes import VALUE_COLUMN, Attribute, attribute
 from kako.facts.model import FactValue
 
 _RATE_PLACES = Decimal("0.000001")  # NUMERIC(9,6)
@@ -53,3 +53,36 @@ def value_columns(attr: Attribute, value: FactValue) -> dict[str, FactValue | No
     columns: dict[str, FactValue | None] = dict.fromkeys(VALUE_COLUMN.values())
     columns[VALUE_COLUMN[attr.value_type]] = value
     return columns
+
+
+def parse_money(text: str) -> int:
+    """Pesos with at most two decimals, as exact centavos ("85000.00" is 8,500,000)."""
+    try:
+        pesos = Decimal(text)
+    except InvalidOperation as exc:
+        raise ValueError(f"{text!r} isn't an amount in pesos") from exc
+    centavos = pesos * 100
+    if not pesos.is_finite() or centavos != centavos.to_integral_value():
+        raise ValueError(f"{text!r} has more than two decimals")
+    return int(centavos)
+
+
+def parse_value(attribute_key: str, text: str) -> FactValue:
+    """A value as its attribute's type, checked against the attribute (V-01, V-07)."""
+    attr = attribute(attribute_key)
+    value: FactValue
+    if attr.value_type == "money":
+        value = parse_money(text)
+    elif attr.value_type == "rate":
+        try:
+            value = Decimal(text)
+        except InvalidOperation as exc:
+            raise ValueError(f"{text!r} isn't a rate") from exc
+    elif attr.value_type == "int":
+        value = int(text)
+    elif attr.value_type == "date":
+        value = date.fromisoformat(text)
+    else:
+        value = text
+    check_value(attr, value)
+    return value

@@ -328,6 +328,7 @@ async def test_what_each_agent_was_sent(house: Villanueva, make_settings: MakeSe
         "ask_debt",
         "ask_savings",
         "ask_goals",
+        "propose_change",
         "submit_answer",
     ]
     for tool in tools:

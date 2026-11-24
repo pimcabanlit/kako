@@ -1,4 +1,4 @@
-# Kako data model v0.7
+# Kako data model v0.8
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -26,7 +26,10 @@ in the same change once agreed.
   adapter (task 6) says how `meko_call` counts and refuses calls, and how documents are uploaded.
   v0.7 (Nov 24) is proposals and approvals (Phase 4, task 1): the payloads of a life event and a
   decision, the idempotency key's shape, what V-09 counts as the same number, the facts a decision
-  rests on, and the guard on decided proposals, decisions and life events (migration 0005).
+  rests on, and the guard on decided proposals, decisions and life events (migration 0005). v0.8
+  (Nov 24) is the life-event replan (task 2): the demo's `decisions.toml`, the session files'
+  `writes`, a turn's own `known_at` and `approve`, and what the number check (V-10) also matches in a
+  turn that proposed something or replans.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -772,7 +775,7 @@ Checked by code before a write, and as a suite over the whole database in CI.
 | V-07 | Money facts are never negative (a debt is a positive balance). Rates are between 0 and 1 |
 | V-08 | Every non-seed fact, decision and life event has an approved proposal; a fact is exactly the write its proposal names, and a proposal writes one fact at most. A seed fact has no proposal and replaces nothing |
 | V-09 | Every number in a proposal appears in its quoted evidence (checked before a proposal is stored; what counts as the same number is under `proposal_evidence`) |
-| V-10 | Every number in a reply, recommendation, summary or reconciliation text matches a figure of the plan's run or of one of its turn's what-ifs, a fact in its snapshot, a what-if's allocation, or a number the household wrote in the turn (the number check, `agents/numbers.py`). Dates (in any common form, each read as one date), months, years, percentages, counts and spelled-out numbers with a unit ("nine months") are checked too; a value written at a lower precision is the figure rounded half up to it, and a negative figure matches its amount. Other spelled-out numbers aren't checked. Never a match: a number run into letters, one with a multiplier (`150k`, `₱2M`, "12 thousand") or more than 6 decimals. A bare number from the household's message is a count, and an amount only from ₱100. A specialist's summary (read by the orchestrator, and shown in the agents' steps) may name the turn's own refs exactly; the reply, the options and the reason may not |
+| V-10 | Every number in a reply, recommendation, summary or reconciliation text matches a figure of the plan's run or of one of its turn's what-ifs, a fact in its snapshot, a what-if's allocation, or a number the household wrote in the turn (the number check, `agents/numbers.py`). Dates (in any common form, each read as one date), months, years, percentages, counts and spelled-out numbers with a unit ("nine months") are checked too; a value written at a lower precision is the figure rounded half up to it, and a negative figure matches its amount. Other spelled-out numbers aren't checked. Never a match: a number run into letters, one with a multiplier (`150k`, `₱2M`, "12 thousand") or more than 6 decimals. A bare number from the household's message is a count, and an amount only from ₱100. A fact matches by its value and by the date it took effect. In a turn that proposed a change (`propose_change`), its values and dates match too: they are the household's words, checked. In a replan, so do the figures of the run the household last decided on and the old and new facts of each change and decision to revisit. A specialist's summary (read by the orchestrator, and shown in the agents' steps) may name the turn's own refs exactly; the reply, the options and the reason may not |
 | V-11 | Every recommendation has at least one `figure` source and one non-figure source (a fact, memory, decision or document) |
 | V-12 | `plan.unallocated` is not negative |
 | V-13 | Each `meko_link` to a memory points to a memory that exists (checked against Meko in the nightly test, not on every write) |
@@ -855,7 +858,15 @@ that doesn't hold the household yet:
   the fact it names (V-08); a fact may name the life event it belongs to. `--through` stops the replay
   at a point in the story (without it, only the seed is loaded). The 18 changes are the worked example:
   plan v2 (Sep 15), the Oct and Nov statements, the October preference pattern, the new job (Nov 20)
-  and plan v3 (Dec 1).
+  and plan v3 (Dec 1). Rows 10 and 11, the new job, are the ones session 4 writes: their `source_ref`
+  is its turn (`s4:t1`).
+- `decisions.toml`: the decisions of the story, each written right after the change it follows
+  (`after`, a seq, at the same `recorded_at`): its session's title and date, who decided (an adult),
+  the question, the reasoning and quote in the household's words, the chosen option's label, the date
+  it takes effect, and every option with its tags (from `decision_option.tags`' fixed list) and, for
+  each rejected one, the reason. Loading writes a session row, then a `decision` proposal approved by
+  that person at that moment, with the facts it rests on as known then. One decision today: session
+  2's "B: split" (Sep 15), which session 4's replan lists to revisit.
 - `statements/*.csv` (synthetic monthly bank, card and loan statements, cited by each statement fact's
   `source_ref`, and uploaded to the knowledge base),
 - `kb/*.md` (planning rules and plain-language reference: 13th-month pay, SSS, Pag-IBIG, emergency funds).
@@ -867,12 +878,19 @@ Every file is checked before anything is written, and an error names the file an
   names its title, the household's date (`on`), what Kako knew then (`known_at`, with its time zone, so
   a database holding the whole story answers as it would have then), its recording (a file name in
   `data/recorded/`) and its turns, each with the speaker (a key in `people.csv`), a seed unique across
-  the sessions, and the message. Session 2 is written; sessions 1, 3 and 4 join with Phase 4 (session 4
-  needs the life-event replan), both adults taking part, and dreaming is tested on them too.
+  the sessions, and the message. A turn may also name its own `known_at` (never before what the
+  session knew already), and an `approve` step after it: `{ by = <an adult's key>, at = <time with its
+  zone> }`, the adult approving everything the turn proposed, at that moment in the story. A session
+  whose approvals write rows of `changes.csv` lists them in `writes` (their seq): each is a fact or a
+  life event recorded at one of its approvals, a life event's facts go with it, and no two sessions
+  write the same row. Demo mode loads the story without them, and after the session checks that its
+  own approved proposals wrote each one as the row has it (kind, entity, attribute, value, date). On a
+  database that holds them already, the session isn't replayed again. Sessions 2 and 4 are written;
+  sessions 1 and 3 join with dreaming, both adults taking part, and dreaming is tested on them too.
 
 `data/recorded/` (beside the demo folder) holds model responses recorded on Foundry, keyed by turn seed,
-agent and call number, and checked against each request's digest when replayed: `session-2.json` for
-session 2, and `test-set-specialists.json` and `test-set-single.json` for the agent test set. Each
+agent and call number, and checked against each request's digest when replayed: `session-2.json` and
+`session-4.json` for sessions 2 and 4 (`kako demo record <session>` records one on Foundry), and `test-set-specialists.json` and `test-set-single.json` for the agent test set. Each
 recording is logged in `docs/tuning-log.md`. `data/test-set/questions.toml` is the agent test set:
 each question's date, `known_at`, message, why it is in the set and what a good answer must hold
 (`backend/src/kako/evals/`); `data/test-set/results/` keeps each architecture's last full run.

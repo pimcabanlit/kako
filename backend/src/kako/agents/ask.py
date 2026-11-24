@@ -32,6 +32,8 @@ from kako.agents.orchestrator import answer_turn
 from kako.agents.present import money
 from kako.agents.reconciling import LABELS, render_resolution
 from kako.agents.recorded import ChatBackend
+from kako.agents.replan import Replan, changes_lines, why_lines
+from kako.agents.replan_store import session_changes
 from kako.agents.tools import TurnState
 from kako.agents.turn import TurnContext
 from kako.db.agent_steps import DbStepLog
@@ -41,6 +43,8 @@ from kako.db.meko_log import DbCallLog
 from kako.db.models import LlmCall, Session
 from kako.db.number_checks import DbCheckLog
 from kako.db.plan_store import SavedAnswer, save_answer
+from kako.db.proposal_store import Evidence, ProposalError, propose
+from kako.facts.proposals import PayloadError, idempotency_key
 from kako.health import safe_error
 from kako.meko.adapter import Meko, Turn
 from kako.meko.client import MekoError
@@ -78,6 +82,15 @@ class Started:
 
 
 @dataclass(frozen=True)
+class StoredProposal:
+    """A change the household stated, kept as a pending proposal for its yes."""
+
+    proposal_id: uuid.UUID
+    kind: str
+    shown: str  # in plain words
+
+
+@dataclass(frozen=True)
 class Asked:
     answer: TurnAnswer
     session_id: uuid.UUID
@@ -93,6 +106,13 @@ class Asked:
     meko_error: str | None = None  # why Meko didn't keep the turn, if it didn't
     what_if_runs: dict[str, uuid.UUID] = field(default_factory=dict)
     state: TurnState | None = None  # what the turn's tools read: the snapshot, refs and what-ifs
+    proposed: tuple[StoredProposal, ...] = ()  # waiting for a person's yes
+    proposal_errors: tuple[str, ...] = ()  # changes the store refused, with why
+    before_run_id: uuid.UUID | None = None  # in a replan: the run it was compared with, stored
+
+    @property
+    def replan(self) -> Replan | None:
+        return self.state.inputs.replan if self.state is not None else None
 
 
 async def start_session(
@@ -161,28 +181,42 @@ async def run_turn(
     known_at: datetime | None,
     seed: str,
     answerer: Answerer = answer_turn,
+    speaker: uuid.UUID | None = None,
 ) -> Asked:
     """Answer the household's `message` in `session`, as of the session's date (and as known at
     `known_at`), and keep it: the plan in Postgres, the turn in Meko. `answerer` is the
-    orchestrator and its specialists; the agent test set also passes the single-agent baseline."""
+    orchestrator and its specialists; the agent test set also passes the single-agent baseline.
+    `speaker`: the person who wrote the message, named on what it proposes.
+
+    Once a person has approved a change stated in this session, its turns are a replan: as of the
+    date the change takes effect, compared with the plan the household last decided on
+    (`agents.replan`)."""
     if meko is not None and not session.in_meko:
         raise SessionError("this session has no Meko conversation")
     conversation = session.conversation_id if meko is not None else None
     async with engine.connect() as conn:
+        changes = await session_changes(
+            conn, session.household_id, session.session_id, session.on, known_at
+        )
         brief, inputs = await gather_brief(
             conn,
             meko,
             household_id=session.household_id,
-            on=session.on,
+            on=changes.on if changes is not None else session.on,
             known_at=known_at,
             message=message,
             conversation_id=conversation,
             budget=settings.brief_token_budget,
             search_limit=settings.brief_search_limit,
+            changes=changes,
+            session_on=session.on,
         )
+    before_run_id = None
     async with engine.connect() as conn:
         # The turn's run, stored with its figures: what the number check holds the texts to.
         calc_run_id = await save_run(conn, inputs.run, created_at=datetime.now(UTC))
+        if inputs.replan is not None:  # and the run it is compared with, so each change traces
+            before_run_id = await save_run(conn, inputs.replan.before, created_at=datetime.now(UTC))
     checks = DbCheckLog(engine, session_id=session.session_id, calc_run_id=calc_run_id)
     state = TurnState(
         brief,
@@ -191,6 +225,7 @@ async def run_turn(
         meko,
         conversation,
         checks=checks,
+        said_on=session.on,
     )
     manager = ModelManager(settings, backend, DbLlmLog(engine))
     turn = manager.turn(
@@ -208,9 +243,15 @@ async def run_turn(
     )
     for check in answer.checks:  # each text as shown: passed, or with its numbers flagged
         await checks.write(record(check, check.result, saved.subject_id(check)))
+    # A turn as known at a time in the story proposes at that time (demo mode); else now.
+    proposed, refused = await _keep_proposals(
+        engine, state, session, seed, speaker, known_at or datetime.now(UTC)
+    )
     message_id = meko_error = None
     if meko is not None and conversation is not None:
-        meko_turn = trace_turn(message, answer, saved, state, calc_run_id, session, seed)
+        meko_turn = trace_turn(
+            message, answer, saved, state, calc_run_id, session, seed, proposed, before_run_id
+        )
         try:
             message_id = await meko.add_turn(conversation, meko_turn, agent_id=AGENT)
         except MekoError as exc:  # the answer is kept in Postgres; the caller is told
@@ -247,7 +288,52 @@ async def run_turn(
         meko_error,
         dict(state.stored),
         state,
+        proposed,
+        refused,
+        before_run_id,
     )
+
+
+async def _keep_proposals(
+    engine: AsyncEngine,
+    state: TurnState,
+    session: Started,
+    seed: str,
+    speaker: uuid.UUID | None,
+    at: datetime,
+) -> tuple[tuple[StoredProposal, ...], tuple[str, ...]]:
+    """Each change the household stated, as pending proposals with its words as evidence: a change
+    in one transaction (a life event with its facts), checked again by the store. A refused change
+    is reported, never dropped silently; the answer is kept either way."""
+    kept: list[StoredProposal] = []
+    refused: list[str] = []
+    for change in state.proposed:
+        try:
+            async with engine.begin() as conn:
+                mine = []
+                for held in change.proposals:
+                    done = await propose(
+                        conn,
+                        household_id=session.household_id,
+                        kind=held.kind,
+                        payload=held.payload,
+                        explanation=change.explanation,
+                        idempotency_key=idempotency_key(
+                            f"{session.session_id}:{seed}", held.kind, held.target
+                        ),
+                        evidence=[
+                            Evidence(
+                                "turn", f"{session.conversation_id}:{seed}", change.quote, speaker
+                            )
+                        ],
+                        today=session.on,
+                        created_at=at,
+                    )
+                    mine.append(StoredProposal(done.proposal_id, held.kind, held.shown))
+            kept += mine
+        except (ProposalError, PayloadError) as exc:
+            refused.append(f"{change.ref}: {exc}")
+    return tuple(kept), tuple(refused)
 
 
 def trace_turn(
@@ -258,6 +344,8 @@ def trace_turn(
     calc_run_id: uuid.UUID,
     session: Started,
     seed: str,
+    proposed: Sequence[StoredProposal] = (),
+    before_run_id: uuid.UUID | None = None,
 ) -> Turn:
     """The turn as Meko keeps it: the household's words and the reply, the steps taken, why, and
     the ids of what Kako stored, so the trace and the tables can be read side by side. Built by
@@ -277,6 +365,15 @@ def trace_turn(
             else "left the choice to the household"
         )
         steps.append(f"Reconciled their proposals in code ({found}) and {outcome}")
+    replan = state.inputs.replan
+    if replan is not None:
+        steps.insert(
+            1,
+            f"Replanned as of {state.snapshot.on.isoformat()} against {replan.since}: "
+            f"{len(replan.moved)} figures moved, {len(replan.revisit)} decisions to revisit",
+        )
+    if proposed:
+        steps.append(f"Proposed {len(proposed)} change(s) for the household's yes")
     if answer.options:
         steps.append(
             f"Offered {len(answer.options)} option{'s' if len(answer.options) != 1 else ''}, "
@@ -287,6 +384,8 @@ def trace_turn(
     reasons = [f"{p.specialist} specialist: {p.summary}" for p in answer.proposals]
     if resolution is not None:
         reasons.append(f"Reconciliation: {resolution.reason}")
+    if answer.why:
+        reasons.append(f"Why: {answer.why}")
     metadata: dict[str, Any] = {
         "kako_turn": seed,
         "kako_session_id": str(session.session_id),
@@ -301,6 +400,13 @@ def trace_turn(
     flagged = {c.label: [n.text for n in c.unmatched] for c in checks if c.unmatched}
     if flagged:
         metadata["kako_flagged"] = flagged
+    if proposed:
+        metadata["kako_proposal_ids"] = [str(p.proposal_id) for p in proposed]
+    if replan is not None and before_run_id is not None:
+        metadata["kako_replan_before_run_id"] = str(before_run_id)
+        if replan.since_decision is not None:
+            metadata["kako_replan_since_decision_id"] = str(replan.since_decision)
+        metadata["kako_revisit_decision_ids"] = [str(r.decision_id) for r in replan.revisit]
     if saved.plan_id is not None:
         metadata["kako_plan_id"] = str(saved.plan_id)
         metadata["kako_plan_version"] = saved.version
@@ -309,9 +415,23 @@ def trace_turn(
         }
         if saved.reconciliations:
             metadata["kako_reconciliation_ids"] = [str(i) for i in saved.reconciliations]
+    output = answer.reply
+    if replan is not None:  # the three parts, as the household reads them
+        output = "\n\n".join(
+            [
+                answer.reply,
+                "\n".join(changes_lines(replan, state.entities)),
+                "\n".join(
+                    [
+                        *(["Why: " + answer.why] if answer.why else []),
+                        *why_lines(replan, state.entities),
+                    ]
+                ),
+            ]
+        )
     return Turn(
         input=message,
-        output=answer.reply,
+        output=output,
         plan=tuple(steps[:4]),
         reasoning="\n\n".join(reasons)[:REASONING_CHARS] or None,
         metadata=metadata,
@@ -339,6 +459,7 @@ async def ask(
     seed: str,
     call_log: DbCallLog | None = None,
     answerer: Answerer = answer_turn,
+    speaker: uuid.UUID | None = None,
 ) -> Asked:
     """`kako ask`: a new session for the household as of `on`, and one turn in it."""
     session = await start_session(
@@ -354,6 +475,7 @@ async def ask(
         known_at=known_at,
         seed=seed,
         answerer=answerer,
+        speaker=speaker,
     )
 
 
@@ -363,7 +485,8 @@ def render_answer(asked: Asked, settings: Settings | None = None) -> str:
     conflict between the specialists was resolved (and the option rejected), then each
     specialist's proposal and what the turn cost."""
     answer = asked.answer
-    lines = [answer.reply, ""]
+    replan = asked.replan
+    lines = (["The new plan:"] if replan is not None else []) + [answer.reply, ""]
     for option in answer.options:
         mark = " (recommended)" if option.label == answer.recommended else ""
         lines.append(f"{option.label}{mark}: {option.summary}")
@@ -373,6 +496,15 @@ def render_answer(asked: Asked, settings: Settings | None = None) -> str:
             lines.append(f"  cites {c.ref}" + (f" = {c.shown}" if c.figure is not None else ""))
     if not answer.options:
         lines.append("No options.")
+    if replan is not None and asked.state is not None:
+        lines += ["", *changes_lines(replan, asked.state.entities), ""]
+        lines += ["Why:", *([answer.why] if answer.why else [])]
+        lines += why_lines(replan, asked.state.entities)[1:]
+    if asked.proposed:
+        lines += ["", "Waiting for your yes (kako proposals approve <id>… --by <name>):"]
+        lines += [f"  {p.proposal_id} {p.kind}: {p.shown}" for p in asked.proposed]
+    for refused in asked.proposal_errors:
+        lines.append(f"Not proposed: {refused}")
     checks = [*answer.checks, *(p.check for p in answer.proposals if p.check is not None)]
     flagged = [f"{n.text!r} in {c.label}" for c in checks for n in c.unmatched]
     if flagged:

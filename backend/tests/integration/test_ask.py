@@ -96,7 +96,9 @@ async def test_ask_records_and_the_command_replays(
     monkeypatch.setenv("KAKO_RECORDED_RESPONSES", str(path))
     args = ["ask", SESSION_2, "--on", "2026-09-15", "--seed", SEED, "--no-meko"]
     get_settings.cache_clear()  # read the settings again, with the replay
-    assert await asyncio.to_thread(_main, [*args, "--title", "Session 2"]) == 0
+    assert await asyncio.to_thread(_main, [*args, "--by", "Nobody"]) == 1
+    assert "No one called Nobody in the household." in capsys.readouterr().err
+    assert await asyncio.to_thread(_main, [*args, "--title", "Session 2", "--by", "Mara"]) == 0
     out = capsys.readouterr().out
     assert "B: split: Card paid off in 17 months" in out
     assert "US$0.0000." in out  # a replay costs nothing

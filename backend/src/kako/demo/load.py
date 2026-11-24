@@ -1,36 +1,51 @@
 """Load the demo household into Postgres, through the same fact store a real household uses.
 
 The seed goes in as seed facts. Each later change becomes a proposal an adult approved, and then the
-write that proposal names, so V-08 holds for every fact after the seed (Pim, Nov 17). `through`
-stops the replay at a point in the story; without it, only the seed is loaded.
+write that proposal names, so V-08 holds for every fact after the seed (Pim, Nov 17). Each decision
+of the story (`decisions.toml`) follows the change it names, in a session row of its own, proposed
+and approved through the proposal store like any other decision. `through` stops the replay at a
+point in the story; without it, only the seed is loaded. `skip` leaves out changes a scripted
+session makes itself in demo mode (`demo/mode.py`).
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from datetime import UTC, datetime, time
 from typing import Any, cast
 
 from sqlalchemy import Table, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from kako.agents.ask import LOCAL_PREFIX
 from kako.db.fact_store import (
     NewFact,
     load_facts,
     record_fact,
     record_seed_fact,
     replace_fact,
+    snapshot,
 )
-from kako.db.models import Entity, Household, LifeEvent, Person, Proposal
-from kako.demo.files import Change, DemoHousehold
-from kako.facts.proposals import fact_payload, life_event_payload
+from kako.db.models import Entity, Household, LifeEvent, Person, Proposal, Session
+from kako.db.proposal_store import Evidence, approve, propose
+from kako.decisions.assumptions import assumptions
+from kako.demo.files import Change, DemoDecision, DemoHousehold
+from kako.facts.proposals import (
+    DecisionWrite,
+    OptionWrite,
+    decision_payload,
+    fact_payload,
+    idempotency_key,
+    life_event_payload,
+)
 
 HOUSEHOLD = cast(Table, Household.__table__)
 PERSON = cast(Table, Person.__table__)
 ENTITY = cast(Table, Entity.__table__)
 PROPOSAL = cast(Table, Proposal.__table__)
 LIFE_EVENT = cast(Table, LifeEvent.__table__)
+SESSION = cast(Table, Session.__table__)
 
 
 class DemoLoadError(Exception):
@@ -43,9 +58,14 @@ def seed_time(demo: DemoHousehold) -> datetime:
 
 
 async def load_demo(
-    conn: AsyncConnection, demo: DemoHousehold, *, through: datetime | None = None
+    conn: AsyncConnection,
+    demo: DemoHousehold,
+    *,
+    through: datetime | None = None,
+    skip: Collection[int] = (),
 ) -> uuid.UUID:
-    """Load the household, its seed, and every change recorded up to `through`. One transaction."""
+    """Load the household, its seed, and every change recorded up to `through` (but those in
+    `skip`), each decision after the change it follows. One transaction."""
     if through is not None and through.tzinfo is None:
         raise DemoLoadError("--through needs its time zone, such as 2026-12-01T12:00+08:00")
     async with conn.begin_nested() if conn.in_transaction() else conn.begin():
@@ -111,8 +131,64 @@ async def load_demo(
         for change in demo.changes if through is not None else ():
             if change.recorded_at > through:  # type: ignore[operator]
                 break
-            await _apply(conn, household_id, change, people, entities, events)
+            if change.seq not in skip:
+                await _apply(conn, household_id, change, people, entities, events)
+            for n, decision in enumerate(demo.decisions, start=1):
+                if decision.after == change.seq:
+                    await _decide(conn, household_id, n, decision, people)
         return household_id
+
+
+async def _decide(
+    conn: AsyncConnection,
+    household_id: uuid.UUID,
+    n: int,
+    decision: DemoDecision,
+    people: Mapping[str, uuid.UUID],
+) -> None:
+    """A decision of the story: its session, then a `decision` proposal with the household's words
+    as evidence, approved by the person who decided, at the moment it was recorded."""
+    session_id = uuid.uuid4()
+    await conn.execute(
+        SESSION.insert().values(
+            id=session_id,
+            household_id=household_id,
+            meko_conversation_id=f"{LOCAL_PREFIX}{uuid.uuid4().hex}",  # no Meko conversation
+            title=decision.session,
+            household_date=decision.session_date,
+            started_at=decision.recorded_at,
+            ended_at=decision.recorded_at,
+        )
+    )
+    snap = await snapshot(conn, household_id, decision.valid_from, decision.recorded_at)
+    write = DecisionWrite(
+        id=uuid.uuid4(),
+        session_id=session_id,
+        question=decision.question,
+        reasoning=decision.reasoning,
+        valid_from=decision.valid_from,
+        chosen=decision.chosen,
+        options=tuple(
+            OptionWrite(uuid.uuid4(), o.label, None, o.rejected_reason, o.tags)
+            for o in decision.options
+        ),
+        assumptions=assumptions(snap),
+        plan_id=None,
+        revises=None,
+    )
+    person = people[decision.decided_by]
+    proposed = await propose(
+        conn,
+        household_id=household_id,
+        kind="decision",
+        payload=decision_payload(write),
+        explanation=f"{decision.session}: {decision.chosen}",
+        idempotency_key=idempotency_key(f"demo:{household_id}", "decision", f"decision/{n}"),
+        evidence=[Evidence("turn", f"{decision.session}: decision", decision.quote, person)],
+        today=decision.valid_from,
+        created_at=decision.recorded_at,
+    )
+    await approve(conn, [proposed.proposal_id], person_id=person, decided_at=decision.recorded_at)
 
 
 async def _proposal(

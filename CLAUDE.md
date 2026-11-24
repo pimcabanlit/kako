@@ -192,10 +192,11 @@ uv run kako proposals list                # what waits for the household (--stat
 uv run kako proposals approve <id>… --by Mara   # approve together and write what each names; again changes nothing (reject: the same)
 uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine's figures then (--household, --save)
 uv run kako demo upload                   # the demo's statements and reference documents into Meko's knowledge base (counted in meko_call)
-uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko)
+uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko, --by Mara: who says it)
 KAKO_MODEL_MODE=replay KAKO_RECORDED_RESPONSES=../data/recorded/session-2.json uv run kako ask …   # the same turn from a recording, no Foundry
 uv run kako demo run                      # demo mode: migrate, load the whole story, upload the documents, replay the scripted sessions (local Meko, no Azure)
 uv run kako demo run --test-set           # … and replay the agent test set for each recorded architecture (--strict: refuse a request that differs from its recording)
+KAKO_MODEL_MODE=record uv run kako demo record session-4   # record one scripted session on Foundry, on an empty database (spends; log a prediction in docs/tuning-log.md first)
 uv run kako test-set                      # the agent test set's score, replayed from data/recorded/test-set-specialists.json (needs the household loaded through Dec 1)
 uv run kako test-set --architecture single --only q01,q07   # the single-agent baseline, some questions (--household, --save: data/test-set/results/)
 KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
@@ -292,7 +293,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   household's words; used by `submit_answer` and `submit_proposal`, one regeneration, then
   flagged) with `checks.py` (what it finds and logs), `ask.py` (a session and its turns, for `kako ask`
   and the API: the session's conversation, the brief, the turn's run stored, the answer, its plan
-  and checks stored, the turn kept in Meko with its steps, reasons and ids, and what it cost) and
+  and checks stored, the changes the household stated kept as pending proposals, the turn kept in
+  Meko with its steps, reasons and ids, and what it cost), `proposing.py` (`propose_change`: a life
+  event and the facts it changes, from the household's words, checked in code and held for a yes),
+  `replan.py` (pure: a replan's figures before and now, the facts behind them and the decisions to
+  revisit, as the agents and the household read them) with `replan_store.py` (the changes a person
+  approved from this session's turns, and the run the household last decided on) and
   `prompts/` (the shared rules, then one file per role; every system prompt is the shared rules,
   the brief, then the role), and `single.py` (`answer_alone`, the single-agent baseline: one agent on
   the strong deployment with every read tool, its own what-ifs and search, and the same
@@ -306,7 +312,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   (`data/demo-household/sessions/`) and `demo/mode.py` is `kako demo run`: local Meko only, the
   household with its whole story, the documents uploaded once, each session replayed by call key
   (a request that differs from its recording, as when another machine's Meko ranks the brief's
-  search results differently, is replayed and reported; `--strict` refuses it).
+  search results differently, is replayed and reported; `--strict` refuses it), a turn's `approve`
+  step approved at its time in the story, and the `changes.csv` rows a session `writes` left out of
+  the load and checked after it (`kako demo record` records a session the same way).
   `db/llm_log.py`, `db/agent_steps.py` and `db/number_checks.py` write those three tables, each row
   committed on its own.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
@@ -361,7 +369,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_evals.py` holds every expected number in the test set to the engine and scores session 2's
   scripted turn and the single agent's; `test_demo_sessions.py` the session files and each mistake;
   `tests/integration/test_demo_mode.py` runs `kako demo run --test-set` on a fresh database and local
-  Meko with no Azure settings, then again, and its refusals; `test_agent_tools.py` also checks that
+  Meko with no Azure settings, then again (session 4 isn't replayed twice), and its refusals, session 4
+  recorded from the scripted model with its approval and the rows it writes, and `kako demo record`'s
+  refusals; `test_agents_proposing.py` tests `propose_change` on the worked example (held, and each
+  refusal a model could cause), and `tests/integration/test_replan.py` runs session 4 with a scripted
+  model on Postgres, through `run_turn` and through the API: the new job proposed, approved, then the
+  replan in three parts with the September decision to revisit; `test_agent_tools.py` also checks that
   tool output doesn't change when the entities' ids sort the other way.
   `test_brief.py` builds the worked example's brief in memory (under budget, with the approved
   preference; Meko results wrapped; trimming in order), and `tests/integration/test_brief_store.py`

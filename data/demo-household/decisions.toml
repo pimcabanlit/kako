@@ -1,0 +1,28 @@
+# What the household decided in its sessions before the demo begins (docs/data-model.md, "Worked
+# example"). Each decision is written after the change it follows, at the same moment, through the
+# proposal store: a `decision` proposal with the household's words as evidence, approved by the
+# person named. Its assumptions are the facts of that day as known then (kako/decisions/assumptions.py),
+# so a later new job sends it back to the household as "to revisit".
+
+# Session 2 (Sep 15, 2026): the debt question. The household chose option B that evening; plan v2's
+# allocations are changes.csv rows 1 and 2.
+[[decision]]
+after = 2
+recorded_at = 2026-09-15T10:00:00+08:00
+session = "Session 2"
+session_date = 2026-09-15
+decided_by = "mara"
+question = "How hard should we pay down the credit card?"
+reasoning = "Lia starts school and we want cash on hand."
+quote = "We'll take the split. Lia starts school and we want cash on hand."
+chosen = "B: split"
+valid_from = 2026-09-15
+
+[[decision.option]]
+label = "A: all extra on the card"
+rejected_reason = "Lia starts school and we want cash on hand."
+tags = ["favours_speed"]
+
+[[decision.option]]
+label = "B: split"
+tags = ["favours_flexibility"]
