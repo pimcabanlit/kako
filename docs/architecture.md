@@ -273,9 +273,26 @@ settings. Deployment names live in settings only; the orchestrator and dreaming 
 deployment and the specialists a faster one, confirmed in Phase 3 by the agent test set.
 
 **Why four specialists and not one agent.** Each specialist gets its own role and scope on the shared
-brief, its own rules from the knowledge base and its own what-ifs. Phase 3 runs the agent test set once against a
-single all-in-one agent as a baseline; both scores go on the metrics page. If the specialists don't
-score better, the docs say so and the design is revisited.
+brief, its own rules from the knowledge base and its own what-ifs. The agent test set (22 questions,
+`data/test-set/questions.toml`, scored in code) ran once against each architecture on Nov 24, 2026,
+with the same tools, checks and deployments (the single agent on the stronger one):
+
+| | Four specialists and the orchestrator | One agent alone (`agents/single.py`) |
+| --- | --- | --- |
+| Score | 98.1% (99 of 102 checks) | 93.9% (93 of 102 checks) |
+| Model calls | 110 | 40 |
+| Tokens | 602,904 | 210,686 |
+| Cost of the run | US$0.60 | US$0.42 |
+
+The specialists score higher, by a small margin: one run each, and a question either way moves a score
+about 4.5 points. Neither stated a number the engine didn't give. The gap is in what a household can
+check: the single agent answered two "what if we put ₱X in" questions in prose with no option to
+choose or trace, while the specialists turned each into a what-if with its figures cited; their one
+miss was a misread move (q12). The single agent is cheaper (30% less spent, about a third of the calls,
+half the time). Kako keeps the specialists, for the traceable options and because each area's rules
+stay in its own prompt as the knowledge base grows; the margin is small, so the README reports both
+scores as they are, and the baseline is run again when a prompt changes (`kako test-set
+--architecture single`). Details in `docs/tuning-log.md` entry 8; results in `data/test-set/results/`.
 
 **Prompts and context.** Every agent's system prompt starts with the same two parts, the shared rules
 and the turn's brief, so the provider's prompt cache serves them to every agent of the turn; each

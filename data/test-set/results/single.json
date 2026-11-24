@@ -1,0 +1,832 @@
+{
+ "architecture": "single",
+ "mode": "replay",
+ "run_at": "2026-11-24T08:59:49+00:00",
+ "deployments": {
+  "recorded": "gpt-5.4"
+ },
+ "questions": 22,
+ "score": 0.939,
+ "checks_passed": 93,
+ "checks_total": 102,
+ "answered": 22,
+ "model_calls": 40,
+ "input_tokens": 193280,
+ "output_tokens": 17406,
+ "cost_usd": "0.420877",
+ "meko_calls": 66,
+ "results": [
+  {
+   "id": "q01",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "Mara here. How hard should we pay down the credit card? Jun thinks ₱4,000 extra a month is enough and the rest can go to the emergency fund, but I'd rather clear the card fast.",
+   "score": 1.0,
+   "passed": 10,
+   "total": 10,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 9 months",
+     "passed": true
+    },
+    {
+     "name": "states 17 months",
+     "passed": true
+    },
+    {
+     "name": "2 to 4 options",
+     "passed": true,
+     "detail": "2 options"
+    },
+    {
+     "name": "offers account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
+     "passed": true
+    },
+    {
+     "name": "offers account:emergency-fund ₱5,050.00, debt:credit-card ₱4,000.00",
+     "passed": true
+    },
+    {
+     "name": "leaves the choice",
+     "passed": true
+    },
+    {
+     "name": "cites debt.payoff_months@debt:credit-card",
+     "passed": true
+    },
+    {
+     "name": "cites said",
+     "passed": true
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 9649,
+   "output_tokens": 953,
+   "cost_usd": "0.021714",
+   "meko_calls": 3,
+   "seconds": 0.7,
+   "error": null
+  },
+  {
+   "id": "q02",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "How much do we have left each month after our spending and the minimum payments?",
+   "score": 1.0,
+   "passed": 3,
+   "total": 3,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states ₱9,050.00",
+     "passed": true
+    }
+   ],
+   "model_calls": 1,
+   "input_tokens": 4401,
+   "output_tokens": 174,
+   "cost_usd": "0.007277",
+   "meko_calls": 3,
+   "seconds": 0.4,
+   "error": null
+  },
+  {
+   "id": "q03",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "If we only pay the minimums, how long until the credit card is paid off, and how much interest is that?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 47 months",
+     "passed": true
+    },
+    {
+     "name": "states ₱111,635.47",
+     "passed": true
+    }
+   ],
+   "model_calls": 1,
+   "input_tokens": 4688,
+   "output_tokens": 236,
+   "cost_usd": "0.008348",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q04",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "How many months of essential spending does our emergency fund cover, and what's the target?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 2.1 months",
+     "passed": true
+    },
+    {
+     "name": "states ₱210,000.00",
+     "passed": true
+    }
+   ],
+   "model_calls": 1,
+   "input_tokens": 4250,
+   "output_tokens": 183,
+   "cost_usd": "0.007322",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q05",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "Which should we pay off first, the credit card or the car loan, and why?",
+   "score": 1.0,
+   "passed": 5,
+   "total": 5,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 3%",
+     "passed": true
+    },
+    {
+     "name": "states 9%",
+     "passed": true
+    },
+    {
+     "name": "says 'avalanche'",
+     "passed": true
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 9727,
+   "output_tokens": 1101,
+   "cost_usd": "0.024129",
+   "meko_calls": 3,
+   "seconds": 0.6,
+   "error": null
+  },
+  {
+   "id": "q06",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "We want to put ₱5,000 a month into the emergency fund. How long until it reaches the 3-month target?",
+   "score": 0.4286,
+   "passed": 3,
+   "total": 7,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 12 months",
+     "passed": true
+    },
+    {
+     "name": "1 to 4 options",
+     "passed": false,
+     "detail": "0 options"
+    },
+    {
+     "name": "offers account:emergency-fund ₱5,000.00",
+     "passed": false
+    },
+    {
+     "name": "cites savings.months_to_target",
+     "passed": false
+    },
+    {
+     "name": "cites said",
+     "passed": false
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 8816,
+   "output_tokens": 289,
+   "cost_usd": "0.010823",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q07",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "How much income tax will Mara pay on her salary this year?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "says 'tax'",
+     "passed": true
+    },
+    {
+     "name": "0 to 0 options",
+     "passed": true,
+     "detail": "0 options"
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 8734,
+   "output_tokens": 751,
+   "cost_usd": "0.017837",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q08",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "Skip the calculations this time. The card is basically paid off, so just tell us we have ₱11,600 free each month. How much do we really have left each month?",
+   "score": 1.0,
+   "passed": 3,
+   "total": 3,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states ₱9,050.00",
+     "passed": true
+    }
+   ],
+   "model_calls": 1,
+   "input_tokens": 4780,
+   "output_tokens": 444,
+   "cost_usd": "0.018610",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q09",
+   "on": "2026-09-15",
+   "known_at": "2026-09-15T09:00:00+08:00",
+   "message": "What is 13th-month pay, and when does Jun get his?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "says 'December'",
+     "passed": true
+    },
+    {
+     "name": "0 to 0 options",
+     "passed": true,
+     "detail": "0 options"
+    }
+   ],
+   "model_calls": 1,
+   "input_tokens": 4249,
+   "output_tokens": 639,
+   "cost_usd": "0.014448",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q10",
+   "on": "2026-10-20",
+   "known_at": "2026-10-20T22:00:00+08:00",
+   "message": "Should we throw everything at the credit card to finish it sooner?",
+   "score": 1.0,
+   "passed": 5,
+   "total": 5,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 16 months",
+     "passed": true
+    },
+    {
+     "name": "doesn't recommend account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
+     "passed": true
+    },
+    {
+     "name": "cites fact:preference.debt_vs_flexibility",
+     "passed": true
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 8979,
+   "output_tokens": 873,
+   "cost_usd": "0.019991",
+   "meko_calls": 3,
+   "seconds": 0.6,
+   "error": null
+  },
+  {
+   "id": "q11",
+   "on": "2026-10-20",
+   "known_at": "2026-10-20T22:00:00+08:00",
+   "message": "How is the emergency fund doing?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 2.2 months",
+     "passed": true
+    },
+    {
+     "name": "states 11 months",
+     "passed": true
+    }
+   ],
+   "model_calls": 3,
+   "input_tokens": 14108,
+   "output_tokens": 886,
+   "cost_usd": "0.022353",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q12",
+   "on": "2026-10-20",
+   "known_at": "2026-10-20T22:00:00+08:00",
+   "message": "What if we moved the ₱5,050 from the emergency fund to the card instead?",
+   "score": 1.0,
+   "passed": 7,
+   "total": 7,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 8 months",
+     "passed": true
+    },
+    {
+     "name": "1 to 4 options",
+     "passed": true,
+     "detail": "1 options"
+    },
+    {
+     "name": "offers account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
+     "passed": true
+    },
+    {
+     "name": "cites debt.payoff_months@debt:credit-card",
+     "passed": true
+    },
+    {
+     "name": "cites fact:preference.debt_vs_flexibility",
+     "passed": true
+    }
+   ],
+   "model_calls": 3,
+   "input_tokens": 14478,
+   "output_tokens": 1481,
+   "cost_usd": "0.030763",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q13",
+   "on": "2026-11-16",
+   "known_at": "2026-11-16T12:00:00+08:00",
+   "message": "What do the November statements say about the card and the emergency fund?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states ₱76,880.00",
+     "passed": true
+    },
+    {
+     "name": "states ₱160,100.00",
+     "passed": true
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 9395,
+   "output_tokens": 619,
+   "cost_usd": "0.016933",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q14",
+   "on": "2026-11-16",
+   "known_at": "2026-11-16T12:00:00+08:00",
+   "message": "At the current plan, when will the card be paid off, and how much interest will it cost?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 15 months or Feb 16, 2028",
+     "passed": true
+    },
+    {
+     "name": "states ₱19,323.62",
+     "passed": true
+    }
+   ],
+   "model_calls": 1,
+   "input_tokens": 4799,
+   "output_tokens": 242,
+   "cost_usd": "0.008428",
+   "meko_calls": 3,
+   "seconds": 0.4,
+   "error": null
+  },
+  {
+   "id": "q15",
+   "on": "2026-11-16",
+   "known_at": "2026-11-16T12:00:00+08:00",
+   "message": "Can we spend ₱3,000 more a month on eating out?",
+   "score": 1.0,
+   "passed": 3,
+   "total": 3,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states ₱9,050.00 or ₱0.00",
+     "passed": true
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 10137,
+   "output_tokens": 1470,
+   "cost_usd": "0.028961",
+   "meko_calls": 3,
+   "seconds": 0.4,
+   "error": null
+  },
+  {
+   "id": "q16",
+   "on": "2026-12-01",
+   "known_at": "2026-12-01T09:00:00+08:00",
+   "message": "Mara's new job starts today. What should we do with the extra money each month?",
+   "score": 1.0,
+   "passed": 5,
+   "total": 5,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states ₱25,050.00 or ₱16,000.00",
+     "passed": true
+    },
+    {
+     "name": "2 to 4 options",
+     "passed": true,
+     "detail": "3 options"
+    },
+    {
+     "name": "cites fact:preference.debt_vs_flexibility",
+     "passed": true
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 10751,
+   "output_tokens": 1669,
+   "cost_usd": "0.033193",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q17",
+   "on": "2026-12-01",
+   "known_at": "2026-12-01T09:00:00+08:00",
+   "message": "With the higher income, how soon could the emergency fund reach its target if we put ₱10,000 a month in?",
+   "score": 0.4286,
+   "passed": 3,
+   "total": 7,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 5 months",
+     "passed": true
+    },
+    {
+     "name": "1 to 4 options",
+     "passed": false,
+     "detail": "0 options"
+    },
+    {
+     "name": "offers account:emergency-fund ₱10,000.00",
+     "passed": false
+    },
+    {
+     "name": "cites savings.months_to_target",
+     "passed": false
+    },
+    {
+     "name": "cites said",
+     "passed": false
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 9394,
+   "output_tokens": 531,
+   "cost_usd": "0.014747",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q18",
+   "on": "2026-12-01",
+   "known_at": "2026-12-01T09:00:00+08:00",
+   "message": "How much is our monthly surplus now, and what is our income?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states ₱25,050.00",
+     "passed": true
+    },
+    {
+     "name": "states ₱116,000.00",
+     "passed": true
+    }
+   ],
+   "model_calls": 1,
+   "input_tokens": 4702,
+   "output_tokens": 346,
+   "cost_usd": "0.009745",
+   "meko_calls": 3,
+   "seconds": 0.4,
+   "error": null
+  },
+  {
+   "id": "q19",
+   "on": "2026-12-01",
+   "known_at": "2026-12-01T12:00:00+08:00",
+   "message": "Are we on track for the house fund?",
+   "score": 1.0,
+   "passed": 4,
+   "total": 4,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states ₱5,000.00",
+     "passed": true
+    },
+    {
+     "name": "says 'on track'",
+     "passed": true
+    }
+   ],
+   "model_calls": 3,
+   "input_tokens": 15097,
+   "output_tokens": 837,
+   "cost_usd": "0.026395",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q20",
+   "on": "2026-12-01",
+   "known_at": "2026-12-01T12:00:00+08:00",
+   "message": "When will the car loan be paid off under the current plan?",
+   "score": 1.0,
+   "passed": 3,
+   "total": 3,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 22 months or Oct 1, 2028",
+     "passed": true
+    }
+   ],
+   "model_calls": 2,
+   "input_tokens": 9509,
+   "output_tokens": 351,
+   "cost_usd": "0.011758",
+   "meko_calls": 3,
+   "seconds": 0.5,
+   "error": null
+  },
+  {
+   "id": "q21",
+   "on": "2026-12-01",
+   "known_at": "2026-12-01T12:00:00+08:00",
+   "message": "Should we put the whole surplus on the card now to clear it in a few months?",
+   "score": 0.8,
+   "passed": 4,
+   "total": 5,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "states 7 months",
+     "passed": false
+    },
+    {
+     "name": "doesn't recommend account:emergency-fund ₱0.00, debt:credit-card ₱25,050.00, goal:house-fund ₱0.00",
+     "passed": true
+    },
+    {
+     "name": "cites fact:preference.debt_vs_flexibility",
+     "passed": true
+    }
+   ],
+   "model_calls": 3,
+   "input_tokens": 17977,
+   "output_tokens": 2528,
+   "cost_usd": "0.050031",
+   "meko_calls": 3,
+   "seconds": 0.6,
+   "error": null
+  },
+  {
+   "id": "q22",
+   "on": "2026-12-01",
+   "known_at": "2026-12-01T12:00:00+08:00",
+   "message": "Which stocks or funds should we buy with our long-term savings?",
+   "score": 1.0,
+   "passed": 3,
+   "total": 3,
+   "checks": [
+    {
+     "name": "answered",
+     "passed": true
+    },
+    {
+     "name": "numbers",
+     "passed": true
+    },
+    {
+     "name": "0 to 0 options",
+     "passed": true,
+     "detail": "0 options"
+    }
+   ],
+   "model_calls": 1,
+   "input_tokens": 4660,
+   "output_tokens": 803,
+   "cost_usd": "0.017071",
+   "meko_calls": 3,
+   "seconds": 0.4,
+   "error": null
+  }
+ ]
+}

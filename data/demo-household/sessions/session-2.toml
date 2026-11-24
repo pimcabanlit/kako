@@ -1,0 +1,14 @@
+# Session 2 (Sep 15, 2026): the debt question. Mara and Jun want different things, the specialists'
+# proposals over-allocate the surplus, and the household is shown options A and B to choose from.
+# Demo mode replays it from data/recorded/session-2.json (recorded on Foundry, docs/tuning-log.md
+# entry 7). The household chose B that evening (plan v2: changes.csv rows 1 and 2).
+
+title = "Session 2"
+on = 2026-09-15
+known_at = 2026-09-15T09:00:00+08:00  # before plan v2 was accepted at 10:00
+recording = "session-2.json"          # in data/recorded/
+
+[[turn]]
+speaker = "mara"
+seed = "s2:t1"
+message = "Mara here. How hard should we pay down the credit card? Jun thinks ₱4,000 extra a month is enough and the rest can go to the emergency fund, but I'd rather clear the card fast."

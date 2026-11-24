@@ -72,7 +72,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | --- | --- | --- | --- | --- |
 | Use of Meko | 30% | Not started | Every part of the context has a visible job (rows below) | 2–5 |
 | Impact and usefulness | 25% | Not started | A household's real question, "what should we do now, and why is that different from before?", answered with figures it can check; plain language for families anywhere | 4–5 |
-| Technical execution | 20% | In progress | A working demo judges can run themselves (demo mode, no Azure account); a pure, tested engine; facts that are never overwritten; CI against local Meko; docs as the source of truth | 1–5 |
+| Technical execution | 20% | In progress | A working demo judges can run themselves (demo mode, no Azure account); a pure, tested engine; facts that are never overwritten; CI against local Meko; docs as the source of truth. Built: `kako demo run` (Phase 3, task 9) loads the household, uploads its documents to local Meko and replays session 2 and the agent test set from recordings, tested in CI on a fresh database | 1–5 |
 | Innovation | 15% | Not started | Memory with history (valid time and record time, replace versus retract); dreaming that proposes and a person who approves; specialists that build on a preference another session taught them | 4 |
 | Presentation | 10% | Not started | A video under 5 minutes, a README with setup and measured metrics, these docs | 6 |
 
@@ -118,7 +118,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Reconciliation rules in code | In progress | Specialist conflicts are found by arithmetic, not by hoping a model notices. Built: over-allocation, opposite moves and missed goal dates over the specialists' proposals together (`planning/reconcile.py`), up to 3 splits checked by the same rules, and the resolution with the option rejected (Phase 3, task 4); stored in `reconciliation` with the plan (task 6) |
 | A call counter for Meko's Free-tier allowances | In progress | The demo can't run out of searches. Every Meko call is counted in `meko_call` before it is sent, and Meko Cloud's capped tools stop at `KAKO_MEKO_CLOUD_CEILING`; the metrics page shows what is left (Phase 5) |
 | The agents' steps on screen and the what-if loop | In progress | Judges see the agents work: each tool call, each split tried through the engine, and what was rejected. Built: every split is an `agent_step` (`rejected` when the rules refuse it) and `kako ask` prints the conflict, the splits, the choice and the rejected option; the screen is Phase 5 |
-| Published evidence: agent test set, dreaming's labelled set, single-agent baseline | Not started | Scores with run dates in the README show it isn't one hand-held demo path |
+| Published evidence: agent test set, dreaming's labelled set, single-agent baseline | In progress | Scores with run dates in the README show it isn't one hand-held demo path. Built: the agent test set (22 questions from Sep 15 to Dec 1, each expected number held to the engine in tests, scored in code by `kako test-set`) and the single-agent baseline, recorded on Foundry Nov 24, 2026: specialists 98.1%, single agent 93.9%, with calls, tokens and cost in `data/test-set/results/` and [architecture.md](architecture.md#agents) (Phase 3, tasks 7 and 8). Dreaming's labelled set is Phase 4; the metrics page and the README are Phases 5 and 6 |
 
 ## Gaps to close
 
@@ -127,6 +127,6 @@ Phases refer to [build-plan.md](build-plan.md).
 | AMP availability and connectivity on our account | Phase 1 spike; Neon as the fallback |
 | Context Gaps (self-learning tools) may not be available on Free | Phase 1 spike; a Must if available, otherwise documented as the production path |
 | Meko Cloud extracts memories before the household approves them | Phase 1 spike (can it be turned off?); dreaming treats extracted memories as candidates either way (V-14) |
-| Judges may not have an Azure account | Demo mode with recorded responses (Phase 3). Recording and replay with no network are built (task 1), and session 2 is recorded from Foundry (`data/recorded/session-2.json`, replayed with `kako ask`); the one-command demo mode is task 9 |
-| "Why four specialists, not one agent?" | Single-agent baseline on the agent test set (Phase 3), both scores published |
+| Judges may not have an Azure account | Built: `kako demo run` (Phase 3, task 9) needs local Postgres and local Meko only, and replays session 2 and the agent test set from `data/recorded/`. Sessions 1, 3 and 4 join it as each is recorded (session 4 needs the life-event replan, Phase 4) |
+| "Why four specialists, not one agent?" | Built: the single-agent baseline on the agent test set (Phase 3, task 8). Specialists 98.1%, single agent 93.9%, at 110 against 40 model calls and US$0.60 against US$0.42; a small margin from one run each, written up as it is in [architecture.md](architecture.md#agents) |
 | Full terms not published | Check before submission |

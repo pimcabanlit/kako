@@ -126,11 +126,16 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
 7. **Agent test set.** About 20 household questions with the figures and sources a good answer must use,
    kept in the repository with how each answer is scored.
    Done when: the set runs in one command and reports a score, kept on the metrics page.
+   Built Nov 24: `kako test-set` scores 22 questions; each run's results are kept in
+   `data/test-set/results/`, which the metrics page (Phase 5, task 4) reads.
 8. **Single-agent baseline.** The same test set against one all-in-one agent with the same tools.
    Done when: both scores and call counts are written up; if the specialists don't score better, the
    architecture doc says so.
 9. **Demo mode.** One command: local Meko, a local database with the demo household, recorded responses.
    Done when: a fresh clone runs session 4 in demo mode with no Azure settings.
+   Built Nov 24 with session 2 and the agent test set (`kako demo run`): session 4 needs the
+   life-event replan (Phase 4, task 2), so it joins demo mode then, as one session file and its
+   recording, and this task's done-when is checked again with it.
 
 ### Phase 4: Memory over time (Mon Dec 28 to Sun Jan 3)
 

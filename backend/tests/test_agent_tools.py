@@ -426,3 +426,33 @@ async def test_a_cited_memory_or_document_is_quoted_and_traceable(house: Villanu
         '- (no document id, not citable) <data source="knowledge-base">No id here.</data>'
     )
     assert searched.searches["debt#1"] == {}
+
+
+def _swapped(h: Villanueva, a: str, b: str) -> Villanueva:
+    """The same household with two entities' ids swapped, so they sort the other way by id."""
+    ids = {h.ids[a]: h.ids[b], h.ids[b]: h.ids[a]}
+    return replace(
+        h,
+        entities=[replace(e, id=ids.get(e.id, e.id)) for e in h.entities],
+        facts=[
+            replace(f, entity_id=ids.get(f.entity_id, f.entity_id) if f.entity_id else None)
+            for f in h.facts
+        ],
+        ids={k: ids.get(v, v) for k, v in h.ids.items()},
+    )
+
+
+async def test_tool_output_doesnt_depend_on_entity_ids(house: Villanueva) -> None:
+    """Recorded replies replay on another database only if every tool says the same there: the
+    debts come in the household's payoff order, never in the order of their database ids."""
+    outputs = []
+    for h in (house, _swapped(house, "card", "car")):
+        state = _state(h)
+        get_figures, _ = read_tools(state)
+        what_if = await what_if_tool(state).run({"allocations": [_alloc(CARD, "said:4000")]})
+        figures = await get_figures.run({"refs": []})
+        outputs.append((what_if.content, figures.content))
+    assert outputs[0] == outputs[1]
+    what_if, figures = outputs[0]
+    assert what_if.index("debt:credit-card") < what_if.index("debt:car-loan")
+    assert figures.index("@debt:credit-card") < figures.index("@debt:car-loan")
