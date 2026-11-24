@@ -59,7 +59,7 @@ async def test_demo_run_replays_session_2_and_the_test_set(
     assert "== Session 2, turn s2:t1 ==" in out
     assert "A: all extra on the card" in out
     assert "B: Jun's split" in out
-    # Session 4: the new job proposed, approved by Mara in the story, then the replan in three parts.
+    # Session 4: the new job proposed, approved by Mara in the story, then the three-part replan.
     assert "== Session 4, turn s4:t1 ==" in out
     assert "replace_fact: Mara's salary: income.monthly_net = ₱68,000.00 from Dec 1, 2026" in out
     assert "== Session 4, turn s4:t2 ==\nThe new plan:" in out
