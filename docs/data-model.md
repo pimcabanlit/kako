@@ -1,4 +1,4 @@
-# Kako data model v0.12
+# Kako data model v0.13
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -39,7 +39,9 @@ in the same change once agreed.
   migration 0006); and V-13 with `kako meko check`. v0.12 (Nov 24) is patterns and promotion
   (task 4): the `promote` payload and its second confirmation, a preference promoted to collective
   memory and a decision record uploaded to the knowledge base by Meko upkeep, their `meko_link`
-  rows, and V-13 over both.
+  rows, and V-13 over both. v0.13 (Nov 24) is Context Gaps (task 6): how a gap is collected from
+  Meko's search log, answered by a proposal that writes a fact, replayed once that fact is in Meko,
+  and dismissed; no schema change.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -592,25 +594,42 @@ the number check (V-10); its reasoning is checked here.
 
 ### `context_gap`
 
-A weak search, from Meko's self-learning tools, and what happened to it.
+A weak search, from Meko's self-learning tools, and what happened to it (`kako/gaps/`).
+Self-learning is served by Meko Cloud only; on local Meko every step below refuses and nothing changes.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `household_id` | UUID FK | |
-| `meko_log_id` | TEXT | The search in Meko's query log; unique |
+| `meko_log_id` | TEXT | The search in Meko's query log; unique, so a search is kept once, for one household |
 | `query` | TEXT | What was searched |
 | `band_before` | TEXT | `mid` or `low` |
-| `score_before` | NUMERIC(4,3) | Best score, 0 to 1 |
+| `score_before` | NUMERIC(4,3) | Best score, 0 to 1, rounded to 3 places; 0 when nothing came back |
 | `reason` | TEXT | Meko's reason, such as `weak_match` |
-| `question` | TEXT, null | The plain question Kako asked the household |
-| `asked_in_session_id` | UUID FK, null | |
-| `proposal_id` | UUID FK, null | The approved answer |
+| `question` | TEXT, null | The plain question for the household, written by code, never a model, with the search's words (at most 500 characters) |
+| `asked_in_session_id` | UUID FK, null | Not set yet: asking in a session (the brief's "Kako would like to know") is Phase 5 |
+| `proposal_id` | UUID FK, null | The answer: one of the household's proposals that writes a fact (`new_fact`, `replace_fact`, `preference_pattern`), pending or approved when tied |
 | `verify_outcome` | TEXT, null | From `selflearning_verify`: `improved`, `no_change`, `worse`, `no_baseline` |
 | `score_after` | NUMERIC(4,3), null | |
 | `status` | TEXT | `open`, `asked`, `answered`, `verified`, `dismissed` |
 
 Checks: both scores are between 0 and 1.
+
+How a gap moves (`kako gaps`, `/api/v1/gaps`):
+
+- **Collected** (`open`): Meko's search log (`selflearning_query_log`, the low and the mid band, the
+  newest 10 of each from the last 7 days) on the household's datapack. Only a shortfall of coverage is
+  kept: Meko's category `coverage`, or with no category a reason of `weak_match`, `partial_match`,
+  `nothing_matched` or `below_floor` (or none). A vague prompt or a failed or out-of-date source
+  isn't the household's to answer.
+- **Answered**: tied to its answer's proposal. Tying it again replaces the answer and clears any
+  outcome. A dismissed or verified gap can't be answered.
+- **Replayed** (`selflearning_verify`) once the answer is approved and every fact it wrote has Kako's
+  own memory in Meko (a `meko_link` with its text): after each approval's upkeep, and with
+  `kako gaps verify`. At most 5 a run; one Meko is still indexing waits for the next run. Meko's
+  outcome and best score after are stored; `improved` makes the gap `verified`, any other outcome
+  leaves it `answered` with that outcome (`kako gaps verify --gap` replays it again).
+- **Dismissed** by an adult of the household, at any point before it is verified.
 
 ## Meko links
 
@@ -725,7 +744,7 @@ Meko is where agents find context. Postgres stays the record. The mapping:
 | A decision the household approves for sharing | A **decision record** in the knowledge base (`kako-decision-<id>.md`), linked as `document` by its upload key | Meko upkeep, after an approval with its second confirmation: `knowledgebase_upload_document` (`upkeep/records.py` writes the Markdown) | The question, who approved it and when, the option chosen with the household's reasoning, the options turned down with their reasons, the facts it rests on (as they were), and the decision it revises. The same decision always gives the same record, and Meko takes the same content once. A decision revised before upkeep gets to it isn't shared |
 | Statements, budgets, planning rules, local reference | **Knowledge-base** documents | `knowledgebase_upload_document`, then a POST of the file to the one-time link it returns (`kako demo upload`); the same on local Meko and Meko Cloud, and a file Meko already holds isn't sent again | Synthetic statements as CSV; rules and reference as Markdown. Reference documents explain 13th-month pay, SSS and Pag-IBIG in plain words and are never used to calculate |
 | A plan report | An **artifact** | `artifact_put` | Markdown; its content hash is stored on `plan` |
-| Weak searches | **Self-learning** shortfalls (Context Gaps) | Read with the `selflearning_*` tools, if the Phase 1 check finds them | A **Must** if available: each becomes a `context_gap`, a question for the household, and a `selflearning_verify` replay once answered |
+| Weak searches | **Self-learning** shortfalls (Context Gaps) | Read with `selflearning_query_log` (`kako gaps sync`; the self-learning tools take no `agent_id`); replayed with `selflearning_verify`, counted as a `context_search`. Meko Cloud only: local Meko has no self-learning tools | Each shortfall of coverage becomes a `context_gap` with a question for the household; once its answer is approved and in Meko, the replay's outcome and score after are kept |
 | Meko's Learnings | Memories waiting to be kept or promoted (`datapack_describe` counts them; local Meko 1.20261116.0 lists no other view) | Read by dreaming, session by session, as the extracted memories above | Candidates: linked once kept as an approved fact, or deleted. Promotion candidates are Kako's own: a preference approved from a pattern, or a decision two sessions have held (dreaming steps 4 and 5) |
 
 Agent ids: `kako:orchestrator`, `kako:budget`, `kako:debt`, `kako:savings`, `kako:goals`,

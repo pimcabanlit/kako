@@ -24,6 +24,7 @@ PURE_MODULES = (
     "upkeep/plan.py",
     "upkeep/records.py",
     "dreaming/patterns.py",
+    "gaps/questions.py",
 )
 ALLOWED = ("kako.agents.present",)
 

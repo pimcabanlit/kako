@@ -82,7 +82,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | --- | --- | --- | --- |
 | Conversations | Not started | Sessions as conversations | 3 |
 | Memory | Not started | Facts, decisions and preferences as memories that stay current | 4 |
-| Learning | In progress | Built (Phase 4, task 4): dreaming counts the household's decisions by option tags and proposes a preference pattern, then offers it and held decisions for promotion; a second confirmation, then Meko upkeep shares them. To come: Meko's own self-learning: weak searches become questions, and `selflearning_verify` shows the search improved (a Must if the tools are available). Dreaming reads Meko's extracted memories and Learnings, proposes promotions; the household approves; a preference goes to collective memory, a decision record to shared knowledge | 1, 4 |
+| Learning | In progress | Built (Phase 4, task 4): dreaming counts the household's decisions by option tags and proposes a preference pattern, then offers it and held decisions for promotion; a second confirmation, then Meko upkeep shares them. Built (task 6): Meko's own self-learning: each weak search in Meko's log becomes a Context Gap with a question for the household; once the answer is approved and in Meko, `selflearning_verify` replays the search and its before and after scores are kept (tested with Meko's log in memory, and run on Meko Cloud on Nov 24: a weak search went from low 0.297 to improved 0.578). Dreaming reads Meko's extracted memories and Learnings, proposes promotions; the household approves; a preference goes to collective memory, a decision record to shared knowledge | 1, 4 |
 | Knowledge | Not started | Statements, rules, reference documents; promoted memories | 2, 4 |
 | Artifacts | Not started | Plan reports | 4 |
 | Decision tracing | In progress | Turns with `plan` and `reasoning`; spans for every Meko call; linked from each recommendation. Built in the backend (Phase 3, task 6); the screens are Phase 5 | 3 |
@@ -125,7 +125,7 @@ Phases refer to [build-plan.md](build-plan.md).
 | Gap | Plan |
 | --- | --- |
 | AMP availability and connectivity on our account | Phase 1 spike; Neon as the fallback |
-| Context Gaps (self-learning tools) may not be available on Free | Phase 1 spike; a Must if available, otherwise documented as the production path |
+| Context Gaps (self-learning tools) may not be available on Free | Phase 1 spike: available on Free on Meko Cloud (not on local Meko). Built in Phase 4, task 6; shown on the demo datapack |
 | Meko Cloud extracts memories before the household approves them | It can't be turned off (Phase 1 spike). Built: dreaming reads each session's extracted memories as candidates; each is linked to what a person approves or deleted, and `kako dream check` holds V-14 (Phase 4, task 3) |
 | Judges may not have an Azure account | Built: `kako demo run` (Phase 3, task 9) needs local Postgres and local Meko only, and replays sessions 2 and 4 and the agent test set from `data/recorded/`. Sessions 1 and 3 join it as each is recorded |
 | "Why four specialists, not one agent?" | Built: the single-agent baseline on the agent test set (Phase 3, task 8). Specialists 98.1%, single agent 93.9%, at 110 against 40 model calls and US$0.60 against US$0.42; a small margin from one run each, written up as it is in [architecture.md](architecture.md#agents) |

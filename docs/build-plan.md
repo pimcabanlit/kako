@@ -206,6 +206,19 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    and questions for the household; an approved answer is followed by `selflearning_verify`.
    Done when: one weak search in the demo household goes from Mid or Low to `improved`, with both scores
    stored.
+   Built Nov 24, and the done-when met on Meko Cloud the same day in a throwaway datapack: "Who looks
+   after Lia after school?" went from `low` 0.297 to `improved` 0.578, both scores stored
+   (docs/meko-setup.md, spike 3). `kako/gaps/` keeps each shortfall of coverage in Meko's search log
+   (`selflearning_query_log`, low and mid bands) as an open `context_gap` with a question written by
+   code (`kako gaps sync`, `POST /api/v1/gaps/sync`). An adult ties the proposal that answers it, one
+   that writes a fact (`kako gaps answer`), or dismisses it. Once that proposal is approved and Meko
+   upkeep has written the fact's memory, the search is replayed (`selflearning_verify`, after each
+   approval's upkeep and with `kako gaps verify`, at most 5 a run) and the outcome and the score
+   after are stored; `improved` makes the gap verified. Tested on Postgres with Meko's search log in
+   memory: a search that found nothing goes from low (0.000) to `improved` (0.800) once Mara's note
+   is approved through the API (`tests/integration/test_gaps.py`); on local Meko the commands say
+   the tools aren't there and nothing changes. Asking a gap in a session (`asked`, the brief's "Kako
+   would like to know") is Phase 5.
 
 ### Phase 5: Screens and demo (Mon Jan 4 to Sun Jan 10, feature freeze)
 

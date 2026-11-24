@@ -16,18 +16,23 @@ import hashlib
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, cast
+from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
 import httpx
 
 from kako.meko.adapter import (
+    Band,
     Context,
     Document,
     DocumentState,
     KnowledgeHit,
+    LoggedSearch,
     Memory,
+    Outcome,
     Promoted,
+    Replay,
+    SelfLearningUnavailable,
     Turn,
     check_agent_id,
     check_document,
@@ -43,6 +48,8 @@ from kako.meko.quota import CallLog, Quota
 from kako.settings import LOCAL_HOSTS, Settings
 
 STATES = frozenset({"awaiting_upload", "indexing", "completed", "failed"})
+BANDS = frozenset({"high", "mid", "low"})
+OUTCOMES = frozenset({"improved", "no_change", "worse", "no_baseline"})
 
 
 class McpMeko:
@@ -223,6 +230,35 @@ class McpMeko:
         memories = tuple(_promoted(m) for m in items)
         total = answer.get("total")
         return Promoted(memories, total if isinstance(total, int) else len(memories))
+
+    async def _self_learning(self, tool: str, agent_id: str, arguments: dict[str, Any]) -> Any:
+        """A self-learning tool: a deployment that doesn't serve it says it has no such tool. These
+        tools take no `agent_id` (Meko Cloud refuses one); the call is counted as the caller's."""
+        try:
+            return await self._call(tool, agent_id, arguments, agent=False)
+        except MekoToolError:
+            raise
+        except MekoError as exc:
+            text = str(exc).lower()
+            if "unknown tool" in text or "tool not found" in text:
+                raise SelfLearningUnavailable(
+                    "this Meko doesn't serve the self-learning tools (Meko Cloud does)"
+                ) from None
+            raise
+
+    async def logged_searches(
+        self, conversation_id: str, *, agent_id: str, band: Literal["low", "mid"]
+    ) -> tuple[LoggedSearch, ...]:
+        answer = await self._self_learning(
+            "selflearning_query_log", agent_id, {"conversation_id": conversation_id, "band": band}
+        )
+        return tuple(_logged(item) for item in _entries(answer, "selflearning_query_log"))
+
+    async def replay_search(self, conversation_id: str, log_id: str, *, agent_id: str) -> Replay:
+        answer = await self._self_learning(
+            "selflearning_verify", agent_id, {"conversation_id": conversation_id, "log_id": log_id}
+        )
+        return _replay(answer)
 
     async def search_context(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5
@@ -420,6 +456,91 @@ def _promoted(item: Any) -> Memory:
         metadata={},
         agent_id=_optional(item.get("agent_id")),
         conversation_id=_optional(item.get("conversation_id")),
+    )
+
+
+# Meko's self-learning answers. Meko Cloud (verified Nov 24, docs/meko-setup.md) lists the log under
+# `rows`, each with `id`, `query`, `band`, `best_score`, `reason` and `category`, and a replay's
+# `before` and `after` as objects with `band` and `best_score`. Other names Meko uses elsewhere are
+# still read, leniently; a field Kako needs that isn't there is a protocol error, never a guess.
+LIST_KEYS = ("rows", "results", "searches", "items", "entries", "logs", "queries")
+
+
+def _first(item: dict[str, Any], *keys: str) -> Any:
+    return next((item[k] for k in keys if item.get(k) is not None), None)
+
+
+def _entries(answer: Any, tool: str) -> list[Any]:
+    if isinstance(answer, list):
+        return answer
+    if isinstance(answer, dict):
+        for key in LIST_KEYS:
+            if isinstance(answer.get(key), list):
+                return cast(list[Any], answer[key])
+    raise MekoProtocolError(f"{tool} answered without its list of searches")
+
+
+def _band(value: Any) -> Band | None:
+    if value is None:
+        return None
+    band = str(value).lower()
+    if band not in BANDS:
+        raise MekoProtocolError(f"a search's band isn't high, mid or low: {band[:20]!r}")
+    return cast(Band, band)
+
+
+def _unit_score(value: Any) -> float | None:
+    score = _score(value)
+    if score is not None and not 0 <= score <= 1:
+        raise MekoProtocolError("a search's score isn't between 0 and 1")
+    return score
+
+
+def _logged(item: Any) -> LoggedSearch:
+    if not isinstance(item, dict):
+        raise MekoProtocolError("a logged search isn't an object")
+    log_id, query = _first(item, "log_id", "id"), _first(item, "query", "prompt")
+    band = _band(_first(item, "band", "match_quality", "quality"))
+    if not log_id or not isinstance(query, str) or band is None:
+        raise MekoProtocolError("a logged search has no log_id, query or band")
+    return LoggedSearch(
+        log_id=str(log_id),
+        query=query,
+        band=band,
+        score=_unit_score(_first(item, "best_score", "top_score", "score")),
+        reason=_optional(item.get("reason")),
+        category=_optional(item.get("category")),
+    )
+
+
+def _side(answer: dict[str, Any], side: str) -> tuple[Band | None, float | None]:
+    """The band and best score before or after a replay: nested (`before: {band, best_score}`)
+    or flat (`band_before`, `best_score_before`)."""
+    nested = answer.get(side)
+    if isinstance(nested, dict):
+        return (
+            _band(_first(nested, "band", "match_quality")),
+            _unit_score(_first(nested, "best_score", "top_score", "score")),
+        )
+    return (
+        _band(_first(answer, f"band_{side}", f"{side}_band")),
+        _unit_score(_first(answer, f"best_score_{side}", f"score_{side}", f"{side}_score")),
+    )
+
+
+def _replay(answer: Any) -> Replay:
+    if not isinstance(answer, dict) or answer.get("outcome") not in OUTCOMES:
+        raise MekoProtocolError("selflearning_verify answered without an outcome")
+    band_before, score_before = _side(answer, "before")
+    band_after, score_after = _side(answer, "after")
+    return Replay(
+        outcome=cast(Outcome, answer["outcome"]),
+        band_before=band_before,
+        band_after=band_after,
+        score_before=score_before,
+        score_after=score_after,
+        indexing=answer.get("indexing") is True,
+        nothing_added=answer.get("nothing_added_since_last_run") is True,
     )
 
 

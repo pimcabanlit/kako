@@ -17,6 +17,8 @@ from kako.meko.client import MekoError
 
 AGENT_ID: Final = re.compile(r"kako:[a-z][a-z_-]*")
 DocumentState = Literal["awaiting_upload", "indexing", "completed", "failed"]
+Band = Literal["high", "mid", "low"]  # a search's match quality: best score 0.75+, 0.50+, below
+Outcome = Literal["improved", "no_change", "worse", "no_baseline"]
 # File types Meko's knowledge base takes (knowledgebase_upload_document), up to 50 MiB.
 DOCUMENT_TYPES: Final = frozenset(
     {".pdf", ".txt", ".text", ".md", ".csv", ".json", ".xml", ".html", ".htm"}
@@ -93,6 +95,35 @@ class Document:
     document_id: str | None = None
     already_uploaded: bool = False
     message: str | None = None
+
+
+class SelfLearningUnavailable(MekoError):
+    """This Meko doesn't serve the self-learning tools (local Meko doesn't; Meko Cloud does)."""
+
+
+@dataclass(frozen=True)
+class LoggedSearch:
+    """One `context_search` in Meko's search log (`selflearning_query_log`)."""
+
+    log_id: str
+    query: str
+    band: Band
+    score: float | None  # the best result's score, 0 to 1; None: nothing came back
+    reason: str | None = None  # why it fell short, such as `weak_match`
+    category: str | None = None  # such as `coverage`
+
+
+@dataclass(frozen=True)
+class Replay:
+    """`selflearning_verify`: one logged search run again, and how it matched before and after."""
+
+    outcome: Outcome
+    band_before: Band | None
+    band_after: Band | None
+    score_before: float | None
+    score_after: float | None
+    indexing: bool  # content added is still being indexed: replay again once it is done
+    nothing_added: bool  # nothing changed since the last replay: this one isn't new
 
 
 def check_document(filename: str, content: bytes) -> None:
@@ -179,6 +210,19 @@ class Meko(Protocol):
 
     async def promoted_memories(self, conversation_id: str, *, agent_id: str) -> Promoted:
         """The datapack's newest promoted memories, each with the agent that wrote it."""
+        ...
+
+    async def logged_searches(
+        self, conversation_id: str, *, agent_id: str, band: Literal["low", "mid"]
+    ) -> tuple[LoggedSearch, ...]:
+        """The newest `context_search` calls on the datapack that matched in `band` (Meko's search
+        log, its first page of 10, from the last 7 days). Raises `SelfLearningUnavailable` where
+        Meko doesn't serve self-learning."""
+        ...
+
+    async def replay_search(self, conversation_id: str, log_id: str, *, agent_id: str) -> Replay:
+        """Run a logged search again and say how it matched before and after. It counts as a
+        `context_search`. Raises `SelfLearningUnavailable` where Meko doesn't serve it."""
         ...
 
     async def search_context(

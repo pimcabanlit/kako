@@ -206,6 +206,10 @@ uv run kako dream settle                  # carry out each memory Meko extracted
 uv run kako dream check                   # V-14 against Meko: each extracted memory linked, waiting on a pending proposal, or gone; exit 1 if not (--household)
 uv run kako meko sync                     # Meko upkeep: a memory per fact, a replaced one rewritten in the past tense, a retracted one's deleted, what was approved for sharing promoted or uploaded (--household, --at; also after each approval)
 uv run kako meko check                    # V-13: every link to a memory, promoted memory or document points to one Meko holds, and no upkeep is owed; exit 1 if not (--household)
+uv run kako gaps sync                     # Context Gaps: each new weak search in Meko's log as an open gap (Meko Cloud only; local Meko says it has no self-learning tools) (--household)
+uv run kako gaps list                     # the gaps, their questions and outcomes (--status open|answered|verified|dismissed|all, --household)
+uv run kako gaps answer <gap> <proposal>  # tie a gap to the proposal that answers it (one that writes a fact); `dismiss <gap> --by Jun` closes one
+uv run kako gaps verify                   # replay each answered search once its answer is approved and in Meko (selflearning_verify; also after each approval's upkeep) (--gap)
 uv run kako dream eval                    # dreaming's labelled set, replayed from data/recorded/dreaming.json; exit 1 under 90% found or on any unquoted number (--only, --household, --save)
 ```
 
@@ -337,7 +341,13 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   time; after each approval, at the end of `kako demo run`, `kako meko sync`), `promote.py` (what was
   approved for sharing: a preference's sentence added and promoted, never twice, or a decision
   record uploaded, each linked), `records.py` (pure: the decision record's Markdown) and `check.py`
-  (V-13, promoted memories and documents included). `demo/sessions.py` reads the scripted sessions
+  (V-13, promoted memories and documents included). `gaps/` is Context Gaps: `questions.py` (pure:
+  which weak searches are a shortfall of coverage, and the question, written by code) and `store.py`
+  (`collect_gaps` from Meko's search log, `answer_gap`, `dismiss_gap`, and `verify_gaps`, which
+  replays an answered search once its proposal is approved and upkeep has written its facts'
+  memories, at most 5 a run, after each approval's upkeep too); the adapter's `logged_searches` and
+  `replay_search` raise `SelfLearningUnavailable` on a Meko without the tools (local Meko);
+  `api/gaps.py` is `/api/v1/gaps`. `demo/sessions.py` reads the scripted sessions
   (`data/demo-household/sessions/`) and `demo/mode.py` is `kako demo run`: local Meko only, the
   household with its whole story, the documents uploaded once, each session replayed by call key
   (a request that differs from its recording, as when another machine's Meko ranks the brief's
@@ -410,6 +420,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_upkeep.py` the sentences and the plan, and `tests/integration/test_upkeep.py` upkeep on the
   demo household in a throwaway datapack (every fact kept, Mara's old salary in the past tense after
   her new job, a retraction, Meko's words deleted once replaced, `kako meko sync` and `check`);
+  `test_gaps.py` which searches are asked about and the question, the fake's search log and replay,
+  and `McpMeko` reading Meko's self-learning answers (nested or flat, refused when unreadable, a
+  missing tool said plainly); `tests/integration/test_gaps.py` a search that found nothing going
+  from low to `improved` with both scores stored once its answer is approved through the API, a
+  replay waiting for upkeep and for indexing, at most 5 a run, the refusals, a Meko with no
+  self-learning, and `kako gaps` on local Meko;
   `test_promotion.py` patterns, promote payloads, decision records and the fake's promotion, and
   `tests/integration/test_promotion.py` the demo household's three decisions: the pattern proposed
   once, the offers, a no that is final, the second confirmation through the API and the command

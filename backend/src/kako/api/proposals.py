@@ -11,7 +11,8 @@
   An approval then offers what is now ready to share as pending promotions
   (`dreaming.promotion`). After the answer, Meko upkeep brings Meko in line with what was
   written and shares what was approved for sharing (`kako.upkeep`): a failure there never undoes
-  the approval.
+  the approval. Once upkeep has written them, the searches of the Context Gaps answered by what was
+  approved are replayed (`kako.gaps`, Meko Cloud only).
 - `POST /api/v1/proposals/reject` rejects pending proposals; nothing is written.
 
 Kako has no sign-in yet, so the person deciding is named in the request, and must be an adult of
@@ -237,10 +238,35 @@ async def _upkeep(services: Services, household_id: uuid.UUID) -> None:
 
     try:
         async with services.open_meko(DbCallLog(services.engine), 1 + MAX_STEPS) as meko:
-            if meko is not None:
-                await keep_up(services.engine, meko, household_id, now=datetime.now(UTC))
+            if meko is None:
+                return
+            report = await keep_up(services.engine, meko, household_id, now=datetime.now(UTC))
     except (MekoError, UpkeepError) as exc:
         log.warning("Meko upkeep after an approval didn't run: %s", safe_error(exc))
+        return
+    if not report.busy:
+        await _verify_gaps(services, household_id)
+
+
+async def _verify_gaps(services: Services, household_id: uuid.UUID) -> None:
+    """After upkeep: replay the searches of the Context Gaps answered and now in Meko
+    (`kako.gaps`). Only Meko Cloud serves the replay; elsewhere nothing changes."""
+    from kako.db.meko_log import DbCallLog
+    from kako.gaps.store import VERIFY_CALLS, GapError, verify_gaps, waiting_replays
+    from kako.meko.adapter import SelfLearningUnavailable
+    from kako.meko.client import MekoError
+
+    async with services.engine.connect() as conn:
+        if not await waiting_replays(conn, household_id):
+            return
+    try:
+        async with services.open_meko(DbCallLog(services.engine), VERIFY_CALLS) as meko:
+            if meko is not None:
+                await verify_gaps(services.engine, meko, household_id)
+    except SelfLearningUnavailable:
+        log.info("Context Gaps: this Meko can't replay searches; none replayed")
+    except (MekoError, GapError) as exc:
+        log.warning("Context Gaps weren't replayed after upkeep: %s", safe_error(exc))
 
 
 async def _offer_promotions(services: Services, household_id: uuid.UUID, now: datetime) -> None:
