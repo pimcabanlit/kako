@@ -1,4 +1,4 @@
-# Kako data model v0.8
+# Kako data model v0.9
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -29,7 +29,9 @@ in the same change once agreed.
   rests on, and the guard on decided proposals, decisions and life events (migration 0005). v0.8
   (Nov 24) is the life-event replan (task 2): the demo's `decisions.toml`, the session files'
   `writes`, a turn's own `known_at` and `approve`, and what the number check (V-10) also matches in a
-  turn that proposed something or replans.
+  turn that proposed something or replans. v0.9 (Nov 24) is dreaming (task 3): ending a session,
+  what `dream_run` keeps, the speaker on a Meko turn (`kako_said_by`), a correction's `fact`
+  evidence, and dreaming's labelled set.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -268,12 +270,13 @@ A planning session is one Meko conversation.
 | `title` | TEXT | |
 | `household_date` | DATE | The demo clock when the session ran |
 | `started_at` | TIMESTAMPTZ | |
-| `ended_at` | TIMESTAMPTZ, null | Null while the session is open. Ending a session queues dreaming |
+| `ended_at` | TIMESTAMPTZ, null | Null while the session is open. Ending a session (`POST /api/v1/sessions/{id}/end`, `kako dream end`) refuses any more turns and queues its dreaming run, once |
 
 ### `session_participant`
 
 Who took part in a session. Each household turn sent to Meko carries the speaker's `person_id` in its
-metadata, so a quote can be attributed ("Mara: I got the job"). The demo has both adults taking part
+metadata (`kako_said_by`, with the turn's seed in `kako_turn` and the session in `kako_session_id`), so
+a quote can be attributed ("Mara: I got the job"), and dreaming names them on what it proposes. The demo has both adults taking part
 across the four sessions.
 
 | Column | Type | Notes |
@@ -501,10 +504,10 @@ decision back to the household, and a new job does.
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `session_id` | UUID FK | Unique: one run per session, so running it twice does nothing |
-| `status` | TEXT | `queued`, `running`, `done`, `failed` |
+| `status` | TEXT | `queued`, `running`, `done`, `failed`. A done run never runs again; a failed one may, and what it proposed the first time is found under its keys |
 | `started_at` | TIMESTAMPTZ, null | Null while queued |
 | `finished_at` | TIMESTAMPTZ, null | |
-| `counts` | JSONB | Proposals made, by kind; empty by default |
+| `counts` | JSONB | Empty by default. A done run: `claims` (what extraction handed in), `model_calls`, `proposals` (made, by kind), `outcomes` (by outcome: `new`, `replace`, `retract`, `same`, `conflict`, `refused`, `deferred`, `already`) and `findings` (up to 40: the claim, the turn, the outcome, what it is and why). A failed run: `error` |
 
 ### `proposal`
 
@@ -559,7 +562,7 @@ recorded at the approval's time.
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `proposal_id` | UUID FK | |
-| `kind` | TEXT | `turn`, `memory`, `extracted_memory` (one Meko extracted on its own), `learning` (one of Meko's Learnings), `fact`, `decision` |
+| `kind` | TEXT | `turn`, `memory`, `extracted_memory` (one Meko extracted on its own), `learning` (one of Meko's Learnings), `fact` (such as the fact a correction takes the place of, from its start date), `decision` |
 | `ref` | TEXT | Turn seed, memory id, or Kako id |
 | `person_id` | UUID FK, null | Who said it, for a turn |
 | `quote` | TEXT | The words the proposal rests on |
@@ -894,5 +897,10 @@ agent and call number, and checked against each request's digest when replayed: 
 recording is logged in `docs/tuning-log.md`. `data/test-set/questions.toml` is the agent test set:
 each question's date, `known_at`, message, why it is in the set and what a good answer must hold
 (`backend/src/kako/evals/`); `data/test-set/results/` keeps each architecture's last full run.
+`data/dreaming/labelled.toml` is dreaming's labelled set: scripted sessions on the demo household, each
+with its date, `known_at`, the turns (who said what) and the proposals dreaming must make (`expect`), may
+make (`maybe`) or must not make. `kako dream eval` scores it (`backend/src/kako/evals/dreaming.py`) from
+the recording `data/recorded/dreaming.json`, or on Foundry with `KAKO_MODEL_MODE=record`; `--save` keeps
+the last run in `data/dreaming/results.json`.
 
 No real person, bank, employer or account. Names are fictional; amounts are plausible, not sampled.

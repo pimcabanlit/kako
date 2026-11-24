@@ -200,6 +200,9 @@ KAKO_MODEL_MODE=record uv run kako demo record session-4   # record one scripted
 uv run kako test-set                      # the agent test set's score, replayed from data/recorded/test-set-specialists.json (needs the household loaded through Dec 1)
 uv run kako test-set --architecture single --only q01,q07   # the single-agent baseline, some questions (--household, --save: data/test-set/results/)
 KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
+uv run kako dream end <session>           # end a session (once) and queue its dreaming run (--at; the API: POST /api/v1/sessions/{id}/end)
+uv run kako dream run                     # run the queued or failed dreaming runs: read the session, one extraction, checks in code, pending proposals (--session, --at)
+uv run kako dream eval                    # dreaming's labelled set, replayed from data/recorded/dreaming.json; exit 1 under 90% found or on any unquoted number (--only, --household, --save)
 ```
 
 The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be running):
@@ -308,7 +311,16 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `evals/` the agent test set: `questions.py` reads and checks `data/test-set/questions.toml`,
   `scoring.py` scores one answer against what its question expects (each check named, a failed turn
   0), and `runner.py` runs the set through `ask` for either architecture and reports the score, model
-  calls, tokens, cost and Meko calls. `demo/sessions.py` reads the scripted sessions
+  calls, tokens, cost and Meko calls; `evals/dreaming.py` dreaming's labelled set
+  (`data/dreaming/labelled.toml`): each case's expected, maybe and forbidden proposals, the score
+  and the cases run through extraction and classification. `dreaming/` the background job after a
+  session: `claims.py` (pure: the claims `submit_claims` hands in, checked for shape), `classify.py`
+  (pure: each claim against what Kako holds, the quote in its turn, V-09, new, replace, retract,
+  correction, same, conflict, refused or deferred, and the proposals it makes), `extract.py` (the
+  brief and the one structured model call, prompt `prompts/dreaming.md`) and `job.py` (`end_session`
+  queues a `dream_run`; `run_dream` reads the session's turns from its Meko conversation as the
+  agent that wrote them, extracts, classifies and proposes in one transaction, and marks the run
+  done or failed with why). `demo/sessions.py` reads the scripted sessions
   (`data/demo-household/sessions/`) and `demo/mode.py` is `kako demo run`: local Meko only, the
   household with its whole story, the documents uploaded once, each session replayed by call key
   (a request that differs from its recording, as when another machine's Meko ranks the brief's
@@ -367,7 +379,14 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   every text's `number_check` row against the stored run, and a planted wrong number regenerated and
   logged.
   `test_evals.py` holds every expected number in the test set to the engine and scores session 2's
-  scripted turn and the single agent's; `test_demo_sessions.py` the session files and each mistake;
+  scripted turn and the single agent's; `test_dreaming_classify.py` tests the classification on the
+  worked example (each outcome, V-09, corrections, repeats within a session) and
+  `test_evals_dreaming.py` the labelled set: a careful extraction (`tests/support/dreaming.py`) finds
+  every case exactly, the scoring, broken files, the brief, and the one structured call with a wrong
+  shape sent back once; `tests/integration/test_dreaming.py` ends a session and dreams over it on
+  Postgres and local Meko (proposed once with its quote and speaker, approved with source `dreaming`,
+  what the session proposed already reported, a failed run run again, the labelled set, the CLI from
+  a recording, the API); `test_demo_sessions.py` the session files and each mistake;
   `tests/integration/test_demo_mode.py` runs `kako demo run --test-set` on a fresh database and local
   Meko with no Azure settings, then again (session 4 isn't replayed twice), and its refusals, session 4
   recorded from the scripted model with its approval and the rows it writes, and `kako demo record`'s

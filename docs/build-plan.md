@@ -159,6 +159,16 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    Done when: the labelled set of scripted sessions scores at least 90% of expected proposals found and
    no proposal with a number that is not in its quote; and every extracted memory ends linked or deleted
    (V-14).
+   Built Nov 24 (first part): ending a session (`POST /api/v1/sessions/{id}/end`, `kako dream end`)
+   queues a `dream_run`; `kako dream run` reads the session's turns from its Meko conversation, makes
+   one structured extraction call (`dreaming/extract.py`, `submit_claims`, no other tools), then checks
+   every claim in code (`dreaming/claims.py`, `dreaming/classify.py`: the quote is in the turn, V-09,
+   the entity and attribute, new, replace, retract, correction, same, conflict) and holds what is new as
+   pending proposals with their quotes. A change the session already proposed is reported, not proposed
+   again. The labelled set (`data/dreaming/labelled.toml`, 13 sessions, 15 expected proposals) scores
+   100% with a careful scripted extraction and no unquoted number; the real Foundry run and its
+   recording come next. Meko's extracted memories and Learnings as candidates, and V-14, are the second
+   part.
 4. **Patterns and promotion.** Option tags, the preference pattern, and promotion with a second
    confirmation: a preference to collective memory, a decision record to shared knowledge.
    Done when: after sessions 1 to 3 (Mara in some, Jun in others) dreaming proposes the flexibility
