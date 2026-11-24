@@ -377,3 +377,72 @@ it led to.
   ref. The number check's send-back fixed it in one try.
 - **Change made:** none yet; one send-back costs one strong call (about US$0.02). If it happens again
   in session 4's next recording, the prompt will say to name them in words.
+
+### 10. Dreaming's labelled set, first real run (Nov 24, 2026)
+
+- **Change tested:** Phase 4, task 3. Dreaming's extraction step (`dreaming/extract.py`, prompt
+  `agents/prompts/dreaming.md`): one call to `submit_claims` per session over a brief of what Kako
+  holds, the noted memories (none in the labelled set) and the household's turns. Code checks every
+  claim (`dreaming/classify.py`). The labelled set (`data/dreaming/labelled.toml`) has 13 sessions
+  and 15 expected proposals; a careful scripted extraction finds all 15.
+- **Prediction (written before the run):**
+  - **Found:** 14 or 15 of 15 (93% to 100%), so the set passes (90%). The likeliest miss is a
+    correction: d10's retraction with an empty value (the model writes `correction` false, or leaves
+    the claim out because there is no new number), or d03 and d12 not marked as corrections, which
+    code then calls a conflict (a value for the same day as the one Kako holds) instead of a
+    retraction.
+  - **Unquoted:** 0. Code refuses any claim with a number not in its quote, so none can be proposed;
+    a refusal shows as a miss instead.
+  - **Wrong proposals:** 0 to 2. The likeliest: a life event nobody stated (a `big_expense` for d07's
+    school costs, or a `raise` in d02, which is a maybe and so not wrong), or d05's what-if or d09's
+    wish handed in as a fact.
+  - **Shape:** every call hands in claims the first time; at most one wrong shape sent back.
+  - **Cost:** 13 strong calls (14 with a send-back), about 3,000 to 5,000 tokens in and 300 to 1,500
+    out each: **US$0.08 to US$0.25**.
+- **Run:** `KAKO_MODEL_MODE=record uv run kako dream eval --save` on a fresh database with the demo
+  household loaded through Dec 1 (gpt-5.4), recorded to `data/recorded/dreaming.json`. Pim approved
+  up to US$0.50.
+  Spent **US$0.0758** (13 calls, 32,541 tokens in, 16,896 of them cached, and 2,165 out).
+- **Result:** **13 of 15 found (87%), 2 wrong, 0 unquoted: FAIL** (needs 90%). Every call handed
+  in claims of the right shape the first time. d04, d05 and d09 handed in nothing, as they should.
+  d01 to d03, d06, d07, d10, d12 and d13 were found exactly, the corrections included. Two misses:
+  - **d08** ("we want the emergency fund to cover 6 months of expenses, not 3"): marked as a
+    correction, so code proposed retracting the target of 3 and writing 6 from Mar 1. That is two
+    wrong proposals, and the change from today was missed. The household changed its mind; it never
+    said Kako had it wrong.
+  - **d11** ("we're expecting a baby in April 2027"): the life event came back with `occurs_on` empty,
+    so code refused it.
+- **Root cause:** the prompt's one example of a correction is "the rent is ₱38,000, not 40,000", so
+  "6 months, not 3" read as a correction. And the prompt says how to write a day but not a month with
+  its year, while "copy, never calculate" made the model unwilling to write April 2027 as 2027-04-01.
+- **Change made:** the prompt now says a correction is a value that was never right ("I misread",
+  "sorry, I told you wrong"), and a decision to change ("we've decided on a bigger target", "from now
+  on") is a change, even when they also say the old value. Its examples are not the labelled set's
+  words, so the set still measures it. It also says a month with its year is written as its first
+  day ("June 2027" is 2027-06-01), which V-09 already accepts. This run's recording is kept as
+  `data/recorded/dreaming-run10.json`; the next run, after Pim's yes, records `dreaming.json`.
+
+### 11. Dreaming's labelled set again, after the prompt fix (Nov 24, 2026)
+
+- **Change tested:** entry 10's prompt change: a correction is a value that was never right, a
+  decision to change is not one, and a month with its year is written as its first day.
+- **Prediction (written before the run):**
+  - **Found:** 15 of 15 (100%); at worst 14 (93%), still a pass. d08 is now a change from the day
+    it was said, and d11's baby is dated 2027-04-01.
+  - **Risk to watch:** the corrections that were right in entry 10 (d03, d10, d12) turn into
+    changes because the prompt now leans away from `correction`. d12 ("I misread") and d10 ("I don't
+    get a 13th month pay") should hold. d03 ("rent and utilities are ₱38,000 a month, not ₱40,000")
+    is the one most at risk, which would be a miss and a wrong proposal.
+  - **Wrong:** 0 to 1. **Unquoted:** 0 (code refuses any). Every call's shape right first time.
+  - **Cost:** 13 strong calls, about US$0.08 like entry 10 (**US$0.06 to US$0.12**). Pim approved up
+    to US$0.25.
+- **Run:** `KAKO_MODEL_MODE=record uv run kako dream eval --save` on the same fresh database (the
+  demo household through Dec 1, gpt-5.4), recorded to `data/recorded/dreaming.json`.
+  Spent **US$0.0750** (13 calls, 34,296 tokens in and 2,029 out).
+- **Result:** **15 of 15 found (100%), 0 wrong, 0 unquoted: PASS**, as predicted. d08 is now a change
+  from Nov 20 and d11's baby is dated Apr 1, 2027. The corrections held: d03, d10 and d12 are still
+  retractions with the right value from the old date. d04, d05 and d09 handed in nothing. Every
+  call's shape was right the first time. `kako dream eval` replays this recording with no Foundry
+  and the same score.
+- **Root cause / change made:** none needed. Phase 4, task 3's first measure (at least 90% found, none
+  unquoted) is met on the real model. The two runs together cost US$0.15 of the US$0.75 Pim approved.

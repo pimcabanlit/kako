@@ -49,6 +49,8 @@ class Memory:
     text: str
     metadata: dict[str, Any]
     score: float | None = None  # a search's relevance, 0 to 1
+    agent_id: str | None = None  # who wrote it: only that agent can change or delete it
+    conversation_id: str | None = None  # the conversation it was saved in (Meko's `run_id`)
 
 
 @dataclass(frozen=True)
@@ -129,6 +131,14 @@ class Meko(Protocol):
 
     async def delete_memory(self, conversation_id: str, memory_id: str, *, agent_id: str) -> None:
         """Delete a memory for good (a retracted fact, a rejected candidate)."""
+        ...
+
+    async def search_memories(
+        self, conversation_id: str, query: str, *, agent_id: str, limit: int = 20
+    ) -> tuple[Memory, ...]:
+        """The memories saved in this conversation that match `query`, Kako's own and those Meko
+        extracted on its own (`memory_search` with the conversation as `run_id`; Meko leaves out
+        weak matches). Each names the agent that wrote it."""
         ...
 
     async def search_context(

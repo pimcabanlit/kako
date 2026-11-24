@@ -27,7 +27,8 @@ from kako.agents.present import Refs, day, fact_value
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult, run_agent
 from kako.agents.tools import MESSAGE_CHARS, object_schema
 from kako.agents.turn import TurnContext, short
-from kako.dreaming.claims import Claim, ClaimError, SaidTurn, parse_claims
+from kako.dreaming.candidates import Noted
+from kako.dreaming.claims import MAX_NOTED, Claim, ClaimError, SaidTurn, parse_claims
 from kako.dreaming.classify import NOT_STATED
 from kako.facts.attributes import CATALOG, Attribute
 from kako.facts.model import EntityRow, FactRow
@@ -55,6 +56,7 @@ class DreamInputs:
     facts: tuple[FactRow, ...]  # in force on `on`, as Kako knew it
     life_events: tuple[tuple[str, date, str], ...]  # kind, occurs_on, description
     turns: tuple[SaidTurn, ...]
+    noted: tuple[Noted, ...] = ()  # memories Meko extracted from the session: candidates
 
     @property
     def refs(self) -> Refs:
@@ -108,6 +110,8 @@ def render_dream_brief(inputs: DreamInputs) -> str:
         f"- {kind} on {day(on)}: {data(description, source='household')}"
         for kind, on, description in sorted(inputs.life_events, key=lambda e: (e[1], e[0]))
     ] or ["None."]
+    lines += ["", "## What Meko noted from the session (its own words: candidates, never a quote)"]
+    lines += [f"- {n.ref}: {data(n.text, source='meko')}" for n in inputs.noted] or ["Nothing."]
     lines += ["", "## The session's turns (the household's words only)"]
     for t in inputs.turns[:MAX_TURNS]:
         who = plain(t.speaker) if t.speaker else "Someone in the household"
@@ -168,6 +172,13 @@ def claims_tool() -> Tool:
             },
             "life_event": event,
             "facts": {"type": "array", "items": fact},
+            "memories": {
+                "type": "array",
+                "items": {"type": "string"},
+                "maxItems": MAX_NOTED,
+                "description": "Refs of the noted memories that say the same as this claim, such "
+                "as m1; [] for none",
+            },
         }
     )
     return Tool(

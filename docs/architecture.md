@@ -216,12 +216,15 @@ queues the run; `kako dream run` runs what is queued, one at a time. The code is
    created the conversation: Meko answers no other). Only the turns Kako kept for this session count:
    each carries its seed, the session's id, the household's date and who said it (`kako_said_by`) in
    its metadata. Then the household's facts and life events as known at the run, with the life events
-   still waiting for a yes. (Built. Still to come with Phase 4, task 3's second part: the memories
-   Meko extracted from those turns on its own and Meko's Learnings, as candidates.)
+   still waiting for a yes. Then the memories Meko extracted from those turns on its own: one
+   `memory_search` limited to the conversation (`run_id`), with the household's words as the query.
+   Those without Kako's `kako_` metadata are **candidates**, shown to extraction as noted memories
+   (`m1`, in Meko's words, wrapped in `<data>`). They are what Meko counts as Learnings, memories
+   waiting to be kept or promoted, so dreaming reads Learnings session by session (`dreaming/candidates.py`).
 2. **Extract** candidate claims with the model, as structured output: one call to one tool,
    `submit_claims`, with the turn, the quote, a life event if any, and each fact's entity, attribute,
-   value **as quoted** and the day it takes effect, and whether the household said a value Kako holds
-   was wrong. The model copies; it does not calculate. It reads only the household's words (Kako's
+   value **as quoted** and the day it takes effect, whether the household said a value Kako holds
+   was wrong, and the noted memories that say the same as the claim. A noted memory is never a quote. The model copies; it does not calculate. It reads only the household's words (Kako's
    replies hold engine figures, which are not theirs), wrapped in `<data>` blocks, with the entities
    by their refs, the attributes, and what Kako holds on the session's date. A wrong shape goes back to
    it once; nothing else does (`dreaming/extract.py`, prompt `agents/prompts/dreaming.md`).
@@ -247,14 +250,22 @@ queues the run; `kako dream run` runs what is queued, one at a time. The code is
    the turn it was said in (`<conversation id>:<seed>`) and who said it, with the run's id. A claim's
    proposals are stored together (a life event with its facts, a retraction with the value that takes
    its place). The idempotency key is the turn's, as in the session, so a change the session already
-   proposed from the same words is **already** and never proposed twice. Nothing becomes household
+   proposed from the same words is **already** and never proposed twice. A noted memory a claim names
+   is shown with its proposals (`extracted_memory` evidence, never counted as a quote for V-09). Nothing becomes household
    knowledge until a person says yes; a fact approved from dreaming's proposal says so (`source_kind`
    `dreaming`). The run keeps what it found in `dream_run.counts`.
-7. **On approval**, the fact store writes the rows and the Meko adapter brings Meko in line: add the new
-   memory (or link Meko's extracted one), rewrite a replaced one, delete a retracted one, promote what was
-   approved for sharing. **On rejection**, an extracted memory the household says is wrong is deleted, so
-   no agent finds it again. Every extracted memory ends either linked to a fact or deleted. (Task 3's
-   second part for extracted memories; task 5 for the rest.)
+7. **Settle the candidates** (`dreaming/memories.py`, after each run and with `kako dream settle`).
+   Each noted memory has one fate, kept in `dream_run.counts`: **waiting** on the proposals its claim
+   made now, each showing its words, or **delete** (no claim names it; its claim was refused, a
+   conflict or deferred; it holds a number its claim's quote doesn't; or its claim made nothing new,
+   so no person would see its words). A waiting memory is linked in `meko_link` to what was written
+   only once a person has approved every one of those proposals, and deleted once any is turned
+   down: the brief marks a linked memory approved, so its words must be what the household saw. A memory is deleted as the agent that wrote it, the only one Meko allows. So every
+   extracted memory ends linked to an approved fact or deleted (V-14, checked by `kako dream check`,
+   which also finds a memory Meko extracted after the run).
+8. **On approval**, the fact store writes the rows; the Meko adapter then adds Kako's own memory,
+   rewrites a replaced one in the past tense, deletes a retracted one and promotes what was approved
+   for sharing (Phase 4, tasks 4 and 5).
 
 Dreaming is a fixed workflow with one model step (extraction); the orchestrator and specialists are the
 agentic part. The docs and the video say so.

@@ -1,0 +1,265 @@
+{
+ "format": 1,
+ "calls": [
+  {
+   "key": "dream:d01:t1/extract/1",
+   "request_sha256": "26b7e36936c82fec56580205f6b6b7997e08d656b248d46bd7f57223b90d814b",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_8dyRZbt9thhtfYtVTeP2Mh8v",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d01:t1\",\"quote\":\"Mara here, with news: I got a new job! I start on Dec 1, and my take-home pay will be ₱68,000 a month.\",\"correction\":false,\"life_event\":{\"kind\":\"new_job\",\"description\":\"I got a new job\",\"occurs_on\":\"2026-12-01\"},\"facts\":[{\"entity\":\"income:mara-s-salary\",\"attribute\":\"income.monthly_net\",\"value\":\"₱68,000\",\"valid_from\":\"2026-12-01\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2508,
+    "output_tokens": 227,
+    "cached_tokens": 0,
+    "finish_reason": "tool_calls",
+    "latency_ms": 4872
+   }
+  },
+  {
+   "key": "dream:d02:t1/extract/1",
+   "request_sha256": "7ca2a1dc60ad952725ecfa9986cbec20f0e879dc0001e9c832fce86824018c44",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_YpJci8rnXJsGE6zSHS7rzyH8",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d02:t1\",\"quote\":\"Jun here. Good news from work: my take-home pay goes up to ₱51,000 a month from January 1, 2027.\",\"correction\":false,\"life_event\":{\"kind\":\"raise\",\"description\":\"my take-home pay goes up to ₱51,000 a month\",\"occurs_on\":\"2027-01-01\"},\"facts\":[{\"entity\":\"income:jun-s-salary\",\"attribute\":\"income.monthly_net\",\"value\":\"₱51,000\",\"valid_from\":\"2027-01-01\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2504,
+    "output_tokens": 152,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 2244
+   }
+  },
+  {
+   "key": "dream:d03:t1/extract/1",
+   "request_sha256": "b703f78449d852dd01494c0bc9dd346e0748f002d64e77fdf2f29b7189cfab99",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_sZX9y2NhR6ITJKbA381j1G25",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d03:t1\",\"quote\":\"Sorry, I had it wrong when we started: rent and utilities are ₱38,000 a month, not ₱40,000.\",\"correction\":true,\"life_event\":null,\"facts\":[{\"entity\":\"expense:rent-and-utilities\",\"attribute\":\"expense.monthly_amount\",\"value\":\"₱38,000\",\"valid_from\":\"\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2502,
+    "output_tokens": 152,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 2561
+   }
+  },
+  {
+   "key": "dream:d04:t1/extract/1",
+   "request_sha256": "806f8e38d7ce8f80ce9060f383c071a1dd8a300a31a6ab3bad80e605c50f40aa",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_cSxnVX8OwqrGA2Z2xBycW2TT",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[]}"
+     }
+    ],
+    "input_tokens": 2500,
+    "output_tokens": 64,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 1935
+   }
+  },
+  {
+   "key": "dream:d05:t1/extract/1",
+   "request_sha256": "402c3a723690dec8d4ca4ef3a7a8dd371fa37c13f24bddca3ffc14159d9378a7",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_FSDMNyVAZYiZrDWvSx0AiYfJ",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[]}"
+     }
+    ],
+    "input_tokens": 2496,
+    "output_tokens": 32,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 1347
+   }
+  },
+  {
+   "key": "dream:d06:t1/extract/1",
+   "request_sha256": "8d0d528b54dc0c9baae442927833f44bdd612742bde99eda72e764c7e316ed7d",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_B78xoJPfhs7H2CueK5b8k3tO",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d06:t1\",\"quote\":\"Something I never told you: I get paid on the 15th of each month, and I also get a 13th month pay of ₱52,000.\",\"correction\":false,\"life_event\":null,\"facts\":[{\"entity\":\"income:mara-s-salary\",\"attribute\":\"income.pay_day\",\"value\":\"15\",\"valid_from\":\"\"},{\"entity\":\"income:mara-s-salary\",\"attribute\":\"income.thirteenth_month\",\"value\":\"₱52,000\",\"valid_from\":\"\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2508,
+    "output_tokens": 213,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 2754
+   }
+  },
+  {
+   "key": "dream:d07:t1/extract/1",
+   "request_sha256": "fdae30d130403dbc590bce1b1d3a739a63d93f512dd960d510bd558ac397dffe",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_dUgArg2xlcz62l7UnXz5UTIw",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d07:t1\",\"quote\":\"Lia's school sent the new fees: school and transport will be ₱12,000 a month from January 2027.\",\"correction\":false,\"life_event\":null,\"facts\":[{\"entity\":\"expense:school-and-transport\",\"attribute\":\"expense.monthly_amount\",\"value\":\"₱12,000\",\"valid_from\":\"2027-01-01\"}],\"memories\":[]},{\"turn\":\"d07:t2\",\"quote\":\"Then let's cut eating out. From now on we spend ₱4,000 a month on it.\",\"correction\":false,\"life_event\":null,\"facts\":[{\"entity\":\"expense:eating-out\",\"attribute\":\"expense.monthly_amount\",\"value\":\"₱4,000\",\"valid_from\":\"\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2547,
+    "output_tokens": 362,
+    "cached_tokens": 0,
+    "finish_reason": "tool_calls",
+    "latency_ms": 3847
+   }
+  },
+  {
+   "key": "dream:d08:t1/extract/1",
+   "request_sha256": "c1d1372ce796f84e8438326ef90049b1766d1cede108bcccf9830cd18cb6d856",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_dy1fEsIjYviceVD2Z7yq77wW",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d08:t1\",\"quote\":\"We talked it over and we want the emergency fund to cover 6 months of expenses, not 3.\",\"correction\":true,\"life_event\":null,\"facts\":[{\"entity\":\"\",\"attribute\":\"household.emergency_months_target\",\"value\":\"6\",\"valid_from\":\"\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2495,
+    "output_tokens": 99,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 1758
+   }
+  },
+  {
+   "key": "dream:d09:t1/extract/1",
+   "request_sha256": "e59379879bf361f0e07bf01f84cf50e344c0e5c2e79de3825a34d0c372277418",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_LJooTfwOtbABVZpqthdnIqdp",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[]}"
+     }
+    ],
+    "input_tokens": 2506,
+    "output_tokens": 68,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 2136
+   }
+  },
+  {
+   "key": "dream:d10:t1/extract/1",
+   "request_sha256": "334927043724084355aa6ad061a4e7ecf99cd844abacde45203cd7493d89c967",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_CGaXEUIBdITwPZT9Zwto3gOy",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d10:t1\",\"quote\":\"One mistake in what you have: I don't get a 13th month pay at my job. Please take that out.\",\"correction\":true,\"life_event\":null,\"facts\":[{\"entity\":\"income:jun-s-salary\",\"attribute\":\"income.thirteenth_month\",\"value\":\"\",\"valid_from\":\"\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2498,
+    "output_tokens": 168,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 2562
+   }
+  },
+  {
+   "key": "dream:d11:t1/extract/1",
+   "request_sha256": "8756efb55a684345dd2ca6386e8c88e7b1cc2431fd349a1a5ddbb26ccea39720",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_Um8ejGZ13jXy1EtHjQC3Bimq",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d11:t1\",\"quote\":\"Big news: we're expecting a baby in April 2027!\",\"correction\":false,\"life_event\":{\"kind\":\"baby\",\"description\":\"expecting a baby in April 2027\",\"occurs_on\":\"\"},\"facts\":[],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2486,
+    "output_tokens": 320,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 4474
+   }
+  },
+  {
+   "key": "dream:d12:t1/extract/1",
+   "request_sha256": "87f140ef8308977f9ace4197db5a2a5a95c317f492eca237ff6e9e783e2c5059",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_UxIN3v90DJjCRiyTB4ldP0kK",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d12:t1\",\"quote\":\"I misread the car loan papers: the annual rate is 9.5%, not 9%.\",\"correction\":true,\"life_event\":null,\"facts\":[{\"entity\":\"debt:car-loan\",\"attribute\":\"debt.annual_rate\",\"value\":\"9.5%\",\"valid_from\":\"\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2495,
+    "output_tokens": 136,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 1970
+   }
+  },
+  {
+   "key": "dream:d13:t1/extract/1",
+   "request_sha256": "1f03055c35ab2ec048307b3b3df7f7e9ae9877d1b2938d36432a8a2d1f20390c",
+   "reply": {
+    "deployment": "gpt-5.4",
+    "text": "",
+    "tool_calls": [
+     {
+      "id": "call_D63mwaBMQkrEbeDInquKW2TO",
+      "name": "submit_claims",
+      "arguments": "{\"claims\":[{\"turn\":\"d13:t1\",\"quote\":\"Tumaas na ang kuryente, so rent and utilities are now ₱42,000 a month.\",\"correction\":false,\"life_event\":null,\"facts\":[{\"entity\":\"expense:rent-and-utilities\",\"attribute\":\"expense.monthly_amount\",\"value\":\"₱42,000\",\"valid_from\":\"\"}],\"memories\":[]}]}"
+     }
+    ],
+    "input_tokens": 2496,
+    "output_tokens": 172,
+    "cached_tokens": 1536,
+    "finish_reason": "tool_calls",
+    "latency_ms": 2386
+   }
+  }
+ ]
+}

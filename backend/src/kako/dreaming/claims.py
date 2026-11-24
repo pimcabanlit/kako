@@ -4,7 +4,10 @@ A **turn** is what one person of the household said in a session: its seed, thei
 household's date and who said it. A **claim** is one thing the extraction step says the household
 stated in a turn: the quote it rests on, a life event if any, and the facts it states, each value
 copied as said. A claim may be a **correction**: the household says a value Kako holds was wrong
-(with the right value, or none when it shouldn't be there at all).
+(with the right value, or none when it shouldn't be there at all). A claim may also name the
+**noted memories** it says the same as: memories Meko extracted from the session on its own, by
+their refs in the brief (`m1`). They are candidates, never a quote: what they settle to is decided
+in `candidates.py`.
 
 `parse_claims` reads the model's `submit_claims` arguments and refuses a wrong shape (`ClaimError`,
 sent back to the model once). Whether a claim holds up (its quote, its numbers, its entity and
@@ -23,6 +26,7 @@ MAX_FACTS: Final = 4  # facts in one claim
 MAX_QUOTE: Final = 600
 MAX_DESCRIPTION: Final = 300
 MAX_VALUE: Final = 200
+MAX_NOTED: Final = 4  # noted memories one claim names
 
 
 class ClaimError(ValueError):
@@ -62,6 +66,7 @@ class Claim:
     correction: bool  # the household says a value Kako holds was wrong
     life_event: ClaimedEvent | None
     facts: tuple[ClaimedFact, ...]
+    memories: tuple[str, ...] = ()  # refs of the noted memories it says the same as (`m1`)
 
 
 def _str(raw: dict[str, Any], name: str, limit: int, where: str) -> str:
@@ -114,12 +119,20 @@ def parse_claims(arguments: dict[str, Any]) -> tuple[Claim, ...]:
         facts = item.get("facts")
         if not isinstance(facts, list) or len(facts) > MAX_FACTS:
             raise ClaimError(f"{where}.facts is a list of at most {MAX_FACTS}")
+        noted = item.get("memories", [])
+        if (
+            not isinstance(noted, list)
+            or len(noted) > MAX_NOTED
+            or not all(isinstance(m, str) and len(m) <= 12 for m in noted)
+        ):
+            raise ClaimError(f"{where}.memories is a list of at most {MAX_NOTED} refs, such as m1")
         claim = Claim(
             _str(item, "turn", 80, where),
             _str(item, "quote", MAX_QUOTE, where),
             correction,
             _event(item.get("life_event"), where),
             tuple(_fact(f, f"{where}.facts[{i}]") for i, f in enumerate(facts, start=1)),
+            tuple(dict.fromkeys(m.strip() for m in noted if m.strip())),
         )
         if not claim.quote:
             raise ClaimError(f"{where}.quote is the household's exact words")

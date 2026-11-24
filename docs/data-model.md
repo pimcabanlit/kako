@@ -1,4 +1,4 @@
-# Kako data model v0.9
+# Kako data model v0.10
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -31,7 +31,9 @@ in the same change once agreed.
   `writes`, a turn's own `known_at` and `approve`, and what the number check (V-10) also matches in a
   turn that proposed something or replans. v0.9 (Nov 24) is dreaming (task 3): ending a session,
   what `dream_run` keeps, the speaker on a Meko turn (`kako_said_by`), a correction's `fact`
-  evidence, and dreaming's labelled set.
+  evidence, and dreaming's labelled set. v0.10 (Nov 24) is task 3's second part: Meko's extracted
+  memories as candidates, each one's fate in `dream_run.counts`, `extracted_memory` evidence kept out
+  of V-09's quotes, and how V-14 is checked.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -507,7 +509,7 @@ decision back to the household, and a new job does.
 | `status` | TEXT | `queued`, `running`, `done`, `failed`. A done run never runs again; a failed one may, and what it proposed the first time is found under its keys |
 | `started_at` | TIMESTAMPTZ, null | Null while queued |
 | `finished_at` | TIMESTAMPTZ, null | |
-| `counts` | JSONB | Empty by default. A done run: `claims` (what extraction handed in), `model_calls`, `proposals` (made, by kind), `outcomes` (by outcome: `new`, `replace`, `retract`, `same`, `conflict`, `refused`, `deferred`, `already`) and `findings` (up to 40: the claim, the turn, the outcome, what it is and why). A failed run: `error` |
+| `counts` | JSONB | Empty by default. A done run: `claims` (what extraction handed in), `model_calls`, `proposals` (made, by kind), `outcomes` (by outcome: `new`, `replace`, `retract`, `same`, `conflict`, `refused`, `deferred`, `already`) `findings` (up to 40: the claim, the turn, the outcome, what it is and why) and `memories` (each memory Meko extracted from the session: its ref, id, the agent that wrote it, its words, its fate `waiting` or `delete`, why, the proposals it waits on (each showing its words), and its `state` as settling carries it out: `linked` with its `links`, `deleted`, or `undeletable` when an agent that isn't Kako's wrote it). A failed run: `error` |
 
 ### `proposal`
 
@@ -562,7 +564,7 @@ recorded at the approval's time.
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `proposal_id` | UUID FK | |
-| `kind` | TEXT | `turn`, `memory`, `extracted_memory` (one Meko extracted on its own), `learning` (one of Meko's Learnings), `fact` (such as the fact a correction takes the place of, from its start date), `decision` |
+| `kind` | TEXT | `turn`, `memory`, `extracted_memory` (one Meko extracted on its own, shown with what dreaming proposed; its words never hold a number for V-09), `learning` (one of Meko's Learnings; never a quote for V-09 either), `fact` (such as the fact a correction takes the place of, from its start date), `decision` |
 | `ref` | TEXT | Turn seed, memory id, or Kako id |
 | `person_id` | UUID FK, null | Who said it, for a turn |
 | `quote` | TEXT | The words the proposal rests on |
@@ -706,7 +708,7 @@ Meko is where agents find context. Postgres stays the record. The mapping:
 | --- | --- | --- | --- |
 | A planning session | A **conversation** (one per session) | `conversation_create`, then `conversation_add_message` per turn with `plan` and `reasoning` | The conversation id is the trace id; every Meko call made with it becomes a span. Kako stores the turn seed on each recommendation |
 | An approved fact | A **memory**, one sentence, with metadata `{fact_id, attribute, valid_from}` | `memory_add` after approval, or a link to the memory Meko already extracted for it | Written as a plain sentence with full names, because Meko's search boosts named entities ("Mara Villanueva's take-home pay is ₱68,000 a month from Dec 1, 2026"). Memories are never the source of a number: agents read numbers from figures |
-| What the household said, extracted by Meko | A **memory** Meko added on its own (`source` = `extract`; Meko Cloud runs this automatically) | Not written by Kako | A **candidate** for dreaming, never knowledge by itself. Each ends linked to an approved fact (`meko_link`) or deleted when the household rejects it (V-14) |
+| What the household said, extracted by Meko | A **memory** Meko added on its own (`source` = `extract`; Meko Cloud runs this automatically) | Not written by Kako | A **candidate** for dreaming, never knowledge by itself (any memory without Kako's `kako_` metadata). Each ends linked to the facts and life events its claim wrote (`meko_link`), once a person has approved every proposal that showed its words, or deleted as the agent that wrote it: when the household turns any of them down, or when no new proposal shows it (V-14) |
 | A replaced fact | The same memory, **rewritten in the past tense** | `memory_update` | Meko keeps a memory's metadata on update but cannot change it, so the text carries the end date: "Until Nov 30, 2026, Mara's take-home pay was ₱52,000 a month" |
 | A retracted fact | The memory is **deleted** | `memory_delete_by_id` | The fact row keeps the history; a wrong memory must not be found again |
 | A household preference the household approves for sharing | A **promoted memory** (collective memory) | `memory_promote`, after a second confirmation | One-way: a promoted memory can't be edited or deleted through MCP. So Kako promotes only durable preferences, and records a later change as a new promoted memory ("From Nov 2026 the household prefers…"), linked in `meko_link` |
@@ -714,7 +716,7 @@ Meko is where agents find context. Postgres stays the record. The mapping:
 | Statements, budgets, planning rules, local reference | **Knowledge-base** documents | `knowledgebase_upload_document`, then a POST of the file to the one-time link it returns (`kako demo upload`); the same on local Meko and Meko Cloud, and a file Meko already holds isn't sent again | Synthetic statements as CSV; rules and reference as Markdown. Reference documents explain 13th-month pay, SSS and Pag-IBIG in plain words and are never used to calculate |
 | A plan report | An **artifact** | `artifact_put` | Markdown; its content hash is stored on `plan` |
 | Weak searches | **Self-learning** shortfalls (Context Gaps) | Read with the `selflearning_*` tools, if the Phase 1 check finds them | A **Must** if available: each becomes a `context_gap`, a question for the household, and a `selflearning_verify` replay once answered |
-| Meko's Learnings | Meko's own top 5 candidates for sharing | Read by dreaming | One more input to dreaming's promotion candidates |
+| Meko's Learnings | Memories waiting to be kept or promoted (`datapack_describe` counts them; local Meko 1.20261116.0 lists no other view) | Read by dreaming, session by session, as the extracted memories above | Candidates: linked once kept as an approved fact, or deleted; promotion candidates come with Phase 4, task 4 |
 
 Agent ids: `kako:orchestrator`, `kako:budget`, `kako:debt`, `kako:savings`, `kako:goals`,
 `kako:dreaming`, and `kako:seed` for the demo's documents. They attribute writes and traces; Meko does not filter reads by agent id, so every agent
@@ -782,7 +784,7 @@ Checked by code before a write, and as a suite over the whole database in CI.
 | V-11 | Every recommendation has at least one `figure` source and one non-figure source (a fact, memory, decision or document) |
 | V-12 | `plan.unallocated` is not negative |
 | V-13 | Each `meko_link` to a memory points to a memory that exists (checked against Meko in the nightly test, not on every write) |
-| V-14 | Every memory Meko extracted from a session that dreaming has run on is either linked to an approved fact in `meko_link` or deleted (nightly test) |
+| V-14 | Every memory Meko extracted from a session that dreaming has run on is either linked to an approved fact in `meko_link` or deleted; one still waiting on a pending proposal is not yet a failure (`kako dream check`, against Meko, not on every write; it also finds a memory extracted after the run) |
 | V-15 | Every `decision_option.tags` value is on the fixed tag list |
 | V-16 | At most one active `account.purpose` = `emergency` fact per household on any date |
 

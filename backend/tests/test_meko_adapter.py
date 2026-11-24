@@ -406,3 +406,34 @@ async def test_turns_read_back_with_their_trace(log: MemoryCallLog) -> None:
         async for meko in _meko(Server({"conversation_get": broken}), log):
             with pytest.raises(MekoProtocolError):
                 await meko.read_turns("c1", agent_id="kako:orchestrator")
+
+
+async def test_a_conversations_memories_with_who_wrote_them(log: MemoryCallLog) -> None:
+    found = {
+        "id": "mem-2",
+        "memory": "The user's take-home pay will be 68,000 pesos a month.",
+        "metadata": {"meko_conversation_id": "c1"},
+        "score": 0.68,
+        "agent_id": "kako:orchestrator",
+        "run_id": "c1",
+    }
+    server = Server({"memory_search": {"results": [found]}})
+    async for meko in _meko(server, log):
+        (memory,) = await meko.search_memories("c1", "my take-home pay", agent_id="kako:dreaming")
+    assert (memory.id, memory.agent_id, memory.conversation_id) == (
+        "mem-2",
+        "kako:orchestrator",
+        "c1",
+    )
+    ((tool, sent),) = server.tools
+    assert (tool, sent["run_id"], sent["limit"]) == ("memory_search", "c1", 20)
+
+
+async def test_the_fake_searches_one_conversations_memories() -> None:
+    meko = FakeMeko()
+    c = await meko.create_conversation(agent_id="kako:orchestrator", title="t")
+    other = await meko.create_conversation(agent_id="kako:orchestrator", title="u")
+    mine = await meko.add_memory(c, "Mara's pay is 68,000.", {}, agent_id="kako:orchestrator")
+    await meko.add_memory(other, "Mara's pay is 52,000.", {}, agent_id="kako:orchestrator")
+    (found,) = await meko.search_memories(c, "Mara's pay", agent_id="kako:dreaming")
+    assert (found.id, found.agent_id, found.conversation_id) == (mine, "kako:orchestrator", c)

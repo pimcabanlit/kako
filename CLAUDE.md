@@ -202,6 +202,8 @@ uv run kako test-set --architecture single --only q01,q07   # the single-agent b
 KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
 uv run kako dream end <session>           # end a session (once) and queue its dreaming run (--at; the API: POST /api/v1/sessions/{id}/end)
 uv run kako dream run                     # run the queued or failed dreaming runs: read the session, one extraction, checks in code, pending proposals (--session, --at)
+uv run kako dream settle                  # carry out each memory Meko extracted from a dreamed session: linked to what a person approved, or deleted (--at)
+uv run kako dream check                   # V-14 against Meko: each extracted memory linked, waiting on a pending proposal, or gone; exit 1 if not (--household)
 uv run kako dream eval                    # dreaming's labelled set, replayed from data/recorded/dreaming.json; exit 1 under 90% found or on any unquoted number (--only, --household, --save)
 ```
 
@@ -316,11 +318,13 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   and the cases run through extraction and classification. `dreaming/` the background job after a
   session: `claims.py` (pure: the claims `submit_claims` hands in, checked for shape), `classify.py`
   (pure: each claim against what Kako holds, the quote in its turn, V-09, new, replace, retract,
-  correction, same, conflict, refused or deferred, and the proposals it makes), `extract.py` (the
-  brief and the one structured model call, prompt `prompts/dreaming.md`) and `job.py` (`end_session`
-  queues a `dream_run`; `run_dream` reads the session's turns from its Meko conversation as the
-  agent that wrote them, extracts, classifies and proposes in one transaction, and marks the run
-  done or failed with why). `demo/sessions.py` reads the scripted sessions
+  correction, same, conflict, refused or deferred, and the proposals it makes), `candidates.py`
+  (pure: which memories Meko extracted are candidates, and each one's fate: waiting or
+  delete), `extract.py` (the brief and the one structured model call, prompt `prompts/dreaming.md`),
+  `job.py` (`end_session` queues a `dream_run`; `run_dream` reads the session's turns from its Meko
+  conversation as the agent that wrote them and its extracted memories (`search_memories`),
+  extracts, classifies and proposes in one transaction, and marks the run done or failed with why)
+  and `memories.py` (`settle_memories` links or deletes each candidate, `check_extracted` is V-14). `demo/sessions.py` reads the scripted sessions
   (`data/demo-household/sessions/`) and `demo/mode.py` is `kako demo run`: local Meko only, the
   household with its whole story, the documents uploaded once, each session replayed by call key
   (a request that differs from its recording, as when another machine's Meko ranks the brief's
@@ -386,7 +390,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   shape sent back once; `tests/integration/test_dreaming.py` ends a session and dreams over it on
   Postgres and local Meko (proposed once with its quote and speaker, approved with source `dreaming`,
   what the session proposed already reported, a failed run run again, the labelled set, the CLI from
-  a recording, the API); `test_demo_sessions.py` the session files and each mistake;
+  a recording, the API); `test_dreaming_candidates.py` which memories are candidates and each
+  fate, and `tests/integration/test_dreaming_memories.py` the candidates on local Meko: shown to
+  extraction, one linked after approval, one deleted after rejection, the rest deleted, Kako's own
+  untouched, Meko's words never a quote for V-09, and `kako dream settle` and `check`; `test_demo_sessions.py` the session files and each mistake;
   `tests/integration/test_demo_mode.py` runs `kako demo run --test-set` on a fresh database and local
   Meko with no Azure settings, then again (session 4 isn't replayed twice), and its refusals, session 4
   recorded from the scripted model with its approval and the rows it writes, and `kako demo record`'s
