@@ -20,6 +20,7 @@ import re
 import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Final
 
 from kako.agents.answers import Allocation, Citation
@@ -115,6 +116,10 @@ class TurnState:
     # The run each what-if was stored as, once the turn is kept (`db/plan_store.save_answer`).
     # The tools write nothing: a turn that fails leaves no scenario behind.
     stored: dict[str, uuid.UUID] = field(default_factory=dict)
+    # Changes the household stated, checked and held by `propose_change` (`agents.proposing`), kept
+    # as pending proposals with the turn.
+    proposed: list[Any] = field(default_factory=list)
+    said_on: date | None = None  # the household's date when it spoke (the session's date)
 
     @property
     def refs(self) -> Refs:

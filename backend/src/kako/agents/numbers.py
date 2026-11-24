@@ -38,6 +38,7 @@ from typing import Final
 from kako.agents.checks import Number, Subject, TextCheck
 from kako.agents.tools import MESSAGE_CHARS, TurnState, said_amounts
 from kako.engine.figures import Figure
+from kako.facts.model import FactRow
 from kako.facts.reading import MAX_DIGITS, MAX_PLACES, Kind, Token, scan
 
 SHOWN_UNMATCHED: Final = 12  # the most unmatched numbers named back to the model
@@ -88,6 +89,20 @@ class Pool:
         target.setdefault(abs(value), ref)
 
 
+def _add_fact(pool: Pool, fact: FactRow, name: str) -> None:
+    pool.refs.add(name)
+    if fact.value_money is not None:
+        pool.money.setdefault(Decimal(fact.value_money) / 100, name)
+    if fact.value_rate is not None:
+        pool.percent.setdefault(fact.value_rate * 100, name)
+    if fact.value_int is not None:
+        pool.counts.setdefault(Decimal(fact.value_int), name)
+        pool.months.setdefault(Decimal(fact.value_int), name)
+    if fact.value_date is not None:
+        pool.dates.setdefault(fact.value_date, name)
+    pool.dates.setdefault(fact.valid_from, name)  # "from Dec 1, 2026": when it took effect
+
+
 def pool_of(state: TurnState) -> Pool:
     """Everything a number in this turn may match: the turn's run first, then each what-if in the
     order it ran, the snapshot's facts, the what-ifs' allocations, the household's own words."""
@@ -99,17 +114,15 @@ def pool_of(state: TurnState) -> Pool:
         for figure in what_if.run.figures:
             pool.add_figure(figure, f"figure:{ref}:{refs.figure(figure)}")
     for fact in state.snapshot.facts:
-        name = f"fact:{refs.fact(fact)}"
-        pool.refs.add(name)
-        if fact.value_money is not None:
-            pool.money.setdefault(Decimal(fact.value_money) / 100, name)
-        if fact.value_rate is not None:
-            pool.percent.setdefault(fact.value_rate * 100, name)
-        if fact.value_int is not None:
-            pool.counts.setdefault(Decimal(fact.value_int), name)
-            pool.months.setdefault(Decimal(fact.value_int), name)
-        if fact.value_date is not None:
-            pool.dates.setdefault(fact.value_date, name)
+        _add_fact(pool, fact, f"fact:{refs.fact(fact)}")
+    replan = state.inputs.replan
+    if replan is not None:  # what changed: the figures and facts the household last decided on
+        for figure in replan.before.figures:
+            pool.add_figure(figure, f"before:figure:{refs.figure(figure)}")
+        for change in (*replan.diff.fact_changes, *(f for r in replan.revisit for f in r.facts)):
+            for row in (change.old, change.new):
+                if row is not None:
+                    _add_fact(pool, row, f"before:fact:{refs.fact(row)}")
     for ref, what_if in state.what_ifs.items():
         for a in what_if.allocations:
             pool.money.setdefault(Decimal(a.centavos) / 100, f"allocation:{ref}:{a.entity_ref}")

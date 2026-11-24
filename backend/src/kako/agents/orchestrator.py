@@ -37,7 +37,8 @@ from kako.agents.chat import ToolSpec
 from kako.agents.checks import Subject, record
 from kako.agents.model_manager import ModelManager
 from kako.agents.numbers import check_texts, mismatch
-from kako.agents.present import money
+from kako.agents.present import day, money
+from kako.agents.proposing import proposal_tool
 from kako.agents.reconciling import RESOLUTION_SCHEMA, Reconciler
 from kako.agents.specialists import run_specialist, system_prompt
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult, run_agent
@@ -60,6 +61,7 @@ MAX_QUESTION: Final = 600
 MAX_REPLY: Final = 4_000
 MAX_OPTION_SUMMARY: Final = 1_000
 MAX_LABEL: Final = 80
+MAX_WHY: Final = 2_000
 
 
 class OrchestratorError(Exception):
@@ -85,6 +87,21 @@ def _text(arguments: dict[str, Any], name: str, limit: int) -> str:
     if len(value) > limit:
         raise ToolInputError(f"{name} must be at most {limit} characters")
     return value.strip()
+
+
+def replan_note(state: TurnState) -> str:
+    """In a replan, what code tells the agent before it starts (the brief has the changes)."""
+    replan = state.inputs.replan
+    if replan is None:
+        return ""
+    areas = ", ".join(replan.areas) or "none"
+    return (
+        f"\n\nThis turn is a replan as of {day(state.snapshot.on)}: the household approved a "
+        "change in this session, and the brief's replan section says what it changed. "
+        f"Specialists whose figures moved: {areas}. Answer in three parts: the new plan (the "
+        "reply and its options), what changed (code shows it from the replan section), and why "
+        "(`why`)."
+    )
 
 
 def render_proposal(proposal: SpecialistProposal) -> str:
@@ -195,7 +212,18 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
         resolution = reconciler.resolution(
             arguments.get("resolution"), options, recommended.strip() or None
         )
+        why = arguments.get("why", "")
+        if not isinstance(why, str) or len(why) > MAX_WHY:
+            raise ToolInputError(f"why must be a string of at most {MAX_WHY} characters")
+        why = why.strip()
+        if state.inputs.replan is not None and not why:
+            raise ToolInputError(
+                "this turn is a replan: say why the new plan is what it is in why, naming the "
+                "changes, preferences and decisions it rests on"
+            )
         texts: list[tuple[Subject, str, str]] = [("reply", "the reply", reply)]
+        if why:
+            texts.append(("reply", "the why", why))
         for o in options:
             texts.append(("recommendation", f"option {o.label!r}'s label", o.label))
             texts.append(("recommendation", f"option {o.label!r}'s summary", o.summary))
@@ -209,6 +237,7 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
             tuple(p for p in asked.proposals if p is not None),
             resolution,
             checks,
+            why or None,
         )
         failed = [c for c in checks if not c.ok]
         if failed and PATH not in state.regenerated:
@@ -250,6 +279,10 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
                     "options": {"type": "array", "items": option},
                     "recommended": {"type": "string"},
                     "resolution": RESOLUTION_SCHEMA,
+                    "why": {
+                        "type": "string",
+                        "description": 'In a replan, why the new plan is what it is; else ""',
+                    },
                 }
             ),
         ),
@@ -268,12 +301,14 @@ async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState
         decisions_tool(state),
         reconciler.split_tool(what_if_tool(state, PATH)),
         *(_ask_tool(manager, turn, state, s, asked) for s in SPECIALISTS),
+        proposal_tool(state),
         answer_tool(state, asked, reconciler),
     ]
     user = (
         "The household's message: "
         + data(state.message, limit=MESSAGE_CHARS, source="household")
         + "\n\nYour own what-ifs are named orch-W1, orch-W2 and so on."
+        + replan_note(state)
     )
     run = await run_agent(
         manager,

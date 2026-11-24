@@ -107,3 +107,4 @@ class TurnAnswer:
     proposals: tuple[SpecialistProposal, ...]  # every specialist's answer, in the order asked
     resolution: Resolution | None = None  # None when the rules found no conflict
     checks: tuple[TextCheck, ...] = ()  # the number check on every text, as finally shown
+    why: str | None = None  # in a replan: why the new plan is what it is, number-checked

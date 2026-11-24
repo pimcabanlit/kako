@@ -18,7 +18,13 @@ from kako.agents.answers import TurnAnswer
 from kako.agents.brief import data
 from kako.agents.model_manager import ModelManager
 from kako.agents.numbers import check_texts
-from kako.agents.orchestrator import AskedSpecialists, OrchestratorError, answer_tool
+from kako.agents.orchestrator import (
+    AskedSpecialists,
+    OrchestratorError,
+    answer_tool,
+    replan_note,
+)
+from kako.agents.proposing import proposal_tool
 from kako.agents.reconciling import Reconciler
 from kako.agents.specialists import system_prompt
 from kako.agents.tool_loop import run_agent
@@ -49,10 +55,13 @@ async def answer_alone(manager: ModelManager, turn: TurnContext, state: TurnStat
         decisions_tool(state),
         search_tool(state, PATH, "kako:orchestrator"),
         what_if_tool(state, PATH),
+        proposal_tool(state),
         answer_tool(state, asked, reconciler),
     ]
-    user = "The household's message: " + data(
-        state.message, limit=MESSAGE_CHARS, source="household"
+    user = (
+        "The household's message: "
+        + data(state.message, limit=MESSAGE_CHARS, source="household")
+        + replan_note(state)
     )
     run = await run_agent(
         manager,
