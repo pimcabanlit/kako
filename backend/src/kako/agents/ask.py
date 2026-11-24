@@ -44,7 +44,7 @@ from kako.db.models import LlmCall, Session
 from kako.db.number_checks import DbCheckLog
 from kako.db.plan_store import SavedAnswer, save_answer
 from kako.db.proposal_store import Evidence, ProposalError, propose
-from kako.facts.proposals import idempotency_key
+from kako.facts.proposals import PayloadError, idempotency_key
 from kako.health import safe_error
 from kako.meko.adapter import Meko, Turn
 from kako.meko.client import MekoError
@@ -331,7 +331,7 @@ async def _keep_proposals(
                     )
                     mine.append(StoredProposal(done.proposal_id, held.kind, held.shown))
             kept += mine
-        except ProposalError as exc:
+        except (ProposalError, PayloadError) as exc:
             refused.append(f"{change.ref}: {exc}")
     return tuple(kept), tuple(refused)
 
