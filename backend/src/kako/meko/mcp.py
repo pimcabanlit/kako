@@ -31,7 +31,13 @@ from kako.meko.adapter import (
     check_agent_id,
     check_document,
 )
-from kako.meko.client import MekoError, MekoMcpSession, MekoProtocolError
+from kako.meko.client import (
+    MekoError,
+    MekoMcpSession,
+    MekoProtocolError,
+    MekoToolError,
+    is_not_found,
+)
 from kako.meko.quota import CallLog, Quota
 from kako.settings import LOCAL_HOSTS, Settings
 
@@ -157,6 +163,34 @@ class McpMeko:
         if not isinstance(results, list):
             raise MekoProtocolError("memory_search answered without its results")
         return tuple(_memory(m) for m in results)
+
+    async def find_memories(
+        self, conversation_id: str, query: str, *, agent_id: str, limit: int = 10
+    ) -> tuple[Memory, ...]:
+        answer = await self._call(
+            "memory_search",
+            agent_id,
+            {"conversation_id": conversation_id, "query": query, "limit": _limit(limit)},
+        )
+        results = answer.get("results") if isinstance(answer, dict) else None
+        if not isinstance(results, list):
+            raise MekoProtocolError("memory_search answered without its results")
+        return tuple(_memory(m) for m in results)
+
+    async def get_memory(
+        self, conversation_id: str, memory_id: str, *, agent_id: str
+    ) -> Memory | None:
+        try:
+            answer = await self._call(
+                "memory_get_by_id",
+                agent_id,
+                {"conversation_id": conversation_id, "memory_id": memory_id},
+            )
+        except MekoToolError as exc:
+            if is_not_found(exc):
+                return None
+            raise
+        return _memory(answer)
 
     async def search_context(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5

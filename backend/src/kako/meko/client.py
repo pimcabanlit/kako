@@ -39,6 +39,12 @@ class MekoToolError(MekoError):
     """A Meko tool ran and reported an error (for example a missing conversation_id)."""
 
 
+def is_not_found(exc: MekoToolError) -> bool:
+    """Whether Meko said the thing asked for doesn't exist (`not_found`, or "No memory found")."""
+    text = str(exc).lower()
+    return "not found" in text or "not_found" in text
+
+
 class MekoCallLimitError(MekoError):
     """The session reached its ceiling of tool calls; nothing more is sent to Meko."""
 

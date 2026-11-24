@@ -163,6 +163,29 @@ class FakeMeko:
             result.result_count = len(found[:limit])
             return tuple(found[:limit])
 
+    async def find_memories(
+        self, conversation_id: str, query: str, *, agent_id: str, limit: int = 10
+    ) -> tuple[Memory, ...]:
+        _check_limit(limit)
+        async with self._call("memory_search", agent_id, conversation_id) as result:
+            found = [
+                Memory(i, m.text, dict(m.metadata), score, m.agent_id, m.conversation_id)
+                for i, m in self.memories.items()
+                if (score := _score(query, m.text))
+            ]
+            found.sort(key=lambda m: -(m.score or 0))
+            result.result_count = len(found[:limit])
+            return tuple(found[:limit])
+
+    async def get_memory(
+        self, conversation_id: str, memory_id: str, *, agent_id: str
+    ) -> Memory | None:
+        async with self._call("memory_get_by_id", agent_id, conversation_id):
+            m = self.memories.get(memory_id)
+            if m is None:
+                return None
+            return Memory(memory_id, m.text, dict(m.metadata), None, m.agent_id, m.conversation_id)
+
     async def search_context(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5
     ) -> Context:

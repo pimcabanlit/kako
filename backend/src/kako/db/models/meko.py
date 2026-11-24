@@ -49,3 +49,5 @@ class MekoLink(Base):
     meko_kind: Mapped[str] = mapped_column(Text, primary_key=True)
     meko_id: Mapped[str] = mapped_column(Text, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)

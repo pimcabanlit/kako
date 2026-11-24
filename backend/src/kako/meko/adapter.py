@@ -141,6 +141,20 @@ class Meko(Protocol):
         weak matches). Each names the agent that wrote it."""
         ...
 
+    async def find_memories(
+        self, conversation_id: str, query: str, *, agent_id: str, limit: int = 10
+    ) -> tuple[Memory, ...]:
+        """The datapack's memories that match `query`, from every conversation and agent
+        (`memory_search`; Meko leaves out weak matches)."""
+        ...
+
+    async def get_memory(
+        self, conversation_id: str, memory_id: str, *, agent_id: str
+    ) -> Memory | None:
+        """One memory by its id, None when Meko holds no such memory (a promoted one is no longer
+        a memory: see `promoted_memories`)."""
+        ...
+
     async def search_context(
         self, conversation_id: str, query: str, *, agent_id: str, limit: int = 5
     ) -> Context:
