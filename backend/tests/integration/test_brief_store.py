@@ -18,6 +18,7 @@ from kako.agents.brief_store import BriefStoreError, gather_brief
 from kako.db.meko_log import DbCallLog
 from kako.demo.files import read_demo
 from kako.demo.load import load_demo
+from kako.meko.fake import FakeMeko
 from kako.meko.mcp import open_meko
 from tests.conftest import MakeSettings
 
@@ -37,6 +38,36 @@ async def _demo(engine: AsyncEngine) -> uuid.UUID:
     return household_id
 
 
+async def _session(engine: AsyncEngine, household_id: uuid.UUID, conversation: str) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO session (id, household_id, meko_conversation_id, title, "
+                "household_date, started_at) VALUES (:id, :h, :c, 'Session 4', :d, :t)"
+            ),
+            {
+                "id": uuid.uuid4(),
+                "h": household_id,
+                "c": conversation,
+                "d": DEC_1,
+                "t": datetime(2026, 12, 1, 4, tzinfo=UTC),
+            },
+        )
+
+
+async def _link(engine: AsyncEngine, household_id: uuid.UUID, memory_id: str) -> None:
+    """Tie the memory to the household's approved preference, as Phase 4's write will."""
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO meko_link (kako_table, kako_id, meko_kind, meko_id, created_at) "
+                "SELECT 'fact', id, 'memory', :m, now() FROM fact WHERE household_id = :h "
+                "AND attribute = 'preference.debt_vs_flexibility' AND status = 'active'"
+            ),
+            {"m": memory_id, "h": household_id},
+        )
+
+
 async def test_the_worked_examples_brief_from_postgres_and_local_meko(
     migrated: AsyncEngine, test_meko_url: str, make_settings: MakeSettings
 ) -> None:
@@ -53,6 +84,8 @@ async def test_the_worked_examples_brief_from_postgres_and_local_meko(
                 conversation, sentence, {"kako_source": "approved_fact"}, agent_id=AGENT
             )
             try:
+                await _session(migrated, household_id, conversation)
+                await _link(migrated, household_id, memory_id)
                 async with migrated.connect() as conn:
                     brief, figures = await gather_brief(
                         conn,
@@ -79,6 +112,8 @@ async def test_the_worked_examples_brief_from_postgres_and_local_meko(
     assert figures.value("cashflow.monthly_surplus") == 2_505_000
     assert memory_id in brief.memories.values()
     assert sentence in brief.text
+    # Approved because meko_link ties it to the household's preference, not because of metadata.
+    assert f'status="approved">{sentence}</data>' in brief.text
     async with migrated.connect() as conn:
         searches = await conn.execute(
             text("SELECT agent_id, outcome FROM meko_call WHERE tool = 'context_search'")
@@ -112,3 +147,47 @@ async def test_no_message_means_no_search(migrated: AsyncEngine) -> None:
             )
     assert "No search was made." in brief.text
     assert "Active decisions (cite as decision:<ref>)\nNone." in brief.text
+
+
+async def test_the_search_stays_in_the_household(
+    migrated: AsyncEngine, make_settings: MakeSettings
+) -> None:
+    """A conversation of no session of this household, or another datapack: refused, unsearched."""
+    household_id = await _demo(migrated)
+    await _session(migrated, household_id, "conv-ours")
+    meko = FakeMeko(datapack_id="other")
+    async with migrated.connect() as conn:
+
+        async def brief(conversation: str) -> None:
+            await gather_brief(
+                conn,
+                meko,
+                household_id=household_id,
+                on=DEC_1,
+                known_at=None,
+                message="why do we keep cash on hand?",
+                conversation_id=conversation,
+                budget=3_000,
+            )
+
+        with pytest.raises(BriefStoreError, match="isn't one of this household's sessions"):
+            await brief("conv-someone-elses")
+        await conn.execute(
+            text("UPDATE household SET meko_datapack_id = 'ours' WHERE id = :h"),
+            {"h": household_id},
+        )
+        with pytest.raises(BriefStoreError, match="isn't on this household's datapack"):
+            await brief("conv-ours")
+        with pytest.raises(ValueError, match="out of its settings' bounds"):
+            await gather_brief(
+                conn,
+                None,
+                household_id=household_id,
+                on=DEC_1,
+                known_at=None,
+                message="",
+                conversation_id=None,
+                budget=3_000,
+                search_limit=50,
+            )
+    assert meko.calls == []

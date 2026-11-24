@@ -572,6 +572,10 @@ Ties a Kako row to what Meko holds about it.
 memory's own metadata while it is a memory but drops it on promotion (a promoted hit carries only its
 `memory_id`, `agent_id` and `source`; tested on local Meko 1.20261116.0, Nov 17, 2026).
 
+The brief marks a memory found by `context_search` approved only when `meko_link` ties it to one
+of the household's facts (not retracted) or decisions. Meko's own metadata never decides that: any
+client of the datapack can write it, and promotion drops it.
+
 ## System
 
 Written by the model manager, the Meko adapter and the number check. Never edited.

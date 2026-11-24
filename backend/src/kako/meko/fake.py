@@ -61,8 +61,9 @@ def _score(query: str, text: str) -> float:
 class FakeMeko:
     """The `Meko` interface in memory. `calls` lists each tool called, in order."""
 
-    def __init__(self, quota: Quota | None = None) -> None:
+    def __init__(self, quota: Quota | None = None, datapack_id: str | None = None) -> None:
         self.quota = quota or Quota(MemoryCallLog(), "local", 0)
+        self.datapack_id = datapack_id
         self.conversations: dict[str, _Conversation] = {}
         self.sessions: dict[str, str] = {}
         self.memories: dict[str, _Memory] = {}
