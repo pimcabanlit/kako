@@ -37,8 +37,6 @@ def test_the_repos_sessions_each_have_their_recording() -> None:
     assert four.known_at_of(asked) == datetime(2026, 11, 20, 20, 5, tzinfo=MANILA)
     for session in sessions:
         assert session.recording.parent == RECORDED_DIR
-        if not session.recording.exists() and session.name == "session-4":
-            continue  # recorded with the replan (Phase 4, task 2)
         recorded = read_recording(session.recording)
         for turn in session.turns:
             assert any(key.startswith(f"{turn.seed}/") for key in recorded), turn.seed

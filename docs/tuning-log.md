@@ -342,3 +342,38 @@ it led to.
   - **Session 2:** the same answer as entry 7 (options A and B with the worked example's figures),
     no `propose_change` call (nothing in the message is a change), `why` empty. 6 to 9 calls,
     US$0.02 to US$0.04.
+- **Run:** `KAKO_MODEL_MODE=record uv run kako demo record session-4`, then `session-2`, each on an
+  empty database and local Meko (gpt-5.4 and gpt-5-mini), recorded to
+  `data/recorded/session-4.json` and `session-2.json` (entry 7's recording is now
+  `session-2-run7.json`). Pim approved up to US$0.50; spent **US$0.1316**.
+
+  | | Turn | Model calls | Tokens in | Out | Cost |
+  | --- | --- | --- | --- | --- | --- |
+  | Session 4 | s4:t1, the news | 2 | 11,700 | 309 | US$0.0212 |
+  | Session 4 | s4:t2, the replan | 11 | 66,696 | 6,768 | US$0.0749 |
+  | Session 2 | s2:t1 | 7 | 34,368 | 3,203 | US$0.0355 |
+
+- **Result:**
+  - **Turn 1 as predicted:** one `propose_change` (the `new_job` life event on Dec 1, "Mara got a new
+    job", and Mara's salary at ₱68,000 from Dec 1, the whole message as the quote), no specialist,
+    and a reply that says it waits for a yes and that the plan is redone after. Every number passed.
+  - **Mara's approval** wrote changes.csv rows 10 and 11 as the story has them (demo mode checked).
+  - **Turn 2:** a replan as of Dec 1 against the decision of Sep 15, Session 2, with that decision to
+    revisit. The orchestrator asked budget, debt and savings (one more than predicted), and the
+    specialists didn't conflict. Options: A, Jun's ₱10,000 on the card and the rest to the fund (card
+    in 7 months, ₱9,358.80 of interest, the fund's target in 4 months), recommended; B, all on the
+    card (3 months). The figures are the engine's, as predicted. The recommendation leans on the
+    preference for flexibility and the September decision, as the worked example's plan v3 does.
+  - **One `submit_answer` sent back, not for a worked-out number but for refs:** the first reply named
+    "D1" and the first `why` wrote `fact:income:mara-s-salary/income.monthly_net` and
+    `figure:cashflow.monthly_surplus` in the household's text. The second try wrote them in plain
+    words ("the September choice", ₱25,050.00) and passed. 11 calls, inside the 8 to 13 predicted.
+  - **Session 2** as entry 7: options A (9 months, ₱12,460.10) and B, Jun's split (17 months, the
+    fund's target in 12 months); the over-allocation caught in code and the choice left to the
+    household; no `propose_change`; `why` empty. 7 calls.
+  - Cost: session 4 US$0.096, inside its range; session 2 US$0.036, just under the top of its range.
+- **Root cause of the miss:** the replan prompt asks `why` to name "the facts, preferences and
+  decisions it rests on", and the brief lists them by ref, so the model's first try named them by
+  ref. The number check's send-back fixed it in one try.
+- **Change made:** none yet; one send-back costs one strong call (about US$0.02). If it happens again
+  in session 4's next recording, the prompt will say to name them in words.

@@ -58,7 +58,15 @@ async def test_demo_run_replays_session_2_and_the_test_set(
     assert "Villanueva household: loaded with its whole story; 15 documents" in out
     assert "== Session 2, turn s2:t1 ==" in out
     assert "A: all extra on the card" in out
-    assert "B: Jun\u2019s split" in out
+    assert "B: Jun's split" in out
+    # Session 4: the new job proposed, approved by Mara in the story, then the replan in three parts.
+    assert "== Session 4, turn s4:t1 ==" in out
+    assert "replace_fact: Mara's salary: income.monthly_net = ₱68,000.00 from Dec 1, 2026" in out
+    assert "== Session 4, turn s4:t2 ==\nThe new plan:" in out
+    assert "What changed since the decision of Sep 15, 2026 in Session 2 (B: split):" in out
+    assert "- Take-home pay a month, all incomes: ₱100,000.00 → ₱116,000.00" in out
+    assert "\nWhy:\n" in out
+    assert "- To revisit: “How hard should we pay down the credit card?”" in out
     assert "US$0.0000." in out  # replayed, so nothing spent
     # The test set replays on this database to the score its saved run reports.
     saved = json.loads((RESULTS / "specialists.json").read_text(encoding="utf-8"))
@@ -66,7 +74,7 @@ async def test_demo_run_replays_session_2_and_the_test_set(
     checks = f"({saved['checks_passed']}/{saved['checks_total']} checks), {n} answered"
     line = next(x for x in out.splitlines() if x.startswith("Agent test set (specialists): "))
     assert f"over {n} questions {checks}" in line
-    assert "Demo mode replayed 1 session(s) from recordings" in out
+    assert "Demo mode replayed 2 session(s) from recordings" in out
     for line in out.splitlines():  # shown in the run's warnings, so a machine's drift is seen
         if "requests differed from the recording" in line:
             warnings.warn(line, stacklevel=1)
@@ -79,7 +87,12 @@ async def test_demo_run_replays_session_2_and_the_test_set(
     assert [r for r, _ in replayed] == [True]
     assert plans >= 1
 
-    # A second run keeps the household and the documents, and replays session 2 again.
+    async with migrated.connect() as conn:
+        events = (await conn.execute(text("SELECT count(*) FROM life_event"))).scalar_one()
+    assert events == 1  # written by session 4's approval, not by loading
+
+    # A second run keeps the household and the documents, and replays session 2 again; session 4
+    # wrote its changes in the first run, so it isn't replayed.
     assert await asyncio.to_thread(_main, ["demo", "run"]) == 0
     out = capsys.readouterr().out
     assert (
@@ -87,6 +100,8 @@ async def test_demo_run_replays_session_2_and_the_test_set(
     )
     assert "== Session 2, turn s2:t1 ==" in out
     assert any(x.startswith("Session 2: ") for x in out.splitlines())  # matched, or reported
+    assert "Session 4: the changes it approves are in this database already" in out
+    assert "== Session 4" not in out
 
 
 async def test_a_request_that_differs_is_reported_or_refused(
@@ -110,7 +125,7 @@ async def test_a_request_that_differs_is_reported_or_refused(
     replayed = await replay_session(migrated, settings, demo, session, household_id)
     # The planted call at least: on a machine whose Meko ranks the excerpts differently, more.
     assert "s2:t1/orchestrator/1" in replayed.drifted
-    assert replayed.calls == 6
+    assert replayed.calls == 7
     assert [a.answer.options[0].label for a in replayed.asked] == ["A: all extra on the card"]
     with pytest.raises(RecordingError, match="'s2:t1/orchestrator/1' has changed"):
         await replay_session(migrated, settings, demo, session, household_id, strict=True)
