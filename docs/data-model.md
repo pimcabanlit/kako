@@ -620,7 +620,7 @@ How a gap moves (`kako gaps`, `/api/v1/gaps`):
 - **Collected** (`open`): Meko's search log (`selflearning_query_log`, the low and the mid band, the
   newest 10 of each from the last 7 days) on the household's datapack. Only a shortfall of coverage is
   kept: Meko's category `coverage`, or with no category a reason of `weak_match`, `partial_match`,
-  `nothing_matched` or `below_quality_floor` (or none). A vague prompt or a failed or out-of-date source
+  `nothing_matched` or `below_floor` (or none). A vague prompt or a failed or out-of-date source
   isn't the household's to answer.
 - **Answered**: tied to its answer's proposal. Tying it again replaces the answer and clears any
   outcome. A dismissed or verified gap can't be answered.
@@ -744,7 +744,7 @@ Meko is where agents find context. Postgres stays the record. The mapping:
 | A decision the household approves for sharing | A **decision record** in the knowledge base (`kako-decision-<id>.md`), linked as `document` by its upload key | Meko upkeep, after an approval with its second confirmation: `knowledgebase_upload_document` (`upkeep/records.py` writes the Markdown) | The question, who approved it and when, the option chosen with the household's reasoning, the options turned down with their reasons, the facts it rests on (as they were), and the decision it revises. The same decision always gives the same record, and Meko takes the same content once. A decision revised before upkeep gets to it isn't shared |
 | Statements, budgets, planning rules, local reference | **Knowledge-base** documents | `knowledgebase_upload_document`, then a POST of the file to the one-time link it returns (`kako demo upload`); the same on local Meko and Meko Cloud, and a file Meko already holds isn't sent again | Synthetic statements as CSV; rules and reference as Markdown. Reference documents explain 13th-month pay, SSS and Pag-IBIG in plain words and are never used to calculate |
 | A plan report | An **artifact** | `artifact_put` | Markdown; its content hash is stored on `plan` |
-| Weak searches | **Self-learning** shortfalls (Context Gaps) | Read with `selflearning_query_log` as `kako:gaps` (`kako gaps sync`); replayed with `selflearning_verify`, counted as a `context_search`. Meko Cloud only: local Meko has no self-learning tools | Each shortfall of coverage becomes a `context_gap` with a question for the household; once its answer is approved and in Meko, the replay's outcome and score after are kept |
+| Weak searches | **Self-learning** shortfalls (Context Gaps) | Read with `selflearning_query_log` (`kako gaps sync`; the self-learning tools take no `agent_id`); replayed with `selflearning_verify`, counted as a `context_search`. Meko Cloud only: local Meko has no self-learning tools | Each shortfall of coverage becomes a `context_gap` with a question for the household; once its answer is approved and in Meko, the replay's outcome and score after are kept |
 | Meko's Learnings | Memories waiting to be kept or promoted (`datapack_describe` counts them; local Meko 1.20261116.0 lists no other view) | Read by dreaming, session by session, as the extracted memories above | Candidates: linked once kept as an approved fact, or deleted. Promotion candidates are Kako's own: a preference approved from a pattern, or a decision two sessions have held (dreaming steps 4 and 5) |
 
 Agent ids: `kako:orchestrator`, `kako:budget`, `kako:debt`, `kako:savings`, `kako:goals`,
