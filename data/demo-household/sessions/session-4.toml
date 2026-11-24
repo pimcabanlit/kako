@@ -1,0 +1,23 @@
+# Session 4 (Nov 20, 2026): the life event. Mara tells Kako about her new job; the turn proposes the
+# life event and her new take-home pay, and she approves both that evening (changes.csv rows 10 and
+# 11, which this session writes: demo mode loads the story without them and checks what it wrote).
+# Jun then asks what it changes, and that turn is a replan as of Dec 1 against the September decision,
+# answered in three parts: the new plan, what changed and why.
+
+title = "Session 4"
+on = 2026-11-20
+known_at = 2026-11-20T19:00:00+08:00  # after the November statements, before the news
+recording = "session-4.json"          # in data/recorded/
+writes = [10, 11]
+
+[[turn]]
+speaker = "mara"
+seed = "s4:t1"
+message = "Mara here, with news: I got a new job! I start on Dec 1, and my take-home pay will be ₱68,000 a month."
+approve = { by = "mara", at = 2026-11-20T20:00:00+08:00 }
+
+[[turn]]
+speaker = "jun"
+seed = "s4:t2"
+known_at = 2026-11-20T20:05:00+08:00
+message = "Jun here. We said yes to Mara's new job. What does it change? Could we put ₱10,000 a month on the card and the rest in the emergency fund, or should it all go on the card?"

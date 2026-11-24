@@ -17,13 +17,16 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from kako.agents.recorded import RecordingError
+from kako.agents.recorded import RecordingBackend, RecordingError
 from kako.demo.files import read_demo
 from kako.demo.load import load_demo
-from kako.demo.mode import replay_session
-from kako.demo.sessions import read_sessions
+from kako.demo.mode import DemoModeError, replay_session, written
+from kako.demo.sessions import check_writes, read_sessions
 from kako.evals.questions import TEST_SET
 from kako.settings import get_settings
+from tests.conftest import MakeSettings
+from tests.integration import test_replan as replan_turns
+from tests.support.models import ScriptedBackend, calls
 
 pytestmark = pytest.mark.integration
 
@@ -104,13 +107,13 @@ async def test_a_request_that_differs_is_reported_or_refused(
     session = replace(session, recording=changed)
     settings = get_settings()
 
-    replayed = await replay_session(migrated, settings, session, household_id)
+    replayed = await replay_session(migrated, settings, demo, session, household_id)
     # The planted call at least: on a machine whose Meko ranks the excerpts differently, more.
     assert "s2:t1/orchestrator/1" in replayed.drifted
     assert replayed.calls == 6
     assert [a.answer.options[0].label for a in replayed.asked] == ["A: all extra on the card"]
     with pytest.raises(RecordingError, match="'s2:t1/orchestrator/1' has changed"):
-        await replay_session(migrated, settings, session, household_id, strict=True)
+        await replay_session(migrated, settings, demo, session, household_id, strict=True)
 
 
 async def test_demo_run_refuses_part_of_the_story(
@@ -139,3 +142,80 @@ def _main(args: list[str]) -> int:
     from kako.cli import main
 
     return main(args)
+
+
+async def test_session_4_approves_what_it_proposed_and_writes_the_story(
+    migrated: AsyncEngine, demo_env: None, tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    """Session 4 with the scripted model, recorded as demo mode plays it: the story is loaded
+    without the rows the session writes, turn 1 proposes the new job, Mara approves it at its time
+    in the story, and turn 2 is the replan. What it wrote is changes.csv rows 10 and 11."""
+    demo = read_demo()
+    sessions = read_sessions(people=PEOPLE)
+    check_writes(sessions, demo)
+    (session,) = [s for s in sessions if s.name == "session-4"]
+    assert session.writes == (10, 11)
+    async with migrated.connect() as conn:
+        household_id = await load_demo(
+            conn, demo, through=max(c.recorded_at for c in demo.changes), skip=session.writes
+        )
+        await conn.commit()
+    assert await written(migrated, demo, session, household_id) == {10: None, 11: None}
+    path = tmp_path / "session-4.json"
+    settings = make_settings(
+        model_strong="kako-strong", model_fast="kako-fast", meko_mcp_url=get_settings().meko_mcp_url
+    )
+    script = {**replan_turns.turn_1(), **replan_turns.turn_2()}
+    replayed = await replay_session(
+        migrated,
+        settings,
+        demo,
+        session,
+        household_id,
+        backend=RecordingBackend(ScriptedBackend(script), path),
+    )
+    told, replanned = replayed.asked
+    assert [p.kind for p in told.proposed] == ["life_event", "replace_fact"]
+    assert replanned.replan is not None
+    assert replanned.replan.since == "the decision of Sep 15, 2026 in Session 2 (B: split)"
+    found = await written(migrated, demo, session, household_id)
+    assert all(key and key.startswith(str(told.session_id)) for key in found.values())
+    async with migrated.connect() as conn:
+        rows = list(
+            await conn.execute(
+                text(
+                    "SELECT p.created_at, p.decided_at, s.display_name FROM proposal p "
+                    "JOIN person s ON s.id = p.decided_by_person_id WHERE p.id = ANY(:ids)"
+                ),
+                {"ids": [p.proposal_id for p in told.proposed]},
+            )
+        )
+    # Proposed as Kako knew it at the turn, approved by Mara at 8 PM on Nov 20, as in the story.
+    assert {tuple(r) for r in rows} == {
+        (
+            datetime(2026, 11, 20, 19, tzinfo=MANILA),
+            datetime(2026, 11, 20, 20, tzinfo=MANILA),
+            "Mara",
+        )
+    }
+
+
+async def test_a_session_that_proposes_nothing_cant_approve(
+    migrated: AsyncEngine, demo_env: None, make_settings: MakeSettings
+) -> None:
+    demo = read_demo()
+    (session,) = [s for s in read_sessions(people=PEOPLE) if s.name == "session-4"]
+    async with migrated.connect() as conn:
+        household_id = await load_demo(
+            conn, demo, through=max(c.recorded_at for c in demo.changes), skip=session.writes
+        )
+        await conn.commit()
+    answer = {"reply": "Congratulations, Mara!", "options": [], "recommended": "", "why": ""}
+    script = {"s4:t1/orchestrator/1": calls(("submit_answer", answer))}  # proposes nothing
+    settings = make_settings(
+        model_strong="kako-strong", model_fast="kako-fast", meko_mcp_url=get_settings().meko_mcp_url
+    )
+    with pytest.raises(DemoModeError, match="Session 4, turn s4:t1: nothing to approve"):
+        await replay_session(
+            migrated, settings, demo, session, household_id, backend=ScriptedBackend(script)
+        )

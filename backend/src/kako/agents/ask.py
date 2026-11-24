@@ -30,7 +30,6 @@ from kako.agents.checks import record
 from kako.agents.model_manager import ModelManager
 from kako.agents.orchestrator import answer_turn
 from kako.agents.present import money
-from kako.agents.proposing import HeldChange
 from kako.agents.reconciling import LABELS, render_resolution
 from kako.agents.recorded import ChatBackend
 from kako.agents.replan import Replan, changes_lines, why_lines
@@ -244,7 +243,10 @@ async def run_turn(
     )
     for check in answer.checks:  # each text as shown: passed, or with its numbers flagged
         await checks.write(record(check, check.result, saved.subject_id(check)))
-    proposed, refused = await _keep_proposals(engine, state, session, seed, speaker)
+    # A turn as known at a time in the story proposes at that time (demo mode); else now.
+    proposed, refused = await _keep_proposals(
+        engine, state, session, seed, speaker, known_at or datetime.now(UTC)
+    )
     message_id = meko_error = None
     if meko is not None and conversation is not None:
         meko_turn = trace_turn(
@@ -298,6 +300,7 @@ async def _keep_proposals(
     session: Started,
     seed: str,
     speaker: uuid.UUID | None,
+    at: datetime,
 ) -> tuple[tuple[StoredProposal, ...], tuple[str, ...]]:
     """Each change the household stated, as pending proposals with its words as evidence: a change
     in one transaction (a life event with its facts), checked again by the store. A refused change
@@ -305,8 +308,6 @@ async def _keep_proposals(
     kept: list[StoredProposal] = []
     refused: list[str] = []
     for change in state.proposed:
-        if not isinstance(change, HeldChange):
-            raise TypeError("a turn holds HeldChange proposals")
         try:
             async with engine.begin() as conn:
                 mine = []
@@ -326,7 +327,7 @@ async def _keep_proposals(
                             )
                         ],
                         today=session.on,
-                        created_at=datetime.now(UTC),
+                        created_at=at,
                     )
                     mine.append(StoredProposal(done.proposal_id, held.kind, held.shown))
             kept += mine

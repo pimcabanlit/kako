@@ -442,8 +442,7 @@ def _turn_out(services: Services, asked: AskedTurn) -> TurnOut:
             for p in answer.proposals
         ],
         changes=[
-            ChangeOut(proposal_id=p.proposal_id, kind=p.kind, shown=p.shown)
-            for p in asked.proposed
+            ChangeOut(proposal_id=p.proposal_id, kind=p.kind, shown=p.shown) for p in asked.proposed
         ],
         not_proposed=list(asked.proposal_errors),
         replan=replan,

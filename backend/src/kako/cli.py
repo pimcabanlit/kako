@@ -331,8 +331,15 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
     from kako.db.engine import make_engine
     from kako.demo.files import DemoDataError, read_demo
     from kako.demo.load import DemoLoadError
-    from kako.demo.mode import DemoModeError, check_target, prepare, replay_session
-    from kako.demo.sessions import RECORDED_DIR, DemoSessionError, read_sessions
+    from kako.demo.mode import (
+        DemoModeError,
+        check_target,
+        prepare,
+        replay_session,
+        written,
+        written_by_sessions,
+    )
+    from kako.demo.sessions import RECORDED_DIR, DemoSessionError, check_writes, read_sessions
     from kako.evals.questions import TestSetError, read_test_set
     from kako.evals.runner import run_test_set
     from kako.meko.client import MekoError
@@ -342,6 +349,7 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
         check_target(settings)
         demo = read_demo()
         sessions = read_sessions(people=frozenset(p.key for p in demo.people))
+        check_writes(sessions, demo)
     except (DemoModeError, DemoDataError, DemoSessionError) as exc:
         print(f"Demo mode can't start: {exc}", file=sys.stderr)
         return 1
@@ -350,7 +358,7 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
         return 1
     engine = make_engine(database_url)
     try:
-        prepared = await prepare(engine, settings, demo)
+        prepared = await prepare(engine, settings, demo, skip=written_by_sessions(sessions))
         print(
             f"{demo.household.name}: "
             + ("loaded with its whole story" if prepared.loaded else "already loaded")
@@ -362,13 +370,27 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
             if not session.recording.exists():
                 print(f"{session.title}: no recording yet ({session.recording.name}), skipped.\n")
                 continue
+            if session.writes:
+                found = await written(engine, demo, session, prepared.household_id)
+                if all(found.values()):
+                    print(
+                        f"{session.title}: the changes it approves are in this database already "
+                        "(an earlier run), so it isn't replayed again; use an empty database to "
+                        "replay it.\n"
+                    )
+                    continue
+                if any(found.values()):
+                    raise DemoModeError(
+                        f"{session.title}: this database holds part of what it writes; use an "
+                        "empty database"
+                    )
 
             def show(asked: Any, title: str = session.title) -> None:
                 print(f"== {title}, turn {asked.seed} ==")
                 print(render_answer(asked, settings) + "\n")
 
             replayed = await replay_session(
-                engine, settings, session, prepared.household_id, strict=strict, shown=show
+                engine, settings, demo, session, prepared.household_id, strict=strict, shown=show
             )
             print(_drift(session.title, replayed.calls, replayed.drifted))
             played += 1
