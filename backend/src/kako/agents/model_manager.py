@@ -49,10 +49,10 @@ from kako.agents.chat import (
     ChatReply,
     ChatRequest,
     Message,
+    ModelError,
     Tier,
     ToolCall,
     ToolSpec,
-    estimate_tokens,
 )
 from kako.agents.recorded import ChatBackend, RecordingBackend, ReplayBackend
 from kako.agents.spend import LlmCallRecord, LlmLog, Outcome, cost_usd
@@ -62,18 +62,6 @@ from kako.settings import Settings
 
 COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
 CHECK_PROMPT = "Reply with the single word OK."
-
-
-class ModelError(Exception):
-    """A model call or the sign-in before it failed. `retryable`: the same call may pass if
-    tried again (rate limit, timeout, connection, server error)."""
-
-    def __init__(
-        self, message: str, *, retryable: bool = False, retry_after: float | None = None
-    ) -> None:
-        super().__init__(message)
-        self.retryable = retryable
-        self.retry_after = retry_after
 
 
 class SpendRefused(ModelError):
@@ -339,7 +327,7 @@ class FoundryChat:
                 safe_error(exc), retryable=True, retry_after=_retry_after(exc)
             ) from exc
         except (APITimeoutError, APIConnectionError) as exc:
-            raise ModelError(safe_error(exc), retryable=True) from exc
+            raise ModelError(safe_error(exc), retryable=True, maybe_billed=True) from exc
         except (OpenAIError, ClientAuthenticationError) as exc:
             raise ModelError(safe_error(exc)) from exc
         latency_ms = round((time.perf_counter() - started) * 1000)
@@ -398,6 +386,7 @@ class ModelManager:
         self._log = log
         self._sleep = sleep
         self._now = now
+        self._cost_in_flight = Decimal(0)  # worst cases of this manager's calls still running
 
     @property
     def replays(self) -> bool:
@@ -436,10 +425,12 @@ class ModelManager:
         reply: ChatReply | None = None,
         latency_ms: int = 0,
         prices: tuple[Decimal, Decimal, Decimal] | None = None,
+        charge: tuple[int, Decimal] | None = None,
     ) -> Decimal:
         """Log one attempt; a reply is priced at the tier's prices (a replay too, for the
-        metrics; the daily cap counts real calls only)."""
-        cost = Decimal(0)
+        metrics; the daily cap counts real calls only). `charge` is the worst case (tokens,
+        US$) of a failed attempt that may have been billed, logged as output tokens."""
+        cost = charge[1] if charge is not None else Decimal(0)
         if reply is not None and prices is not None:
             cost = cost_usd(
                 prices,
@@ -454,7 +445,7 @@ class ModelManager:
                 agent=agent,
                 deployment=reply.deployment if reply is not None else deployment,
                 input_tokens=reply.input_tokens if reply else 0,
-                output_tokens=reply.output_tokens if reply else 0,
+                output_tokens=reply.output_tokens if reply else (charge[0] if charge else 0),
                 cached_tokens=reply.cached_tokens if reply else 0,
                 latency_ms=reply.latency_ms if reply else latency_ms,
                 cost_usd=cost,
@@ -465,34 +456,56 @@ class ModelManager:
         )
         return cost
 
-    async def _check_spend(
+    def _worst_cost(self, request: ChatRequest) -> Decimal:
+        """The most a call could cost: its whole input uncached, its whole output cap used."""
+        price_in, _, price_out = self._settings.prices(request.tier)
+        return cost_usd(
+            (price_in, price_in, price_out),
+            request.estimated_input_tokens(),
+            0,
+            request.max_output_tokens,
+        )
+
+    async def _reserve(
         self, request: ChatRequest, turn: TurnContext, agent: CallAgent, deployment: str
-    ) -> None:
-        """Refuse, and log the refusal, when the call could pass the turn's budget or the cap."""
-        worst_tokens = estimate_tokens(request.text_length()) + request.max_output_tokens
+    ) -> tuple[int, Decimal]:
+        """Check the call against the turn's budget and the day's cap, and reserve its worst
+        case on both before sending, so calls running in parallel can't each pass a check that
+        only one of them fits. Returns what was reserved; `_release` gives it back. A refusal
+        is logged and raises `SpendRefused`."""
+        worst_tokens = request.estimated_input_tokens() + request.max_output_tokens
         if worst_tokens > turn.tokens_left():
             await self._record(turn, agent, deployment, "budget_exceeded")
             raise SpendRefused(
                 f"the turn's token budget ({turn.token_budget:,}) has {turn.tokens_left():,} "
                 f"tokens left; this call could use {worst_tokens:,} (KAKO_TURN_TOKEN_BUDGET)"
             )
+        turn.tokens_reserved += worst_tokens  # before any await: no other call slips in
         if self.replays:
-            return  # a replay spends nothing
-        price_in, _, price_out = self._settings.prices(request.tier)
-        worst_cost = cost_usd(
-            (price_in, price_in, price_out),
-            estimate_tokens(request.text_length()),
-            0,
-            request.max_output_tokens,
-        )
-        spent = await self._log.spent_since(utc_day_start(self._now()))
+            return worst_tokens, Decimal(0)  # a replay spends nothing
+        worst_cost = self._worst_cost(request)
+        try:
+            spent = await self._log.spent_since(utc_day_start(self._now()))
+        except BaseException:
+            turn.tokens_reserved -= worst_tokens
+            raise
+        # From here to the reservation there is no await: the check and the reservation are one
+        # step for every call in this process.
         cap = self._settings.daily_spend_cap_usd
-        if spent + worst_cost > cap:
+        if spent + self._cost_in_flight + worst_cost > cap:
+            turn.tokens_reserved -= worst_tokens
             await self._record(turn, agent, deployment, "budget_exceeded")
             raise SpendRefused(
-                f"today's model spend is US${spent:.4f} of the US${cap} cap, and this call could "
+                f"today's model spend is US${spent:.4f} of the US${cap} cap, with "
+                f"US${self._cost_in_flight:.4f} in calls still running, and this call could "
                 f"cost up to US${worst_cost:.4f} (KAKO_DAILY_SPEND_CAP_USD)"
             )
+        self._cost_in_flight += worst_cost
+        return worst_tokens, worst_cost
+
+    def _release(self, turn: TurnContext, tokens: int, cost: Decimal) -> None:
+        turn.tokens_reserved -= tokens
+        self._cost_in_flight -= cost
 
     async def chat(
         self, request: ChatRequest, *, turn: TurnContext, agent: CallAgent, key: str
@@ -504,23 +517,38 @@ class ModelManager:
         prices = self._settings.prices(request.tier)
         attempts = 1 + self._settings.model_max_retries
         for attempt in range(1, attempts + 1):
-            await self._check_spend(request, turn, agent, deployment)
+            tokens, cost = await self._reserve(request, turn, agent, deployment)
             started = time.perf_counter()
             try:
                 reply = await self._backend.chat(request, deployment=deployment, key=key)
             except ModelError as exc:
-                await self._record(
-                    turn,
-                    agent,
-                    deployment,
-                    "error",
-                    latency_ms=round((time.perf_counter() - started) * 1000),
-                )
+                billed = exc.maybe_billed and not self.replays
+                # A request that may have reached the model is charged at its worst case. The
+                # row is written before the reservation is released, so the cap always sees one.
+                try:
+                    await self._record(
+                        turn,
+                        agent,
+                        deployment,
+                        "error",
+                        latency_ms=round((time.perf_counter() - started) * 1000),
+                        charge=(tokens, self._worst_cost(request)) if billed else None,
+                    )
+                finally:
+                    self._release(turn, tokens, cost)
+                if billed:
+                    turn.tokens_used += tokens
                 if not exc.retryable or attempt == attempts:
                     raise
                 await self._sleep(min(exc.retry_after or 2.0 ** (attempt - 1), 20.0))
                 continue
-            await self._record(turn, agent, deployment, "ok", reply, prices=prices)
-            turn.tokens_used += reply.total_tokens
+            except BaseException:
+                self._release(turn, tokens, cost)
+                raise
+            try:
+                await self._record(turn, agent, deployment, "ok", reply, prices=prices)
+            finally:
+                self._release(turn, tokens, cost)
+                turn.tokens_used += reply.total_tokens
             return reply
         raise AssertionError("unreachable: the loop returns or raises")  # pragma: no cover

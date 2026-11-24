@@ -62,6 +62,7 @@ class TurnContext:
     steps: StepLog = field(default_factory=MemoryStepLog)
     session_id: uuid.UUID | None = None
     tokens_used: int = 0
+    tokens_reserved: int = 0  # worst cases of calls in flight: parallel calls can't overspend
     _seq: int = 0
 
     def next_seq(self) -> int:
@@ -70,4 +71,4 @@ class TurnContext:
         return self._seq
 
     def tokens_left(self) -> int:
-        return max(self.token_budget - self.tokens_used, 0)
+        return max(self.token_budget - self.tokens_used - self.tokens_reserved, 0)

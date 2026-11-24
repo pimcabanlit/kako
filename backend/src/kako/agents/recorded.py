@@ -19,18 +19,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
-from kako.agents.chat import ChatReply, ChatRequest, reply_from_json, reply_to_json
+from kako.agents.chat import ChatReply, ChatRequest, ModelError, reply_from_json, reply_to_json
 
 FORMAT: Final = 1
 
 
-class RecordingError(Exception):
-    """A recording that is missing, malformed, or doesn't hold the call asked for."""
+class RecordingError(ModelError):
+    """A recording that is missing, malformed, or doesn't hold the call asked for. A model error
+    that can't pass on a retry, so a replay that fails is logged like any failed call."""
 
 
 class ChatBackend(Protocol):
     """Sends one request to one deployment. `key` names the call for recordings; a live backend
-    ignores it. Raises `ModelError` (kako.agents.model_manager) when the call fails."""
+    ignores it. Raises `ModelError` when the call fails."""
 
     async def chat(self, request: ChatRequest, *, deployment: str, key: str) -> ChatReply: ...
 

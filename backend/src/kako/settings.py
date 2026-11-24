@@ -97,13 +97,13 @@ class Settings(BaseSettings):
     reasoning_effort_fast: ReasoningEffort | None = "low"
     # Per-token prices in US$ per million tokens, per tier, for `llm_call.cost_usd`. Defaults are
     # OpenAI's list prices for gpt-5.4 and gpt-5-mini (Nov 2026); check Azure's pricing page for
-    # the deployment type in use (docs/azure-setup.md).
-    price_strong_input: Decimal = Field(default=Decimal("2.50"), ge=0)
-    price_strong_cached: Decimal = Field(default=Decimal("0.25"), ge=0)
-    price_strong_output: Decimal = Field(default=Decimal("15.00"), ge=0)
-    price_fast_input: Decimal = Field(default=Decimal("0.25"), ge=0)
-    price_fast_cached: Decimal = Field(default=Decimal("0.025"), ge=0)
-    price_fast_output: Decimal = Field(default=Decimal("2.00"), ge=0)
+    # the deployment type in use (docs/azure-setup.md). Never 0: a free price turns the cap off.
+    price_strong_input: Decimal = Field(default=Decimal("2.50"), gt=0)
+    price_strong_cached: Decimal = Field(default=Decimal("0.25"), gt=0)
+    price_strong_output: Decimal = Field(default=Decimal("15.00"), gt=0)
+    price_fast_input: Decimal = Field(default=Decimal("0.25"), gt=0)
+    price_fast_cached: Decimal = Field(default=Decimal("0.025"), gt=0)
+    price_fast_output: Decimal = Field(default=Decimal("2.00"), gt=0)
 
     @field_validator("meko_mcp_url")
     @classmethod

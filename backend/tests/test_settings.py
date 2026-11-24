@@ -114,6 +114,7 @@ def test_spend_controls_have_safe_defaults(make_settings: MakeSettings) -> None:
         {"model_max_retries": 4},
         {"model_mode": "free"},
         {"price_fast_output": "-0.1"},
+        {"price_strong_output": "0"},
         {"reasoning_effort_fast": "max"},
     ],
 )

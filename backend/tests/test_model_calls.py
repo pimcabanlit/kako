@@ -3,15 +3,16 @@ and the daily spend cap. A scripted backend stands in for Foundry: no network.""
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
-from kako.agents.chat import ChatRequest, Message
+from kako.agents.chat import ChatReply, ChatRequest, Message
 from kako.agents.model_manager import ModelError, ModelManager, SpendRefused, chat_backend
-from kako.agents.recorded import RecordingError, ReplayBackend, write_recording
+from kako.agents.recorded import ChatBackend, RecordingError, ReplayBackend, write_recording
 from kako.agents.spend import LlmCallRecord, MemoryLlmLog, cost_usd
 from kako.settings import Settings
 from tests.conftest import MakeSettings
@@ -30,7 +31,7 @@ def settings(make_settings: MakeSettings) -> Settings:
 
 
 def manager(
-    settings: Settings, backend: ScriptedBackend, log: MemoryLlmLog | None = None
+    settings: Settings, backend: ChatBackend, log: MemoryLlmLog | None = None
 ) -> tuple[ModelManager, MemoryLlmLog, list[float]]:
     log = log or MemoryLlmLog()
     slept: list[float] = []
@@ -204,3 +205,89 @@ def test_the_mode_picks_the_backend(make_settings: MakeSettings, tmp_path: Path)
         make_settings(model_mode="replay", recorded_responses=tmp_path / "r.json")
     )
     assert isinstance(replay, ReplayBackend)
+
+
+class HeldBackend:
+    """A live backend whose calls wait until the test lets them finish: calls in flight."""
+
+    def __init__(self) -> None:
+        self.release = asyncio.Event()
+        self.started = 0
+
+    @property
+    def replays(self) -> bool:
+        return False
+
+    async def chat(self, request: ChatRequest, *, deployment: str, key: str) -> ChatReply:
+        self.started += 1
+        await self.release.wait()
+        return says("ok", tokens=(10, 10))
+
+
+async def test_parallel_calls_cannot_share_the_last_of_the_turn_budget(
+    make_settings: MakeSettings,
+) -> None:
+    settings = make_settings(model_fast="kako-fast", turn_token_budget=1_000)
+    backend = HeldBackend()
+    models, log, _ = manager(settings, backend)
+    turn = models.turn("t")
+    first = asyncio.create_task(models.chat(ask(), turn=turn, agent="debt", key="a"))
+    await asyncio.sleep(0)
+    assert backend.started == 1
+    assert turn.tokens_reserved > 500  # the first call's worst case is held
+    with pytest.raises(SpendRefused, match="KAKO_TURN_TOKEN_BUDGET"):
+        await models.chat(ask(), turn=turn, agent="savings", key="b")
+    backend.release.set()
+    await first
+    assert (turn.tokens_reserved, turn.tokens_used) == (0, 20)
+    assert [r.outcome for r in log.records] == ["budget_exceeded", "ok"]
+
+
+async def test_parallel_calls_cannot_share_the_last_of_the_daily_cap(
+    make_settings: MakeSettings,
+) -> None:
+    # Each call's worst case is about US$0.0075 (500 output tokens at US$15 a million).
+    settings = make_settings(model_strong="kako-strong", daily_spend_cap_usd="0.01")
+    backend = HeldBackend()
+    models, log, _ = manager(settings, backend)
+    first = asyncio.create_task(
+        models.chat(ask("strong"), turn=models.turn("t1"), agent="orchestrator", key="a")
+    )
+    await asyncio.sleep(0)
+    with pytest.raises(SpendRefused, match="still running"):
+        await models.chat(ask("strong"), turn=models.turn("t2"), agent="orchestrator", key="b")
+    backend.release.set()
+    await first
+    assert [r.outcome for r in log.records] == ["budget_exceeded", "ok"]
+
+
+async def test_a_timeout_is_charged_at_its_worst_case(settings: Settings) -> None:
+    timeout = ModelError("APITimeoutError", retryable=True, maybe_billed=True)
+    backend = ScriptedBackend({"k": [timeout, says("ok", tokens=(100, 20))]})
+    models, log, _ = manager(settings, backend)
+    turn = models.turn("t")
+    await models.chat(ask(), turn=turn, agent="debt", key="k")
+    charged, ok = log.records
+    assert charged.outcome == "error"
+    request = ask()
+    worst = request.estimated_input_tokens() + request.max_output_tokens
+    assert charged.output_tokens == worst
+    # Its whole input and output at gpt-5-mini's prices, as if nothing were cached.
+    assert charged.cost_usd == cost_usd(
+        (Decimal("0.25"), Decimal("0.25"), Decimal("2.00")),
+        request.estimated_input_tokens(),
+        0,
+        500,
+    )
+    assert turn.tokens_used == worst + 120
+    assert ok.outcome == "ok"
+
+
+async def test_a_failed_replay_is_logged(make_settings: MakeSettings, tmp_path: Path) -> None:
+    write_recording(tmp_path / "r.json", {})
+    models, log, _ = manager(make_settings(), ReplayBackend(tmp_path / "r.json"))
+    with pytest.raises(RecordingError, match="no recorded call"):
+        await models.chat(ask(), turn=models.turn("t"), agent="debt", key="missing")
+    assert [(r.outcome, r.recorded_replay, r.cost_usd) for r in log.records] == [
+        ("error", True, Decimal(0))
+    ]

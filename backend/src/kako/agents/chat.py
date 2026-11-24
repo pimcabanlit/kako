@@ -22,6 +22,26 @@ ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
 TIERS: Final = ("strong", "fast")
 
 
+class ModelError(Exception):
+    """A model call or the sign-in before it failed. `retryable`: the same call may pass if
+    tried again (rate limit, timeout, connection, server error). `maybe_billed`: the request may
+    have reached the model before it failed (a timeout or a lost connection), so it is charged at
+    its worst case."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool = False,
+        retry_after: float | None = None,
+        maybe_billed: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+        self.retry_after = retry_after
+        self.maybe_billed = maybe_billed
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     """A function the model may call. `parameters` is a JSON schema; with `strict`, every
@@ -64,13 +84,16 @@ class ChatRequest:
         if not self.messages:
             raise ValueError("a request needs at least one message")
 
-    def text_length(self) -> int:
-        """Characters the model reads: every message and tool definition."""
+    def estimated_input_tokens(self) -> int:
+        """A high estimate of the input tokens: every message and tool definition, in UTF-8
+        bytes (so non-Latin text and emoji count more), plus a fixed overhead for each."""
         size = sum(
-            len(m.content or "") + sum(len(c.arguments) for c in m.tool_calls)
+            _bytes(m.content or "") + sum(_bytes(c.name + c.arguments) for c in m.tool_calls)
             for m in self.messages
         )
-        return size + sum(len(json.dumps(t.parameters)) + len(t.description) for t in self.tools)
+        size += sum(_bytes(t.name + t.description + json.dumps(t.parameters)) for t in self.tools)
+        overhead = MESSAGE_OVERHEAD * len(self.messages) + TOOL_OVERHEAD * len(self.tools)
+        return estimate_tokens(size) + overhead
 
     def digest(self) -> str:
         """SHA-256 of the request in a canonical form: the same request, the same digest."""
@@ -157,7 +180,20 @@ def reply_from_json(raw: dict[str, Any]) -> ChatReply:
     )
 
 
-def estimate_tokens(characters: int) -> int:
-    """A deliberately high token estimate for text of this length, with no tokenizer download:
-    one token per 3 characters (English and pesos run nearer 4). Budgets check against it."""
-    return -(-characters // 3)
+MESSAGE_OVERHEAD: Final = 8  # tokens a message's role and framing take
+TOOL_OVERHEAD: Final = 16  # and a tool definition's
+
+
+def _bytes(text: str) -> int:
+    return len(text.encode("utf-8"))
+
+
+def estimate_tokens(size: int) -> int:
+    """A deliberately high token estimate for `size` bytes of UTF-8 text, with no tokenizer
+    download: one token per 3 bytes (English runs nearer 4 characters a token). Budgets check
+    against it."""
+    return -(-size // 3)
+
+
+def estimate_text_tokens(text: str) -> int:
+    return estimate_tokens(_bytes(text))
