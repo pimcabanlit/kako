@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -395,16 +395,32 @@ ALLOCATIONS: Final = {
 }
 
 
+def in_order(state: TurnState, figures: Iterable[Figure]) -> list[Figure]:
+    """Figures in the order an agent reads them, the same on every machine: by key, then debts in
+    their payoff order (`debt.strategy_order`), then by ref. Never by database id: the engine sorts
+    its figures by entity id, which differs between databases, and a tool result in a different
+    order is a different request, so a recorded turn would not replay on another machine."""
+    rank = {
+        f.entity_id: f.value
+        for f in state.run.figures
+        if f.key == "debt.strategy_order" and isinstance(f.value, int)
+    }
+    return sorted(figures, key=lambda f: (f.key, rank.get(f.entity_id, 0), state.refs.figure(f)))
+
+
 def _changed(state: TurnState, run: Run) -> list[Figure]:
     """The what-if's figures that differ from the turn's run, and the unallocated surplus."""
     base = {f.ref: f for f in state.run.figures}
-    return [
-        f
-        for f in run.figures
-        if f.key == "plan.unallocated"
-        or base.get(f.ref) is None
-        or (base[f.ref].value, base[f.ref].flag) != (f.value, f.flag)
-    ]
+    return in_order(
+        state,
+        (
+            f
+            for f in run.figures
+            if f.key == "plan.unallocated"
+            or base.get(f.ref) is None
+            or (base[f.ref].value, base[f.ref].flag) != (f.value, f.flag)
+        ),
+    )
 
 
 def read_tools(state: TurnState, path: str = ORCHESTRATOR) -> list[Tool]:
@@ -415,7 +431,7 @@ def read_tools(state: TurnState, path: str = ORCHESTRATOR) -> list[Tool]:
         figures = (
             [state.figure(r, path) for r in refs]
             if refs
-            else [(f, None) for f in state.run.figures]
+            else [(f, None) for f in in_order(state, state.run.figures)]
         )
         lines = []
         for figure, what_if in figures:
@@ -489,7 +505,7 @@ def what_if_tool(state: TurnState, path: str = ORCHESTRATOR) -> Tool:
         named_ids = {a.entity_id for a in allocations}
         payoffs = [
             f
-            for f in result.run.figures
+            for f in in_order(state, result.run.figures)
             if f.key == "debt.payoff_months" and f.entity_id in named_ids
         ]
         summary = f"{result.ref}: " + ", ".join(
