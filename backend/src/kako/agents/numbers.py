@@ -18,7 +18,8 @@ Written at a lower precision a value is rounded half up to it ("2.1 months", "â‚
 Never a match: a number run into letters (`W1`), a number with a multiplier (`150k`, `â‚±2M`,
 "12 thousand"), or one written with more than 6 decimals. Agents write numbers as the tools show
 them. A specialist's summary, which the orchestrator reads, may name the turn's own refs exactly
-(`debt1-W1`, `figure:debt1-W1:<ref>`, `fact:<ref>`); the reply, the options and the reason may not.
+(`debt1-W1`, `figure:debt1-W1:<ref>`, `fact:<ref>`, and the brief's `D1`, `P1`, `M1`, `K1`); the
+reply, the options and the reason may not.
 Other spelled-out numbers ("two options") aren't checked.
 
 The texts: the reply, each option's label and summary, the resolution's reason and each
@@ -188,6 +189,16 @@ def pool_of(state: TurnState) -> Pool:
         _add_said(pool, words[:MESSAGE_CHARS])
     pool.dates.setdefault(state.snapshot.on, "date:today")
     pool.refs |= set(state.what_ifs)
+    # The brief's own refs (D1, P1, M1, K1), which a specialist's summary may name too.
+    brief = state.brief
+    named: tuple[tuple[str, Iterable[str]], ...] = (
+        ("decision", brief.decisions),
+        ("proposal", brief.proposals),
+        ("memory", brief.memories),
+        ("doc", brief.knowledge),
+    )
+    for prefix, short_refs in named:
+        pool.refs |= {r for ref in short_refs for r in (ref, f"{prefix}:{ref}")}
     return pool
 
 

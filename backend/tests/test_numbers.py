@@ -3,6 +3,7 @@ number matches, and what fails. No model: the texts are written here."""
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import replace
 
 import pytest
@@ -239,3 +240,24 @@ def test_the_households_earlier_words_in_the_session_match(house: Villanueva) ->
         s.inputs, earlier=(EarlierTurn("Jun", "Jun", "It lasts ₱123,456.00 longer."),)
     )
     assert _matches(s, "₱123,456.00")[0][2] is None
+
+
+def test_a_summary_may_name_the_briefs_decisions(state: TurnState) -> None:
+    """Session 4's recording (Nov 25): the budget specialist wrote "Decisions D1, D2 and D3 need
+    revisiting", refs the brief gave it, and was flagged. The brief's own refs pass in a
+    specialist's summary, never in the household's texts."""
+    brief = state.brief
+    state.brief = replace(brief, decisions={"D1": uuid.uuid4()}, memories={"M1": "mem-1"})
+    try:
+        text = "D1 needs revisiting (decision:D1, memory:M1); D7 isn't in the brief."
+        [check] = check_texts(state, [("recommendation", "the summary", text)], refs_allowed=True)
+        assert [(n.text, n.match) for n in check.numbers] == [
+            ("D1", "ref"),
+            ("decision:D1", "ref"),
+            ("memory:M1", "ref"),
+            ("D7", None),
+        ]
+        [household] = check_texts(state, [("reply", "the reply", text)])
+        assert all(n.match is None for n in household.numbers)
+    finally:
+        state.brief = brief
