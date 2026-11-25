@@ -522,14 +522,17 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   rejected inline by an adult), `working.tsx` ("Show the working": the agents' steps, live while a
   turn runs), `plan-view.tsx` (the plan screen: what changed, each option's why down to the facts,
   the number check, the turn's Meko calls; docs/architecture.md, "The plan screen"),
-  `timeline-view.tsx` (what happened and each thing over time), `decisions-view.tsx` (each decision,
+  `timeline-view.tsx` (what happened as a list and each thing as cards, details in a sheet),
+  `page-header.tsx` (a screen's title and its view chips), `detail-sheet.tsx` (an item's details in
+  a modal sheet), `decisions-view.tsx` (each decision,
   its options and what to revisit; docs/architecture.md, "The timeline and decisions screens"),
   `metrics-view.tsx` (what Kako measured; docs/architecture.md, "The metrics screen") and
   `health-panel.tsx`. `src/lib/`: `api.ts` (every call, and `ApiError`), `types.ts`
   (the API's shapes, kept in step with `api/sessions.py`, `api/proposals.py`, `api/household.py`,
   `api/plans.py`, `api/history.py` and `api/metrics.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
   that ran them), `plan.ts` (a plan's status, the facts behind its figures, the number check's
-  tally), `history.ts` (events by day, a value's state and window, a decision's standing),
+  tally), `history.ts` (events by month and the line under each, a thing's card, a value's state and window,
+  a decision's standing),
   `metrics.ts` (the metrics screen's words and formats), `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.

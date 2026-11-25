@@ -316,6 +316,40 @@ body {
     color: var(--muted);
   }
 
+  /* A details sheet (a native <dialog>, opened modal): from the right on a wide screen, from the
+     bottom on a phone. */
+  .sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: 88dvh;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 22px 22px 0 0;
+    background: var(--surface);
+    color: var(--fg);
+    box-shadow: var(--shadow);
+  }
+  .sheet::backdrop {
+    background: rgba(4, 8, 6, 0.55);
+    backdrop-filter: blur(2px);
+  }
+  @media (min-width: 768px) {
+    .sheet {
+      inset: 0 0 0 auto;
+      width: min(520px, 100vw);
+      height: 100dvh;
+      max-height: none;
+      border-bottom: 1px solid var(--line);
+      border-right: 0;
+      border-radius: 22px 0 0 22px;
+    }
+  }
+
   .skeleton {
     border-radius: 10px;
     background: linear-gradient(90deg, var(--raised), var(--line), var(--raised));
@@ -349,6 +383,26 @@ body {
   }
   .pulse-dot {
     animation: pulse 1.2s ease-in-out infinite;
+  }
+  .sheet[open] {
+    animation: sheet-up 0.22s ease-out;
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+  @keyframes sheet-in {
+    from {
+      transform: translateX(32px);
+      opacity: 0;
+    }
+  }
+  @media (min-width: 768px) {
+    .sheet[open] {
+      animation-name: sheet-in;
+    }
   }
   @keyframes pulse {
     50% {

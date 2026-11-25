@@ -2,7 +2,7 @@
 // history.test.ts.
 
 import { formatDay } from "./text.ts";
-import type { Decision, TimelineEvent, ValueAt } from "./types.ts";
+import type { Decision, Thing, TimelineEvent, ValueAt } from "./types.ts";
 import type { Tone } from "./words.ts";
 
 /** A value's state on the household's date, in words and its colour: what holds now is
@@ -22,20 +22,139 @@ export function windowWords(value: Pick<ValueAt, "valid_from" | "valid_to">): st
   return `${formatDay(value.valid_from)} until ${formatDay(value.valid_to)}`;
 }
 
-export type Day = { on: string; events: TimelineEvent[] };
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
-/** The events by day, in the order given (newest first), with what is ahead of the household's
- * date apart from what has happened. */
-export function byDay(events: readonly TimelineEvent[]): { ahead: Day[]; past: Day[] } {
-  const ahead: Day[] = [];
-  const past: Day[] = [];
+/** "December 2026" from "2026-12-01". */
+export function monthWords(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})/.exec(isoDate);
+  const month = match ? MONTHS[Number(match[2]) - 1] : undefined;
+  return match && month ? `${month} ${match[1]}` : isoDate;
+}
+
+export type Month = { key: string; label: string; events: TimelineEvent[] };
+
+/** The events by month, in the order given (newest first). */
+export function byMonth(events: readonly TimelineEvent[]): Month[] {
+  const months: Month[] = [];
   for (const event of events) {
-    const days = event.ahead ? ahead : past;
-    const last = days.at(-1);
-    if (last && last.on === event.on) last.events.push(event);
-    else days.push({ on: event.on, events: [event] });
+    const key = event.on.slice(0, 7);
+    const last = months.at(-1);
+    if (last && last.key === key) last.events.push(event);
+    else months.push({ key, label: monthWords(event.on), events: [event] });
   }
-  return { ahead, past };
+  return months;
+}
+
+const EVENT_KIND: Record<string, string> = {
+  start: "Starting figures",
+  life_event: "Life event",
+  correction: "Correction",
+  decision: "Decision",
+  change: "Facts",
+  plan: "Plan",
+  session: "Session",
+};
+
+/** The short line under an event's headline: when, what kind, and who said yes to it.
+ * "Dec 1, 2026 · New job · Approved by Mara". */
+export function eventLine(
+  event: Pick<TimelineEvent, "kind" | "on" | "detail" | "changes" | "by">,
+): string[] {
+  const parts = [formatDay(event.on)];
+  if (event.kind === "life_event") parts.push(event.detail ?? EVENT_KIND.life_event);
+  else if (event.kind === "change")
+    parts.push(event.changes.length === 1 ? "1 figure" : `${event.changes.length} figures`);
+  else if ((event.kind === "plan" || event.kind === "session") && event.detail)
+    parts.push(`${EVENT_KIND[event.kind]}, ${event.detail.toLowerCase()}`);
+  else parts.push(EVENT_KIND[event.kind] ?? event.kind);
+  if (event.by) parts.push(`${event.kind === "decision" ? "Decided" : "Approved"} by ${event.by}`);
+  return parts;
+}
+
+const THING_GROUP: Record<string, string> = {
+  household: "The household",
+  income: "Income",
+  expense: "Spending",
+  debt: "Debts",
+  account: "Savings",
+  goal: "Goals",
+};
+
+export type ThingGroup = { kind: string; label: string; things: Thing[] };
+
+/** The things by kind, in the order given. */
+export function byKind(things: readonly Thing[]): ThingGroup[] {
+  const groups: ThingGroup[] = [];
+  for (const thing of things) {
+    const last = groups.at(-1);
+    if (last && last.kind === thing.kind) last.things.push(thing);
+    else {
+      const label = THING_GROUP[thing.kind] ?? thing.kind;
+      groups.push({ kind: thing.kind, label, things: [thing] });
+    }
+  }
+  return groups;
+}
+
+export type ThingCard = {
+  value: string | null; // what it holds now: its first value ("₱68,000.00")
+  words: string; // what that value is ("take-home pay a month"), or that none is kept
+  meta: string; // when it last changed, or since when it has held
+  coming: string | null; // the day a coming value starts
+  corrected: boolean; // a value of it was corrected
+};
+
+/** What a thing holds now for one attribute: its current value, else the one coming, else the
+ * newest. */
+function shownValue(values: readonly ValueAt[]): ValueAt | undefined {
+  return (
+    values.find((v) => v.state === "current") ??
+    values.find((v) => v.state === "coming") ??
+    values[0]
+  );
+}
+
+/** A thing's card: its headline value now (its first attribute: a salary's pay, a debt's
+ * balance), when it last changed, and what is coming. The rest waits for its details. */
+export function thingCard(thing: Pick<Thing, "attributes">): ThingCard {
+  const first = thing.attributes[0];
+  const shown = first ? shownValue(first.values) : undefined;
+  const values = thing.attributes.flatMap((a) => a.values);
+  const coming = values
+    .filter((v) => v.state === "coming")
+    .map((v) => v.valid_from)
+    .sort()[0];
+  // A change: a value that took another's place and holds now or held since.
+  const changed = thing.attributes
+    .flatMap((a) =>
+      a.values.filter(
+        (v, i) => i < a.values.length - 1 && v.state !== "coming" && v.state !== "corrected",
+      ),
+    )
+    .map((v) => v.valid_from)
+    .sort()
+    .at(-1);
+  const since = values.map((v) => v.valid_from).sort()[0];
+  return {
+    value: shown?.value ?? null,
+    words: first && shown ? first.words : "No values kept for it",
+    meta: changed ? `Changed ${formatDay(changed)}` : since ? `Since ${formatDay(since)}` : "",
+    coming: coming ?? null,
+    corrected: values.some((v) => v.state === "corrected"),
+  };
 }
 
 /** Where an event opens: a plan, a session, or the decision on the decisions screen. */

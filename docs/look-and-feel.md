@@ -118,6 +118,10 @@ Sizes used in the preview: body 15px / line-height 1.55; chat bubble 14.5px; pan
 
 - Layout: like ChatGPT, Claude and Gemini (Pim, Nov 25): the sessions down the left, the conversation in the
   middle, the composer at the bottom. See [architecture.md](architecture.md#the-session-screen).
+- Screens (Pim, Nov 25): a screen's title large at the top left (Unbounded 500, 28px on a phone,
+  34px wide), with its views as chips under it; lists and cards first, one line or one card per
+  item, and an item's details in a sheet (from the right, or from the bottom on a phone). Built on
+  the timeline first (`PageHeader`, `ViewChips`, `DetailSheet`).
 - The swirl art (Pim's title card, `web/public/swirl.jpg`, 1400 x 724) sits on the empty new-session screen.
 - The fonts load with `next/font/google` and the `latin-ext` subset as well as `latin`: the peso sign (U+20B1) is
   only in `latin-ext`.
