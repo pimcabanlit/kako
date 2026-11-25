@@ -1,4 +1,4 @@
-# Lint, type check and tests for the backend, and lint, type check and build for the web app,
+# Lint, type check and tests for the backend, and lint, type check, tests and build for the web app,
 # on every pull request and on pushes to main.
 #
 # The integration tests run against a Postgres service and against local Meko, installed from
@@ -113,4 +113,5 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build
