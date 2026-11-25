@@ -141,6 +141,7 @@ class Settings(BaseSettings):
         "meko_datapack_id",
         "meko_langfuse_project_id",
         "recorded_responses",
+        "documents_dir",
         "reasoning_effort_strong",
         "reasoning_effort_fast",
         mode="before",

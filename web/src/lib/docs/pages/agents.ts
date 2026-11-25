@@ -7,7 +7,7 @@ import type { DocPage } from "../types.ts";
 export const AGENTS: DocPage = {
   slug: "agents",
   title: "The agents",
-  lead: "An orchestrator answers each turn by asking four specialists. They explain and propose; the engine calculates; the household decides.",
+  lead: "An orchestrator answers any money question, and asks four specialists when the household needs a plan. They explain and propose; the engine calculates; the household decides.",
   sections: [
     {
       id: "who",
@@ -19,8 +19,8 @@ export const AGENTS: DocPage = {
           rows: [
             [
               "Orchestrator",
-              "Reads the brief, asks the specialists it needs, settles conflicts, writes the answer, proposes facts and life events the household stated",
-              "The four specialists, read tools, `run_what_if`, `propose_change`, `propose_decision`",
+              "Reads the brief, picks the kind of answer, answers it (asking the specialists only for a plan), settles conflicts, proposes facts and life events the household stated",
+              "The four specialists, read tools, `get_history`, `get_figures_on`, `read_document`, `calculate`, `run_what_if` (with changes and new items), `propose_change`",
               "Proposals only",
             ],
             ["Budget", "Spending against income; where the surplus comes from", "Read tools, `run_what_if`", "Nothing"],
@@ -56,6 +56,34 @@ export const AGENTS: DocPage = {
         {
           kind: "p",
           text: "The brief's session state, kept by code, holds the thread of a long conversation: who wrote this message (so \"I\" and \"my\" have an owner and Kako never asks \"whose?\"), who else wrote, what the conversation is about, the question Kako last asked (so a short reply answers it), the options on the table with the moves behind each (so \"go with B\" can run B again), and the changes filed for a yes. The specialists get this state and a question that stands on its own, never the transcript. Once a session ends, a recap written by code is kept in Meko, so a later session can find it.",
+        },
+      ],
+    },
+    {
+      id: "any-question",
+      title: "Any question",
+      blocks: [
+        {
+          kind: "p",
+          text: "A household asks more than where the money should go. Kako answers any money question on one rule: **reading, explaining, working out and trying change nothing; only news an adult approves writes data; every answer shows what it rests on.** It never answers with a flat \"can't\": it declines only real limits (a tax amount, picking an investment product, live prices), says why, and gives what it can.",
+        },
+        {
+          kind: "table",
+          head: ["Asked like", "Kind", "How Kako answers"],
+          rows: [
+            ["\"What's an emergency fund?\"", "General information", "In plain words, citing Kako's guidance documents"],
+            ["\"Why is our surplus lower than in October?\"", "Explain", "Today's figures beside another date's, or each value over time"],
+            ["\"How much interest did we pay last month?\"", "Look up", "The household's statements and records (`read_document`, `get_history`)"],
+            ["\"How much is ₱6,000 a month over a year?\"", "Compute", "`calculate`: the formula worked out in code, with its working shown"],
+            ["\"What if my salary goes up by ₱20,000?\"", "Simulate", "`run_what_if` with the fact changed for the run: before and after, nothing saved"],
+            ["\"Should we get a cashback card?\"", "Advise", "Pros and cons against their own figures; never a product"],
+            ["\"How hard should we pay down the card?\"", "Plan", "The specialists, then 2 to 4 options"],
+            ["\"Mara got a new job at ₱72,000.\"", "Record", "`propose_change`, held for an adult's yes"],
+          ],
+        },
+        {
+          kind: "p",
+          text: "Under each answer, code shows its labels (**General information**, **Scenario, nothing saved**, **Calculated**, **From your documents**), a card for any what-if with what it changed, what Kako assumed and the figures before and after, a card for any sum with its formula and inputs, and the sources it rests on. A value the household never wrote is refused, or used as Kako's assumption and shown as one.",
         },
       ],
     },

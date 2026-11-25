@@ -1,4 +1,4 @@
-# Kako data model v0.19
+# Kako data model v0.21
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -60,7 +60,12 @@ message was built from (`llm_call.prompts`, migration 0008), and each Meko turn 
 agents were given (the brief as sent, which earlier turns went word for word, as one line or were
 left out, the brief's Meko search) and the orchestrator's two notes for the next turn, `topic` and
 `asks`; `meko_link.kako_table` gains `session`, for the recap of an ended session Meko upkeep keeps
-as one of Kako's own memories (migration 0009).
+as one of Kako's own memories (migration 0009). v0.21 (Nov 25) is answering any question (Phase 5a,
+item 10): a turn's what-if may change any fact for its run or add new items, kept as `scenario` and
+`scenario_override` rows like its allocations (never facts; a new item has no entity, so it is named in
+the scenario's name and its own figures are left out of the stored run); and what the number check
+(V-10) also matches: a calculation, another date's figures, history lines and a cited document. No
+schema change.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -479,13 +484,15 @@ A what-if: the snapshot plus hypothetical facts (`scenario_override`) that are n
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `household_id` | UUID FK | |
-| `name` | TEXT | "If Jun takes the Cebu job"; a turn's what-if is named by its ref and allocations ("debt1-W1: debt:credit-card ₱9,050.00 a month"), kept with the turn (never by an agent's tool), and then the `agent_step` rows that ran it name its run |
+| `name` | TEXT | "If Jun takes the Cebu job"; a turn's what-if is named by its ref, its allocations, the facts it changes and its new items ("debt1-W1: debt:credit-card ₱9,050.00 a month", "orch-W1: Jun's salary: income.monthly_net ₱48,000.00 → ₱68,000.00; new debt Second car loan"), kept with the turn (never by an agent's tool), and then the `agent_step` rows that ran it name its run |
 | `base_as_of` | DATE | |
 | `amp_branch_id` | TEXT, null | Set when the scenario is kept as an AMP branch (a Should, see the build plan) |
 
 ### `scenario_override`
 
-One hypothetical value, in the same shape as a fact, with the same checks on its value columns.
+One hypothetical value, in the same shape as a fact, with the same checks on its value columns: a
+what-if's `plan.allocation`, or a fact it changes for its run ("what if my salary goes up by
+₱20,000?"), starting on the turn's date. A new item's values are not overrides (it has no entity).
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -927,7 +934,7 @@ Checked by code before a write, and as a suite over the whole database in CI.
 | V-07 | Money facts are never negative (a debt is a positive balance). Rates are between 0 and 1 |
 | V-08 | Every non-seed fact, decision and life event has an approved proposal; a fact is exactly the write its proposal names, and a proposal writes one fact at most. A seed fact has no proposal and replaces nothing |
 | V-09 | Every number in a proposal appears in its quoted evidence (checked before a proposal is stored; what counts as the same number is under `proposal_evidence`) |
-| V-10 | Every number in a reply, recommendation, summary or reconciliation text matches a figure of the plan's run or of one of its turn's what-ifs, a fact in its snapshot, a what-if's allocation, or a number the household wrote in the turn (the number check, `agents/numbers.py`). Dates (in any common form, each read as one date), months, years, percentages, counts and spelled-out numbers with a unit ("nine months") are checked too; a value written at a lower precision is the figure rounded half up to it, and a negative figure matches its amount. Other spelled-out numbers aren't checked. Never a match: a number run into letters, one with a multiplier (`150k`, `₱2M`, "12 thousand") or more than 6 decimals. A bare number from the household's message is a count, and an amount only from ₱100. A fact matches by its value and by the date it took effect. In a turn that proposed a change (`propose_change`), its values and dates match too: they are the household's words, checked. In a replan, so do the figures of the run the household last decided on and the old and new facts of each change and decision to revisit. A specialist's summary (read by the orchestrator, and shown in the agents' steps) may name the turn's own refs exactly; the reply, the options and the reason may not |
+| V-10 | Every number in a reply, recommendation, summary or reconciliation text matches a figure of the plan's run or of one of its turn's what-ifs, a fact in its snapshot, a what-if's allocation, or a number the household wrote in the turn (the number check, `agents/numbers.py`). Dates (in any common form, each read as one date), months, years, percentages, counts and spelled-out numbers with a unit ("nine months") are checked too; a value written at a lower precision is the figure rounded half up to it, and a negative figure matches its amount. Other spelled-out numbers aren't checked. Never a match: a number run into letters, one with a multiplier (`150k`, `₱2M`, "12 thousand") or more than 6 decimals. A bare number from the household's message is a count, and an amount only from ₱100. A fact matches by its value and by the date it took effect. In a turn that proposed a change (`propose_change`), its values and dates match too: they are the household's words, checked. In a replan, so do the figures of the run the household last decided on and the old and new facts of each change and decision to revisit. A specialist's summary (read by the orchestrator, and shown in the agents' steps) may name the turn's own refs exactly; the reply, the options and the reason may not. An answer also matches what its turn worked out: a what-if's changed values, another date's figures (`get_figures_on`), history lines (`get_history`), a calculation's result, inputs and constants (`calculate`), and the numbers of a document the answer cites in its sources (only then); a sum written in prose matches nothing |
 | V-11 | Every recommendation has at least one `figure` source and one non-figure source (a fact, memory, decision or document) |
 | V-12 | `plan.unallocated` is not negative |
 | V-13 | Each `meko_link` to a memory points to a memory that exists, and one Kako wrote says what Kako wrote; each to a promoted memory is among the promoted memories Meko lists (its newest 20; one beyond them isn't checked) with the words shared; each to a document is uploaded and hasn't failed to index (`kako meko check`, against Meko, not on every write; it also reports upkeep still owed, an approved promotion not yet shared included) |
