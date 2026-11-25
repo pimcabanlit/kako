@@ -542,9 +542,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   and the shared classes: panel, edge, chip, btn), `layout.tsx` (the fonts, the theme set before the
   first paint, the app shell), `page.tsx` (a new session), `sessions/[id]/page.tsx` (a session),
   `plans/page.tsx` (the newest plan), `plans/[id]/page.tsx` (one version), `timeline/page.tsx`,
-  `decisions/page.tsx`, `metrics/page.tsx`, `money/page.tsx` and `system/page.tsx` (the system check). `src/components/`: `app-shell.tsx` (the frame, and what every
+  `decisions/page.tsx`, `metrics/page.tsx`, `money/page.tsx`, `system/page.tsx` (the system check), `docs/page.tsx` (to the first page) and `docs/[slug]/page.tsx` (one documentation page). `src/components/`: `app-shell.tsx` (the frame, and what every
   screen shares: the household, who is writing, the sessions, the one turn that can run),
-  `sidebar.tsx`, `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as", the
+  `sidebar.tsx` (with the household menu in its footer: System check, Documentation, the people), `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as", the
   "synthetic data, not financial advice" line every screen keeps), `new-session.tsx`,
   `session-view.tsx` (the conversation, polled only while a turn runs), `turn.tsx` (a message and
   Kako's answer: options, replan, resolution), `approval-card.tsx` (a turn's changes, approved or
@@ -562,7 +562,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   amortization table, big moments, net worth; the view in the address, `?view=`;
   docs/architecture.md, "The money screen"), `compare-view.tsx` (each option beside today's plan:
   the card's "Before → after", "Compare the options" and the month by month, on the session and
-  plan screens; docs/architecture.md, "The session screen") and
+  plan screens; docs/architecture.md, "The session screen"), `docs-view.tsx` (the documentation:
+  its menu, a page's blocks, "Copy page as Markdown", "On this page", whether Meko is reachable here;
+  docs/architecture.md, "The documentation screen") and
   `health-panel.tsx`. `src/lib/`: `api.ts` (every call, and `ApiError`), `types.ts`
   (the API's shapes, kept in step with `api/sessions.py`, `api/proposals.py`, `api/household.py`,
   `api/plans.py`, `api/history.py`, `api/metrics.py` and `api/money.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
@@ -572,7 +574,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   each book's cover and picture, the pattern across the shelf, the bookmarks, the facts by kind),
   `metrics.ts` (the metrics screen's words and formats), `money.ts` (the money screen's views, signed
   amounts, months and the donut's arcs), `compare.ts` (a change's chip, an option's card rows), `turns.ts` (whether a turn whose request ended with no answer was kept after all),
-  `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
+  `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`; `docs/` the documentation's pages as data (`types.ts` the
+  blocks, `pages/` one module per page, `index.ts` the menu, `inline.ts` code, bold and links in a line, `markdown.ts`
+  a page as Markdown and its contents, `here.ts` Meko here in words), held by `docs.test.ts` (every link resolves). `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.
 - Ruff bans model SDK imports (`openai`, `azure.identity`, `azure.ai`) everywhere except

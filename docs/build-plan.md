@@ -452,6 +452,27 @@ reads, never what Kako works out.
      income change.
    - Dreaming runs only when someone runs it, and a session nobody ends stays open.
 
+7. **Documentation inside the app (Nov 25).** The sidebar's footer (the household's name and date)
+   opens a menu with System check and a new Documentation, in the style of Meko's own docs: how
+   Kako uses every part of Meko's context (conversations, memory, learning, knowledge, artifacts,
+   decision tracing, Postgres in the datapack, sharing and collaboration), anchored to the
+   Villanuevas' story, with a placeholder for each part not built yet, and "Under the hood" pages
+   on the engine, the agents, dreaming and the guardrails. It answers the judging's "Use of Meko"
+   in the app itself.
+   Done when: Pim has approved a mockup, and the screen built from it shows every page and section
+   with its status, every internal link opens a page, section or screen that exists, every figure is
+   one the demo's files or the engine give, "Copy page as Markdown" copies the page, in both themes,
+   at phone width and by keyboard.
+   Approved Nov 25 (the mockup, then the four Under the hood drafts). Built Nov 25: the pages as
+   data (`web/src/lib/docs/`, one module per page, with `docs.test.ts`: unique ids, the menu, every
+   link, the statuses, the Markdown), `components/docs-view.tsx` and `/docs/[slug]`, and the
+   household menu in `components/sidebar.tsx` (closes on Escape or a click outside). The first page
+   says live whether Meko is reachable here, off or unreachable. Artifacts and Postgres in the
+   datapack are placeholders (planned); sharing is in part (promotion is built, per-person
+   datapacks need Meko Pro). The approved mockup and drafts stay in `docs/mockups/` as the record.
+   Checked on the demo story through Dec 1, in both themes, at desktop and phone width (no sideways
+   scroll), with no console errors.
+
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 
 1. **Video** under 5 minutes, following the storyboard.
