@@ -3,8 +3,11 @@ number matches, and what fails. No model: the texts are written here."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
+from kako.agents.brief import EarlierTurn
 from kako.agents.numbers import check_text, check_texts, mismatch, names_of, pool_of
 from kako.agents.tools import MESSAGE_CHARS, TurnState
 from tests.support.villanueva import Villanueva, build
@@ -221,3 +224,18 @@ def test_the_mismatch_names_each_number_and_where(state: TurnState) -> None:
     told = mismatch(checks)
     assert "'8 months' in the reply; '₱11,843.52' in option 'A: card'." in told
     assert "never work one out" in told
+
+
+def test_the_households_earlier_words_in_the_session_match(house: Villanueva) -> None:
+    """Pim's sandbox, Nov 25: "what if my salary goes to 200000 per month", then "Jun". The
+    reply to "Jun" may quote the amount back: the household said it, in this session."""
+    s = _state(house, message="Jun")
+    earlier = (EarlierTurn("Jun", "what if my salary goes to 200000 per month", "Whose?"),)
+    s.inputs = replace(s.inputs, earlier=earlier)
+    text = "Jun's salary at ₱200,000.00 a month is a change Kako can't test yet."
+    assert _matches(s, text) == [("₱200,000.00", "money", "said")]
+    # Kako's own earlier replies are not the household's words: their numbers match nothing.
+    s.inputs = replace(
+        s.inputs, earlier=(EarlierTurn("Jun", "Jun", "It lasts ₱123,456.00 longer."),)
+    )
+    assert _matches(s, "₱123,456.00")[0][2] is None
