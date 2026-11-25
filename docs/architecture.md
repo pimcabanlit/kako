@@ -395,16 +395,18 @@ The household plans in one screen shaped like the chat apps they already use, so
 new to learn about where things are:
 
 - **Down the left**, the sessions, newest first, with their date and turn count, and "New session".
-  The footer names the household and links the system check. The header holds Kako's mark and
+  Above them the screens by name only (Money, Plan, Timeline, Decisions, Metrics). The footer names the household and links the system check. The header holds Kako's mark and
   wordmark, the theme switch and, as in ChatGPT, a button that collapses the sidebar to a rail of
   icons (the mark, which opens it again, "New session", the screens, then System check,
   Documentation and the theme switch at the foot). The
   choice is kept on this device (`kako-sidebar`) and set before the first paint, like the theme. On
   a phone it is a drawer, and the same button closes it.
 - **A new session** opens empty, as chat apps do: a greeting over the swirl art, the composer and a
-  few starter questions any household could ask. The first message starts the session (its title is
+  few starter questions any household could ask, on one line (a row that scrolls sideways on a
+  phone). The first message starts the session (its title is
   that message) and is sent as its first turn.
-- **The conversation**: each person's message on the right with who wrote it, then Kako's answer:
+- **The conversation**: each person's message on the right with who wrote it, then Kako's answer
+  with no avatar or name over it, as in ChatGPT (Pim, Nov 25):
   the reply, any flagged figures, the options with the monthly amounts and their sources, the
   replan (what changed, old struck through, why, the decisions to revisit), how a conflict between
   specialists was resolved, the approval card, and "Show the working", closed by default like a chat
@@ -434,7 +436,9 @@ new to learn about where things are:
   sent, with the same words, is shown as answered, one still running is waited for, and only then
   is the error shown (`web/src/lib/turns.ts`). "Try again" never sends a turn that was kept.
 - **The composer**: Enter sends, Shift+Enter starts a new line, "Writing as" picks Mara, Jun or Lia,
-  and "Synthetic data. Not financial advice." sits under it on every screen.
+  and nothing under it (Pim, Nov 25): "Synthetic data. Not financial advice." sits at the foot of
+  the screens that show the household's figures (money, plan, timeline, decisions, metrics), on
+  the system check and in the documentation, not under the chat.
 
 Each turn is kept as the household saw it (`session_turn`, the answer exactly as the API returned
 it), written by the same code path for the API, `kako ask` and demo mode, so every turn shows on

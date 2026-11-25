@@ -27,7 +27,8 @@ import { formatDay } from "@/lib/text";
 import { listOf, plural } from "@/lib/working";
 
 // The screens above the sessions: where the money stands, what the household plans, its story,
-// and what it decided.
+// and what it decided. The open sidebar shows only the names (Pim, Nov 25); each note is the
+// collapsed rail's tooltip.
 const SCREENS: { href: string; label: string; note: string; icon: LucideIcon }[] = [
   { href: "/money", label: "Money", note: "where it all stands", icon: Wallet },
   { href: "/plans", label: "Plan", note: "why and what changed", icon: ClipboardList },
@@ -70,7 +71,7 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           New session
         </Link>
         <ul className="mt-1.5 space-y-0.5">
-          {SCREENS.map(({ href, label, note, icon: Icon }) => {
+          {SCREENS.map(({ href, label, icon: Icon }) => {
             const here = isHere(pathname, href);
             return (
               <li key={href}>
@@ -84,7 +85,6 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
                 >
                   <Icon className={`size-4 shrink-0 ${here ? "text-teal" : "text-muted"}`} aria-hidden />
                   {label}
-                  <span className="ml-auto truncate text-xs font-normal text-muted">{note}</span>
                 </Link>
               </li>
             );

@@ -121,12 +121,12 @@ export function Composer({
           </div>
         </div>
       </div>
-      <Disclaimer />
     </form>
   );
 }
 
-/** The line every screen keeps (docs/look-and-feel.md, style rule 7). */
+/** The line at the foot of the screens that show the household's figures (docs/look-and-feel.md,
+ * style rule 7). Not under the composer: the chat screens keep it out of the way (Pim, Nov 25). */
 export function Disclaimer() {
   return (
     <p className="mt-2 text-center text-xs text-muted">

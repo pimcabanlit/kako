@@ -96,18 +96,24 @@ export function NewSession() {
               </button>
             </div>
           )}
-          <div className="mt-6 flex flex-wrap justify-center gap-2">
-            {STARTERS.map((q) => (
-              <button
-                key={q}
-                type="button"
-                disabled={starting || running || Boolean(noHousehold)}
-                onClick={() => start(q)}
-                className="btn rounded-full px-3.5 py-1.5 text-[13.5px] font-medium text-muted hover:text-fg"
-              >
-                {q}
-              </button>
-            ))}
+          {/* One line, as chat apps show them (Pim, Nov 25): centred when they fit, as they do in
+              the column's full width on a laptop, and on a narrower screen a row that scrolls
+              sideways rather than a second line. */}
+          <div className="-mx-4 mt-6 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:px-0 [&::-webkit-scrollbar]:hidden">
+            <ul className="mx-auto flex w-max gap-1.5" aria-label="Questions to start with">
+              {STARTERS.map((q) => (
+                <li key={q}>
+                  <button
+                    type="button"
+                    disabled={starting || running || Boolean(noHousehold)}
+                    onClick={() => start(q)}
+                    className="btn rounded-full px-3 py-1.5 text-[13.5px] font-medium whitespace-nowrap text-muted hover:text-fg"
+                  >
+                    {q}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </main>

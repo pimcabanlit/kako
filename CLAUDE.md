@@ -571,8 +571,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `sidebar.tsx` (with the household menu in its footer: System check, Documentation, the people; and
   `SidebarRail`, the sidebar collapsed to icons), `sidebar-toggle.tsx` (collapse and open again: `data-sidebar`
   on <html>, kept as `kako-sidebar`, set before the first paint by `layout.tsx`), `brand.tsx` (the mark,
-  `public/kako-mark.png`, and the wordmark), `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as", the
-  "synthetic data, not financial advice" line every screen keeps), `new-session.tsx`,
+  `public/kako-mark.png`, and the wordmark), `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as"; and `Disclaimer`, the
+  "synthetic data, not financial advice" line at the foot of the screens with the household's figures), `new-session.tsx`,
   `session-view.tsx` (the conversation, polled only while a turn runs), `turn.tsx` (a message and
   Kako's answer: options, replan, resolution), `approval-card.tsx` (a turn's changes, approved or
   rejected inline by an adult), `working.tsx` ("Show the working": the agents' steps, live while a
