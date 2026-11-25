@@ -41,7 +41,7 @@ export const AGENTS: DocPage = {
       blocks: [
         {
           kind: "p",
-          text: "Before any agent runs, code writes one brief of about 3,000 tokens: the key figures, the decisions in force with their reasons, approved preferences, pending proposals, recent life events, in a replan what changed, and the results of **one** Meko search on the household's message. Every agent starts from it, so answers stay grounded and Meko calls stay few. Agents see stable refs (`debt:credit-card`, `M1`), never database ids.",
+          text: "Before any agent runs, code writes one brief of about 3,000 tokens: the key figures, the decisions in force with their reasons, approved preferences, pending proposals, recent life events, in a replan what changed, who is writing (so \"I\" and \"my\" have an owner), the session so far (its last few turns, from Postgres, so a short reply like \"Jun\" answers the question before it, with Meko on or off), and the results of **one** Meko search on the household's message. Every agent starts from it, so answers stay grounded and Meko calls stay few. Agents see stable refs (`debt:credit-card`, `M1`), never database ids.",
         },
       ],
     },

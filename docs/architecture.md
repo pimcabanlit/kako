@@ -99,7 +99,14 @@ flowchart LR
    figures, the active decisions with their reasons, approved preferences and constraints, pending
    proposals, the household's last 5 life events, in a replan what changed (see "How a life event
    replans"), and the results of **one** `context_search` on the household's message (memories, shared
-   knowledge and documents, past conversations). A turn as known at a time (demo mode, the test set)
+   knowledge and documents, past conversations). Two parts follow the conversation itself, from
+   Postgres so they hold with Meko on or off (Pim's laptop try, Nov 25): **who is writing** (the
+   person "Writing as" names, so "I" and "my" have an owner and no agent asks "whose?"), and **this
+   session so far**, its last 4 turns as the household saw them (`session_turn`: each message and
+   its writer, Kako's reply, the options offered and the changes filed for a yes), so a short
+   message such as "Jun" or "no, just the simulation" reads as a reply to the turn before. Kako's
+   earlier replies are data like any other words, and their figures are not cited: agents cite
+   today's from the tools. Meko's search stays for older sessions, memories and documents. A turn as known at a time (demo mode, the test set)
    sees the decisions, proposals and life events as Kako knew them then. Specialists start from this brief instead of searching
    on their own, which keeps the answer grounded and the Meko call count low. Agents see stable refs, never
    database ids (`debt:credit-card`, `figure:debt.payoff_months@debt:credit-card`, `M1` for a
@@ -142,10 +149,10 @@ flowchart LR
    option rejected are shown, and stored in `reconciliation` with the plan.
 7. **The number check.** Every number in the reply, the options' labels and summaries, the resolution's
    reason and each specialist's summary must match a figure of the turn's run or one of its what-ifs,
-   a fact in the snapshot, a what-if's allocation, or a number the household wrote (rule V-10,
-   `agents/numbers.py`). A specialist's summary may also name the turn's own refs, which the
-   orchestrator resolves from the proposal's citations; the reply, the options and the reason may
-   not. It runs inside the final tools (`submit_answer`, `submit_proposal`): a
+   a fact in the snapshot, a what-if's allocation, or a number the household wrote, in this message
+   or an earlier one of the session (rule V-10, `agents/numbers.py`). A specialist's summary may also
+   name the turn's own refs and the brief's (`D1`, `P1`, `M1`, `K1`), which the orchestrator resolves
+   from the proposal's citations; the reply, the options and the reason may not. It runs inside the final tools (`submit_answer`, `submit_proposal`): a
    failure is sent back once with the mismatch named; if it fails again, the text is shown with the
    unmatched numbers flagged, never silently. Every check is a `number_check` row, against the turn's
    run, which is stored before the agents start.
@@ -171,7 +178,9 @@ This is the centre of the live demo.
 1. Mara says she has a new job from Dec 1 at ₱68,000 take-home. The orchestrator calls
    `propose_change` once: the `new_job` life event and the facts it changes (here Mara's salary), each
    value copied from her words, with the words as `quote`. Code checks it before holding it
-   (`agents/proposing.py`): the quote is in her message, every number is in the quote (V-09), the
+   (`agents/proposing.py`): the quote is in her message, the sentence it comes from tells news and
+   doesn't ask a what-if ("what if I lose my job?", "suppose…", "paano kung…": a what-if is never
+   filed as a change), every number is in the quote (V-09), the
    entity and attribute exist, and a change replaces the fact Kako holds now and starts after it; a
    value Kako already holds, a life event it already has, or `plan.allocation` (chosen by accepting a
    plan) is refused. The turn keeps what it holds as **pending proposals** with her words as evidence

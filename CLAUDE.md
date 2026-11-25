@@ -315,8 +315,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `present.py` (what agents see: stable
   refs such as `debt:credit-card`, figures and facts written out as ₱9,050.00, 12 months, Feb 15,
   2028), `brief.py` (`render_brief`, pure: the brief within `KAKO_BRIEF_TOKEN_BUDGET`, people's and
-  Meko's words wrapped in `<data>` blocks, and what it drops first when over budget) and
-  `brief_store.py` (`gather_brief`: Postgres, then one `context_search`); `answers.py` (what agents
+  Meko's words wrapped in `<data>` blocks, who is writing and this session so far, and what it drops
+  first when over budget) and `brief_store.py` (`gather_brief`: Postgres, the session's earlier turns
+  from `session_turn`, then one `context_search`); `answers.py` (what agents
   hand back: allocations with their amount specs, citations, proposals, options), `tools.py`
   (`TurnState` and the agents' tools: `get_figures`, `get_facts`, `get_decisions`, one extra
   `search_memory`, `run_what_if`; amount specs and citations resolved and checked in code),
