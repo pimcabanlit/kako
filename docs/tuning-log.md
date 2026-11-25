@@ -680,3 +680,41 @@ it led to.
   replays session 4 with its requests differing from the recording, because `demo record` doesn't
   replay session 2 before recording session 4, so the brief's Meko search sees a different
   datapack; the replies are replayed and reported.
+
+### 15. The conversation as context: sessions, both test sets and the conversation set (Nov 25, 2026)
+
+- **Change tested:** the context strategy agreed with Pim on Nov 25 (docs/architecture.md, "The
+  conversation"). The orchestrator's system prompt is the shared rules and its role alone; the
+  session's earlier turns follow as chat messages, compacted by code beyond
+  `KAKO_HISTORY_TOKEN_BUDGET`; then the brief and the new message. The brief carries the session
+  state and recaps of earlier sessions; `submit_answer` takes `topic` and `asks`; the orchestrator
+  and the single agent gain `read_turns`; the prompts gain "The conversation" and "What Kako can
+  test". Specialists get a self-contained question. Every orchestrator request changes, so every
+  recording is made again: sessions 2 and 4 (`kako demo record`, session 4 now after session 2 is
+  replayed, so its brief recaps Session 2), the test set for both architectures and without the
+  preference, and the new conversation set (`kako conversations`, specialists). Waiting for Pim's
+  yes; estimate about **US$1.60 to US$2.00**, under the daily cap of US$3.
+- **Prediction (written before the runs):**
+  - **Session 2:** as entry 14: A all on the card (9 months), B Jun's split (17 months, the fund's
+    target in 12), the choice left to the household, no `propose_change`; `topic` about paying down
+    the card, `asks` the choice between A and B. 6 to 10 calls, **US$0.03 to US$0.06**.
+  - **Session 4:** turn 1 one `propose_change`, 2 calls. Turn 2 the replan against Oct 18 with
+    Sessions 1 to 3 to revisit, A recommended on the preference. The brief now recaps Session 2 and
+    the orchestrator reads turn 1 as a chat turn; I expect no change to the options, and the
+    reply may name Mara's news as "the new job you just approved". 12 to 16 calls, **US$0.10 to
+    US$0.16**.
+  - **Test set:** single-turn questions see no earlier sessions and no history, so only the layout
+    and the new fields change. Specialists within one question of entry 12 (93.3%), single within
+    one question of 90.7%; cost about entry 12's (US$0.62 and US$0.49), without the preference
+    about US$0.12. The likeliest new miss: a `topic` or `asks` with a number in it, sent back once.
+  - **Conversation set** (8 turns):
+    - c01: no turn files a change (the what-if guard and the prompt). Turn 1 shows the runway in
+      months and doesn't ask whose job. Turn 2 ("Jun") reads as Jun answering, not a greeting, and
+      stays on the job. Turn 3 gives the runway again, plainly. The likeliest miss: turn 1 asks
+      "should I show the runway?" instead of showing it.
+    - c02: turn 1 files Mara's salary at ₱72,000.00 from Feb 1, 2027, naming Mara. Turn 2 (Jun) says
+      the raise waits for a yes before the plan changes, and asks nobody whose salary.
+    - c03: turn 1 as session 2. Turn 2 ("go with B") names B with its moves from the session state
+      and says how to accept it; the likeliest miss is offering A and B again (the options check
+      fails), since there is no "accept an option" step yet.
+    - About 20 to 30 calls, **US$0.15 to US$0.30**. Score: 85% to 95% of checks.
