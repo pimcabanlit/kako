@@ -88,11 +88,23 @@ class WrittenOut(BaseModel):
     id: uuid.UUID
 
 
+class ChangeShapeOut(BaseModel):
+    """A fact a proposal would write or retract, in parts: what the approval card draws (the old
+    value struck through, then the new one)."""
+
+    subject: str  # the entity's name, or "Household"
+    attribute: str  # the attribute's key, such as income.monthly_net
+    before: str | None  # the value it replaces or retracts, as shown; None for a new fact
+    after: str | None  # the value it writes, as shown; None for a retraction
+    from_day: str | None  # when the new value takes effect, as shown
+
+
 class ProposalOut(BaseModel):
     id: uuid.UUID
     kind: str
     status: str
     shown: str  # what it would write, in plain words
+    change: ChangeShapeOut | None  # for a fact written or retracted: the same, in parts
     explanation: str
     payload: dict[str, object]
     from_dreaming: bool
@@ -177,6 +189,41 @@ def describe(view: ProposalView, entities: Sequence[EntityRow], facts: Sequence[
     return view.kind.replace("_", " ")
 
 
+def shape(
+    view: ProposalView, entities: Sequence[EntityRow], facts: Sequence[FactRow]
+) -> ChangeShapeOut | None:
+    """A fact proposal in parts, from its payload and the household's rows; None for other kinds
+    or a payload that can't be read (its `shown` and payload say what it is)."""
+    names = {e.id: e.name for e in entities}
+    by_id = {f.id: f for f in facts}
+    payload = view.payload
+    try:
+        if view.kind in FACT_KINDS:
+            write = parse_fact(view.kind, payload)
+            old = by_id.get(write.replaces) if write.replaces else None
+            return ChangeShapeOut(
+                subject=names.get(write.entity_id, "Household") if write.entity_id else "Household",
+                attribute=write.attribute,
+                before=fact_value(old) if old is not None else None,
+                after=_value(write.attribute, payload["value"]),
+                from_day=day(write.valid_from),
+            )
+        if view.kind == "retract_fact":
+            fact = by_id.get(uuid.UUID(str(payload["fact_id"])))
+            if fact is None:
+                return None
+            return ChangeShapeOut(
+                subject=names.get(fact.entity_id, "Household") if fact.entity_id else "Household",
+                attribute=fact.attribute,
+                before=fact_value(fact),
+                after=None,
+                from_day=None,
+            )
+    except (KeyError, ValueError, PayloadError):
+        return None  # shown as its kind; the payload itself is in the response
+    return None
+
+
 def _written(decided: Decided | ProposalView) -> list[WrittenOut]:
     return [WrittenOut(table=w.table, id=w.row_id) for w in decided.written]
 
@@ -200,6 +247,7 @@ async def _views(
             kind=v.kind,
             status=v.status,
             shown=describe(v, entities, facts),
+            change=shape(v, entities, facts),
             explanation=v.explanation,
             payload=v.payload,
             from_dreaming=v.from_dreaming,

@@ -39,17 +39,15 @@ from kako.agents.ask import (
     run_turn,
     start_session,
 )
-from kako.agents.ask import Asked as AskedTurn
 from kako.agents.brief_store import BriefStoreError
 from kako.agents.chat import ModelError
 from kako.agents.orchestrator import OrchestratorError
-from kako.agents.present import money
-from kako.agents.reconciling import LABELS
 from kako.agents.recorded import ChatBackend
-from kako.agents.replan import changes_lines, why_lines
+from kako.agents.shown import TurnOut, turn_shown
 from kako.agents.tools import MESSAGE_CHARS
 from kako.db.meko_log import DbCallLog
 from kako.db.models import Household, LlmCall, Person, Session
+from kako.db.turn_store import StepRow, list_sessions, read_steps, read_turns
 from kako.dreaming.job import DREAM_RUN, DreamError, end_session
 from kako.health import safe_error
 from kako.meko.adapter import Meko
@@ -66,6 +64,17 @@ SEED: Final = re.compile(r"[a-z0-9][a-z0-9:_-]{0,39}")
 OpenMeko = Callable[[DbCallLog, int], AbstractAsyncContextManager[Meko | None]]
 
 
+@dataclass(frozen=True)
+class Running:
+    """The turn running now: its session and seed, so the screen can show its steps as they come."""
+
+    session_id: uuid.UUID
+    seed: str
+    message: str
+    said_by: uuid.UUID | None
+    started_at: datetime
+
+
 @dataclass
 class Services:
     """What the session routes use, built from settings (or by a test)."""
@@ -76,6 +85,7 @@ class Services:
     backend: Callable[[], ChatBackend]
     http: httpx.AsyncClient  # for local Meko's call log
     turn_lock: asyncio.Lock
+    running: Running | None = None  # set while a turn runs (one at a time)
 
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
@@ -118,107 +128,61 @@ class SessionOut(BaseModel):
     trace_url: str | None
 
 
-class AllocationOut(BaseModel):
-    entity: str
-    centavos: int
-    shown: str
-    spec: str
+class SessionSummaryOut(BaseModel):
+    """A session in the household's list: the session screen's sidebar."""
 
-
-class SourceOut(BaseModel):
-    kind: str
-    ref: str
-    shown: str
-
-
-class OptionOut(BaseModel):
-    label: str
-    summary: str
-    what_if: str
-    recommended: bool
-    allocations: list[AllocationOut]
-    sources: list[SourceOut]
-    specialists: list[str]
-    recommendation_ids: list[uuid.UUID]
-
-
-class ResolutionOut(BaseModel):
-    conflicts: list[str]
-    described: list[str]
-    together: str
-    splits: list[str]
-    chosen: str | None
-    rejected: str | None
-    reason: str
-    reconciliation_ids: list[uuid.UUID]
-
-
-class FlaggedOut(BaseModel):
-    text: str
-    where: str
-
-
-class ProposalOut(BaseModel):
-    specialist: str
-    what_if: str | None
-    summary: str
-
-
-class ChangeOut(BaseModel):
-    """A change the household stated, pending until a person approves it (`/api/v1/proposals`)."""
-
-    proposal_id: uuid.UUID
-    kind: str
-    shown: str
-
-
-class ReplanOut(BaseModel):
-    """A replan's other two parts: what changed (from code's diff) and why."""
-
-    since: str
-    what_changed: list[str]
-    why: str | None  # the orchestrator's, number-checked
-    because: list[str]  # the facts behind it and the decisions to revisit, from code
-    before_run_id: uuid.UUID | None
-    revisit_decision_ids: list[uuid.UUID]
-
-
-class PlanOut(BaseModel):
     id: uuid.UUID
-    version: int
-    status: Literal["proposed"]
+    title: str
+    household_date: date
+    started_at: datetime
+    ended_at: datetime | None
+    turns: int
+    last_at: datetime
 
 
-class MekoTurnOut(BaseModel):
-    conversation_id: str | None
-    message_id: str | None
-    error: str | None
-    trace_url: str | None
+class StepOut(BaseModel):
+    """One tool call by one agent, as `agent_step` logged it."""
+
+    seq: int
+    agent: str
+    tool: str
+    input_summary: str
+    result_summary: str
+    outcome: str
+    at: datetime
 
 
-class CostOut(BaseModel):
-    model_calls: int
-    input_tokens: int
-    output_tokens: int
-    usd: str  # a decimal string: money is never a float
+class PersonRef(BaseModel):
+    id: uuid.UUID
+    display_name: str
 
 
-class TurnOut(BaseModel):
-    session_id: uuid.UUID
+class KeptTurnOut(BaseModel):
+    """A turn kept in the session: the household's message, who wrote it, the answer as shown
+    then, and the agents' steps."""
+
     seed: str
-    reply: str
-    options: list[OptionOut]
-    recommended: str | None
-    resolution: ResolutionOut | None
-    flagged: list[FlaggedOut]
-    proposals: list[ProposalOut]
-    changes: list[ChangeOut]  # waiting for the household's yes
-    not_proposed: list[str]  # changes the store refused, with why
-    replan: ReplanOut | None
-    plan: PlanOut | None
-    calc_run_id: uuid.UUID | None
-    meko: MekoTurnOut
-    cost: CostOut
+    said_by: PersonRef | None
+    message: str
+    at: datetime
+    answer: TurnOut
+    steps: list[StepOut]
+
+
+class RunningOut(BaseModel):
+    """The session's turn running now, with the steps its agents have taken so far."""
+
+    seed: str
+    said_by: uuid.UUID | None
+    message: str
+    started_at: datetime
+    steps: list[StepOut]
+
+
+class TurnsOut(BaseModel):
+    session: SessionSummaryOut
+    turns: list[KeptTurnOut]
+    running: RunningOut | None
 
 
 class PartOut(BaseModel):
@@ -300,6 +264,73 @@ async def create_session(body: NewSession, request: Request) -> SessionOut:
     return _session_out(services, started)
 
 
+@router.get("", response_model=list[SessionSummaryOut])
+async def read_sessions(
+    request: Request, household_id: uuid.UUID | None = None
+) -> list[SessionSummaryOut]:
+    """The household's sessions, the most recently active first."""
+    services = _services(request)
+    household, _ = await _household(services.engine, household_id)
+    async with services.engine.connect() as conn:
+        rows = await list_sessions(conn, household)
+    return [SessionSummaryOut(**row.__dict__) for row in rows]
+
+
+def _step_out(step: StepRow) -> StepOut:
+    return StepOut(
+        seq=step.seq,
+        agent=step.agent,
+        tool=step.tool,
+        input_summary=step.input_summary,
+        result_summary=step.result_summary,
+        outcome=step.outcome,
+        at=step.created_at,
+    )
+
+
+@router.get("/{session_id}/turns", response_model=TurnsOut)
+async def read_session_turns(session_id: uuid.UUID, request: Request) -> TurnsOut:
+    """The session's turns as the household saw them, each with its agents' steps; and the turn
+    running now, if it is this session's, with the steps taken so far."""
+    services = _services(request)
+    running = services.running
+    async with services.engine.connect() as conn:
+        household = (
+            await conn.execute(select(SESSION.c.household_id).where(SESSION.c.id == session_id))
+        ).scalar_one_or_none()
+        if household is None:
+            raise HTTPException(404, "no such session")
+        summary = next(r for r in await list_sessions(conn, household) if r.id == session_id)
+        turns = await read_turns(conn, session_id)
+        live = None
+        if running is not None and running.session_id == session_id:
+            steps = await read_steps(conn, session_id, [running.seed])
+            live = RunningOut(
+                seed=running.seed,
+                said_by=running.said_by,
+                message=running.message,
+                started_at=running.started_at,
+                steps=[_step_out(s) for s in steps.get(running.seed, ())],
+            )
+    return TurnsOut(
+        session=SessionSummaryOut(**summary.__dict__),
+        turns=[
+            KeptTurnOut(
+                seed=t.seed,
+                said_by=PersonRef(id=t.said_by, display_name=t.said_by_name or "")
+                if t.said_by is not None
+                else None,
+                message=t.message,
+                at=t.created_at,
+                answer=TurnOut.model_validate(t.shown),
+                steps=[_step_out(s) for s in t.steps],
+            )
+            for t in turns
+        ],
+        running=None if live is None or any(t.seed == live.seed for t in turns) else live,
+    )
+
+
 @router.get("/{session_id}", response_model=SessionOut)
 async def read_session(session_id: uuid.UUID, request: Request) -> SessionOut:
     services = _services(request)
@@ -317,6 +348,9 @@ async def take_turn(session_id: uuid.UUID, body: NewTurn, request: Request) -> T
         seed = await _seed(services.engine, session_id, body.seed)
         if body.person_id is not None:
             await _person(services.engine, session.household_id, body.person_id)
+        services.running = Running(
+            session_id, seed, body.message, body.person_id, datetime.now(UTC)
+        )
         try:
             async with services.open_meko(
                 DbCallLog(services.engine, session_id), MEKO_CALLS
@@ -338,7 +372,9 @@ async def take_turn(session_id: uuid.UUID, body: NewTurn, request: Request) -> T
             raise HTTPException(409, str(exc)) from None
         except (ModelError, MekoError, BriefStoreError, OrchestratorError) as exc:
             raise HTTPException(502, f"the turn stopped: {safe_error(exc)}") from None
-    return _turn_out(services, asked)
+        finally:
+            services.running = None
+    return asked.shown or turn_shown(asked, services.settings)
 
 
 async def _person(engine: AsyncEngine, household_id: uuid.UUID, person_id: uuid.UUID) -> None:
@@ -376,94 +412,6 @@ async def _seed(engine: AsyncEngine, session_id: uuid.UUID, asked: str | None) -
     while f"t{n}" in used:
         n += 1
     return f"t{n}"
-
-
-def _turn_out(services: Services, asked: AskedTurn) -> TurnOut:
-    answer, saved = asked.answer, asked.saved
-    recs = saved.recommendations if saved is not None else {}
-    options = [
-        OptionOut(
-            label=o.label,
-            summary=o.summary,
-            what_if=o.what_if,
-            recommended=o.label == answer.recommended,
-            allocations=[
-                AllocationOut(
-                    entity=a.entity_ref, centavos=a.centavos, shown=money(a.centavos), spec=a.spec
-                )
-                for a in o.allocations
-            ],
-            sources=[SourceOut(kind=c.kind, ref=c.ref, shown=c.shown) for c in o.citations],
-            specialists=list(o.specialists),
-            recommendation_ids=list(recs.get(o.label, ())),
-        )
-        for o in answer.options
-    ]
-    resolution = None
-    if answer.resolution is not None:
-        r = answer.resolution
-        resolution = ResolutionOut(
-            conflicts=[LABELS[c.kind] for c in r.conflicts],
-            described=list(r.described),
-            together=r.together,
-            splits=[f"{s.what_if}: {'fits' if s.fits else 'refused'}" for s in r.splits],
-            chosen=r.chosen,
-            rejected=r.rejected,
-            reason=r.reason,
-            reconciliation_ids=list(saved.reconciliations) if saved is not None else [],
-        )
-    checks = [*answer.checks, *(p.check for p in answer.proposals if p.check is not None)]
-    flagged = [FlaggedOut(text=n.text, where=c.label) for c in checks for n in c.unmatched]
-    plan = None
-    if saved is not None and saved.plan_id is not None and saved.version is not None:
-        plan = PlanOut(id=saved.plan_id, version=saved.version, status="proposed")
-    replan = None
-    if asked.replan is not None and asked.state is not None:
-        entities = asked.state.entities
-        replan = ReplanOut(
-            since=asked.replan.since,
-            what_changed=[line[2:] for line in changes_lines(asked.replan, entities)[1:]],
-            why=answer.why,
-            because=[line[2:] for line in why_lines(asked.replan, entities)[1:]],
-            before_run_id=asked.before_run_id,
-            revisit_decision_ids=[r.decision_id for r in asked.replan.revisit],
-        )
-    conversation = asked.conversation_id
-    in_meko = conversation is not None and not conversation.startswith(LOCAL_PREFIX)
-    return TurnOut(
-        session_id=asked.session_id,
-        seed=asked.seed,
-        reply=answer.reply,
-        options=options,
-        recommended=answer.recommended,
-        resolution=resolution,
-        flagged=flagged,
-        proposals=[
-            ProposalOut(specialist=p.specialist, what_if=p.what_if, summary=p.summary)
-            for p in answer.proposals
-        ],
-        changes=[
-            ChangeOut(proposal_id=p.proposal_id, kind=p.kind, shown=p.shown) for p in asked.proposed
-        ],
-        not_proposed=list(asked.proposal_errors),
-        replan=replan,
-        plan=plan,
-        calc_run_id=asked.calc_run_id,
-        meko=MekoTurnOut(
-            conversation_id=conversation if in_meko else None,
-            message_id=asked.meko_message_id,
-            error=asked.meko_error,
-            trace_url=services.settings.meko_trace_url(conversation)
-            if in_meko and conversation
-            else None,
-        ),
-        cost=CostOut(
-            model_calls=asked.model_calls,
-            input_tokens=asked.input_tokens,
-            output_tokens=asked.output_tokens,
-            usd=f"{asked.cost_usd:.6f}",
-        ),
-    )
 
 
 class EndOut(BaseModel):

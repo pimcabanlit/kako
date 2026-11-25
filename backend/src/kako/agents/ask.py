@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Final, cast
@@ -34,6 +34,8 @@ from kako.agents.reconciling import LABELS, render_resolution
 from kako.agents.recorded import ChatBackend
 from kako.agents.replan import Replan, changes_lines, why_lines
 from kako.agents.replan_store import session_changes
+from kako.agents.shown import LOCAL_PREFIX as LOCAL_PREFIX  # where other modules read it
+from kako.agents.shown import TurnOut, turn_shown
 from kako.agents.tools import TurnState
 from kako.agents.turn import TurnContext
 from kako.db.agent_steps import DbStepLog
@@ -44,6 +46,7 @@ from kako.db.models import LlmCall, Session
 from kako.db.number_checks import DbCheckLog
 from kako.db.plan_store import SavedAnswer, save_answer
 from kako.db.proposal_store import Evidence, ProposalError, propose
+from kako.db.turn_store import TurnStoreError, keep_turn
 from kako.facts.proposals import PayloadError, idempotency_key
 from kako.health import safe_error
 from kako.meko.adapter import Meko, Turn
@@ -55,7 +58,6 @@ LLM_CALL = cast(Table, LlmCall.__table__)
 AGENT = "kako:orchestrator"
 # What answers a turn: the orchestrator with its specialists, or the single-agent baseline.
 Answerer = Callable[[ModelManager, TurnContext, TurnState], Awaitable[TurnAnswer]]
-LOCAL_PREFIX: Final = "local-"  # a session's id with no Meko conversation
 REASONING_CHARS: Final = 4_000
 # A turn's Meko calls at most: the conversation, the brief's search, one extra search for the
 # orchestrator and each of its 4 specialist asks, and the turn itself.
@@ -109,6 +111,7 @@ class Asked:
     proposed: tuple[StoredProposal, ...] = ()  # waiting for a person's yes
     proposal_errors: tuple[str, ...] = ()  # changes the store refused, with why
     before_run_id: uuid.UUID | None = None  # in a replan: the run it was compared with, stored
+    shown: TurnOut | None = None  # the turn as the household is shown it, kept in `session_turn`
 
     @property
     def replan(self) -> Replan | None:
@@ -282,7 +285,7 @@ async def run_turn(
                 )
             )
         ).one()
-    return Asked(
+    asked = Asked(
         answer,
         session.session_id,
         seed,
@@ -301,6 +304,22 @@ async def run_turn(
         refused,
         before_run_id,
     )
+    # The turn as shown, kept for the session screen: what the household reads later is exactly
+    # what it read then.
+    shown = turn_shown(asked, settings)
+    try:
+        await keep_turn(
+            engine,
+            session_id=session.session_id,
+            seed=seed,
+            said_by=speaker,
+            message=message,
+            shown=shown.model_dump(mode="json"),
+            created_at=datetime.now(UTC),
+        )
+    except TurnStoreError as exc:
+        raise SessionError(str(exc)) from None
+    return replace(asked, shown=shown)
 
 
 async def _keep_proposals(
