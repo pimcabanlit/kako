@@ -172,6 +172,82 @@ flowchart LR
    household accepts one option; accepting writes its `plan.allocation` facts (Phase 4).
 
 
+## Answering any question
+
+A household asks more than "where should the money go". It asks what a figure means, why something
+moved, how a rule works, what a sum comes to, what would happen if, whether it should, and it tells
+Kako news. Kako answers all of them, on one rule: **reading, explaining, working out and trying change
+nothing; only news a person approves writes data; and every answer shows what it rests on.** It never
+answers with a flat "can't". It declines only real limits (a tax amount, picking an investment
+product, live prices or rates), says why, and gives what it can.
+
+**The kind of answer.** The orchestrator (and the single agent) first picks the kind, and hands it in
+with the answer (`kind` in `submit_answer`, `agents/answers.py`):
+
+| Kind | Asked like | How it is answered |
+| --- | --- | --- |
+| `inform` | "What's an emergency fund?" | In plain words; any number from a document it cites (`general-guidance`, 13th-month pay, SSS, Pag-IBIG, the planning rules) |
+| `explain` | "Why is our surplus lower than in October?" | Today's figures against another date's (`get_figures_on`) or each value over time (`get_history`) |
+| `look_up` | "How much interest did we pay last month?" | The household's records: history, decisions, earlier turns, statements (`read_document`) |
+| `compute` | "How much is ₱6,000 a month over a year?" | `calculate`: a formula over named inputs, worked out in code, with its working shown |
+| `simulate` | "What if my salary goes up by ₱20,000?" | `run_what_if` with changes or new items: before and after, nothing saved |
+| `advise` | "Should we get a cashback card?" | Pros and cons against the household's own figures and preferences; never a product |
+| `plan` | "How hard should we pay down the card?" | The specialists, reconciliation and 2 to 4 options (as in "How one planning turn flows") |
+| `record` | "Mara got a new job at ₱72,000 from Feb 1." | `propose_change`, held for an adult's yes (see "How a life event replans") |
+| `small_talk` | "Thanks!" | Short, keeping the thread |
+
+The specialists are asked only for a plan. Every other kind is one or two read tools and the answer,
+so a simple question costs one model round or two.
+
+**What-ifs that change anything** (`agents/scenarios.py`). Besides allocations, the orchestrator's
+`run_what_if` takes `changes` (a fact with another value for this run only: an income, an expense, a
+debt's balance, rate or minimum, the fund's balance, a goal, the emergency target, the debt strategy)
+and `new` items (an income, expense, debt or goal the household doesn't have, such as a second car
+loan with its balance, rate and payment). Each value is a spec, resolved in code: `none`, `said:<v>`
+(checked against what the household wrote, read as people write it: 20k, 1.5M, 10%, a date),
+`assume:<v>` (Kako's assumption, shown to the household as one), `fact:`, `figure:` or `calc:`, and
+`+`/`-` in front for a change to today's value (a percentage on money is a share of it, on a rate it is
+points). Code refuses a value the household never wrote, a fact that can't change in a what-if
+(allocations, notes, what an entity is), the same fact twice, a change to the value it already has,
+and a new item missing what the engine needs. The engine projects from one date, so a change said to
+start later is run as if from today, and the reply says so. Such a what-if is **hypothetical**: it is
+never an option (an option only moves the surplus) and never a split while a conflict is open; a
+specialist's `run_what_if` only takes allocations.
+
+**The calculator** (`agents/calculator.py`). A sum no figure has is a `calculate` call: a label, a
+formula, named inputs (each a value spec: a figure, a fact, a what-if's figure, an earlier calculation,
+or a value said or assumed) and a unit. The formula is parsed with Python's `ast` against a whitelist
+(`+ - * /`, brackets, numbers, the input names, `min`, `max`, `abs`); anything else is refused before
+anything runs, and nothing is `eval`'d. It works in exact decimals and rounds half up: pesos to the
+centavo, percentages to 0.01 of a point, months and other numbers to 0.1. A result is `C1`, cited as
+`calc:C1`, at most 6 a turn.
+
+**Look-ups** (`agents/lookups.py`), read-only, from what Kako knew at the turn's time:
+
+- `get_history`: each value Kako has held for a thing, with when it held and where it came from, and
+  the life events; each line is `history:H1`.
+- `get_figures_on`: the engine's figures on another date, past or up to 60 months ahead (the facts as
+  known now, `take_snapshot` on that date), at most 3 a turn, cited as `figure:orch-R1:<ref>`.
+- `read_document`: the household's statements and Kako's reference documents, read from files
+  (`KAKO_DOCUMENTS_DIR`, by default `data/demo-household/`), so it works with Meko off. A statement
+  shows only once its last line is on or before the turn's date. Cited as `doc:<name>`, at most 4 a turn.
+
+**The number check** (V-10) now also accepts what the turn worked out: a what-if's changed values,
+another date's figures, history lines, a calculation's result, inputs and constants, and the numbers of
+a document the answer cites (only when it cites it). A sum written in prose still fails: the agent is
+told to call `calculate`.
+
+**What the household sees.** Under each reply, code shows labels worked out from what it rests on
+(`shown.labels_of`): **General information** (an `inform` or `advise` answer that rests on no figure
+or fact of theirs), **Scenario, nothing saved** (it cites a hypothetical what-if), **Calculated** (it
+cites a calculation), **From your documents** (it cites a document); then a "Scenario, nothing saved"
+card for each hypothetical what-if (what it changed, what Kako assumed, the headline figures before
+and after, how it was run), a card for each calculation with its formula and inputs, and the sources
+as chips ("What this answer rests on"). A document Kako read from its own files is shown as a
+document, never in Meko's violet. "Show the working" names the kind of answer. A hypothetical what-if
+is kept with the turn like any other, as a `scenario` with its changes as `scenario_override` rows
+(never facts); a new item has no entity, so it lives in the scenario's name and its run.
+
 ## The conversation
 
 A session is a conversation, and a household writes the way people chat: "Jun", "go with B", "just
@@ -661,7 +737,7 @@ never import the database, Meko or the model SDK.
 
 | Agent | Job | Tools | Writes |
 | --- | --- | --- | --- |
-| Orchestrator | Reads the conversation and the brief, decides which specialists to ask, resolves conflicts, writes the answer, proposes facts and events the household stated | The four specialists, `get_figures`, `get_facts`, `get_decisions`, `read_turns` (earlier turns in full), `propose_change` (a life event and the facts it changes), `propose_decision` | Pending proposals only |
+| Orchestrator | Reads the conversation and the brief, picks the kind of answer, answers it (asking the specialists only for a plan), resolves conflicts, proposes facts and events the household stated | The four specialists, `get_figures`, `get_facts`, `get_decisions`, `read_turns` (earlier turns in full), `get_history`, `get_figures_on`, `read_document`, `calculate`, `run_what_if` (with changes and new items), `propose_change` (a life event and the facts it changes) | Pending proposals only |
 | Budget | Spending against income; where the surplus comes from | Read tools, `run_what_if` | Nothing |
 | Debt | Payoff order and extra payments, respecting preferences | Read tools, `run_what_if` | Nothing |
 | Savings | Emergency runway and target | Read tools, `run_what_if` | Nothing |
@@ -774,14 +850,14 @@ not queried. A kept scenario branch is a record, not a second database.
 
 | Control | How |
 | --- | --- |
-| No numbers from a model | The engine computes; agents read figures; the number check (V-10) blocks the rest; dreaming copies quoted numbers only (V-09) |
+| No numbers from a model | The engine computes; a sum no figure has is worked out by the calculator in code; agents read figures; the number check (V-10) blocks the rest; dreaming copies quoted numbers only (V-09) |
 | No silent overwrite | Facts are insert-only apart from the status transitions in the data model; a database trigger rejects other updates and deletes |
 | A person decides | Every fact, event, decision, preference and promotion starts as a proposal, with its evidence; every number in it must be in its quotes (V-09). Only an adult of the household approves; an approval writes exactly what was proposed, once, and approving again changes nothing (`db/proposal_store.py`). A database trigger keeps a decided proposal from changing and refuses a decision or life event without its approved proposal (migration 0005). Promotion asks twice because it can't be undone |
 | Traceable advice | Every recommendation has a figure source and a non-figure source (V-11), and its Meko turn, which names the prompt versions the turn ran with (`kako_prompts`; each call's are in `llm_call.prompts`) |
 | Prompt injection | Session text, memories and documents are passed as data; agents have read tools and `propose_*` tools only; nothing an agent says can write without approval |
 | Spend and quota | Token budget per turn (`KAKO_TURN_TOKEN_BUDGET`) and a daily cap (`KAKO_DAILY_SPEND_CAP_USD`), both checked in the model manager before each call, with at most `KAKO_MODEL_MAX_RETRIES` retries and every attempt in `llm_call`; an Azure budget with email alerts on Kako's own resource group; a Meko call counter with a ceiling per environment, so rehearsals can't use up the Free tier's lifetime allowances |
 | Meko's own extraction | Meko Cloud extracts memories from the household's words before anyone approves them. Dreaming treats them as candidates; each ends linked to an approved fact or deleted. A Phase 1 test checks whether extraction can be turned off on a Cloud datapack (local Meko allows it) |
-| Not financial advice | Synthetic household only; the app and README say so; no product picks, no tax calculations |
+| Not financial advice | Synthetic household only; the app and README say so; no product picks, no tax calculations, no live prices; general information is labelled as such |
 | Secrets | Environment variables only; `.env` is gitignored and `.env.example` lists the names |
 
 ## Cost plan

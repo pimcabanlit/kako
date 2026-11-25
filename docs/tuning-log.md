@@ -718,3 +718,50 @@ it led to.
       and says how to accept it; the likeliest miss is offering A and B again (the options check
       fails), since there is no "accept an option" step yet.
     - About 20 to 30 calls, **US$0.15 to US$0.30**. Score: 85% to 95% of checks.
+
+### 16. Answering any question: sessions, both test sets, the conversation set and the open set (Nov 25, 2026)
+
+- **Change tested:** Phase 5a item 10 (docs/architecture.md, "Answering any question"). The
+  orchestrator and the single agent pick a kind of answer and hand it in with its sources; the
+  specialists are asked only for a plan; `run_what_if` takes `changes` and `new` items (hypothetical,
+  never an option); new tools `calculate`, `get_history`, `get_figures_on` and `read_document`; the
+  number check accepts what the turn worked out and a cited document's numbers; `common.md`,
+  `orchestrator.md` and `single.md` rewritten ("Answer first"; the "What Kako can test" lines
+  gone); a new reference document, `general-guidance`. Every orchestrator request changes, so entry
+  15's runs are folded into this one and nothing from entry 15 is recorded on its own: sessions 2
+  and 4 (`kako demo record`), the test set for both architectures and without the preference, the
+  conversation set (specialists), and the new open-question set (`kako conversations --set open`,
+  specialists, 30 one-turn questions). Waiting for Pim's yes; estimate about **US$2.00 to US$2.60**
+  in all, under the daily cap of US$3, run over two days if it would pass it.
+- **Prediction (written before the runs):**
+  - **Session 2:** a `plan` answer, as entry 14: A all on the card (9 months), B Jun's split (17
+    months, the fund's target in 12), the choice left to the household. Its sources name the two
+    what-ifs and Jun's words. 6 to 10 calls, **US$0.03 to US$0.06**.
+  - **Session 4:** turn 1 a `record` answer with one `propose_change`, 2 calls. Turn 2 a `plan`
+    replan against Oct 18 with Sessions 1 to 3 to revisit, A recommended on the preference. 12 to
+    16 calls, **US$0.10 to US$0.16**.
+  - **Test set:** most questions are plans and stay so. The risk is the other way from before: a
+    "what if we put ₱X in" question (q06, q17) answered as a `simulate` with no option, where the
+    set expects an option. Specialists 88% to 95% (entry 12: 93.3%), single 86% to 93% (90.7%);
+    cost about entry 12's (US$0.62 and US$0.49), without the preference about US$0.12.
+  - **Conversation set:** as entry 15's prediction, except c01 turn 1 ("what if i lose my job"):
+    now a `simulate` with Jun's salary at `none`, the runway shown, no question back. 85% to 95%.
+  - **Open set** (30 questions, scored on kind, sources, labels, words, numbers and nothing filed):
+    - Simulations (o01 to o07, o30): each runs one what-if with `changes` or `new`, `said:` values
+      for what was said and `assume:` for a loan's missing rate; "Scenario, nothing saved" on each.
+      The likeliest miss: a rent rise or 10% raise "from March" run without saying it is run as if
+      from today (not scored), or the reply working out a difference in prose and being sent back
+      once.
+    - Explanations and look-ups (o08, o09, o16 to o18, o22, o23): `get_figures_on` or `get_history`, and
+      the card statement for o17, labelled "From your documents".
+    - Sums (o19 to o21): `calculate`, labelled "Calculated". Likeliest miss: o20's share of income
+      to debt answered from `cashflow.debt_payment_share` without a calculation, which is fine but
+      fails "Calculated" if the set asks for it.
+    - General knowledge and advice (o10 to o15, o24, o25, o29): `inform` or `advise` from
+      `general-guidance` and the reference documents; o25 (tax on 13th-month pay) explains the
+      rule and says Kako doesn't work tax out; o24 names kinds of investment, no product. Likeliest
+      miss: "General information" missing when the reply also cites a household figure (by design
+      the label then doesn't apply; the set expects it only where no figure is needed).
+    - o26 a `plan` with 2 to 4 options; o27 a `record` proposing Mara's salary; o28 small talk.
+    - About 70 to 100 calls, **US$0.30 to US$0.60**. Score: 80% to 92% of checks; no flat "can't"
+      anywhere; nothing filed except o27.

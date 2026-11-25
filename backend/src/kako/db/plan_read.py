@@ -26,6 +26,7 @@ from typing import Any, cast
 from sqlalchemy import RowMapping, Table, func, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from kako.agents.answers import DOCUMENT, FILE
 from kako.agents.present import Refs as EntityRefs
 from kako.agents.present import day, fact_value, figure_value, money
 from kako.agents.replan_store import last_decision
@@ -152,7 +153,7 @@ class DecisionWhy:
 
 @dataclass(frozen=True)
 class MemoryWhy:
-    kind: str  # memory or knowledge
+    kind: str  # memory, knowledge, or document: one of Kako's own files (source id file:<name>)
     source_id: str
     quote: str | None
     fact_id: uuid.UUID | None  # the fact Kako keeps this memory for, if it is one of Kako's
@@ -413,7 +414,7 @@ async def read_plan(
                     ],
                     memories=[
                         MemoryWhy(
-                            s["source_kind"],
+                            DOCUMENT if s["source_id"].startswith(FILE) else s["source_kind"],
                             s["source_id"],
                             s["quote"],
                             kept_for.get(s["source_id"]),

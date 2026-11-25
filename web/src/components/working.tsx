@@ -4,6 +4,7 @@ import { ChevronRight, LoaderCircle } from "lucide-react";
 
 import type { SpecialistProposal, Step, TurnAnswer } from "@/lib/types";
 import { count, usd } from "@/lib/text";
+import { answerKindWords } from "@/lib/words";
 import {
   describeTool,
   groupSteps,
@@ -135,6 +136,7 @@ export function Working({ steps, answer }: { steps: Step[]; answer: TurnAnswer }
           </section>
         )}
         <p className="num flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line pt-3 text-xs text-muted">
+          {answerKindWords(answer.kind) && <span>Answered as: {answerKindWords(answer.kind)}</span>}
           <span>{answer.cost.model_calls} model calls</span>
           <span>
             {count(answer.cost.input_tokens)} tokens in, {count(answer.cost.output_tokens)} out

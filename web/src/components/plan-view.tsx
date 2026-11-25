@@ -354,11 +354,15 @@ function OptionPanel({
   const { why } = option;
   const facts = [...new Set([...why.facts, ...factsBehind(why.figures, plan.figures)])];
   const tally = checkTally(option.checks);
+  // A document Kako read from its own files is not Meko's: it shows apart, without violet.
+  const documents = why.memories.filter((m) => m.kind === "document");
+  const fromMeko = why.memories.filter((m) => m.kind !== "document");
   const rests = [
     why.figures.length ? plural(why.figures.length, "figure") : null,
     facts.length ? plural(facts.length, "fact") : null,
     why.decisions.length ? plural(why.decisions.length, "decision") : null,
-    why.memories.length ? `${why.memories.length} from Meko` : null,
+    fromMeko.length ? `${fromMeko.length} from Meko` : null,
+    documents.length ? plural(documents.length, "document") : null,
   ].filter((p): p is string => p !== null);
   return (
     <article
@@ -437,10 +441,24 @@ function OptionPanel({
               </ul>
             </WhySection>
           )}
-          {why.memories.length > 0 && (
+          {documents.length > 0 && (
+            <WhySection title="From documents">
+              <ul className="space-y-2.5">
+                {documents.map((m, i) => (
+                  <li key={`${m.source_id}-${i}`} className="space-y-1">
+                    <span className="chip font-medium">
+                      Document: {m.source_id.replace(/^file:/, "").replace(/-/g, " ")}
+                    </span>
+                    {m.quote && <p className="quote line-clamp-4">{m.quote}</p>}
+                  </li>
+                ))}
+              </ul>
+            </WhySection>
+          )}
+          {fromMeko.length > 0 && (
             <WhySection title="From Meko">
               <ul className="space-y-2.5">
-                {why.memories.map((m, i) => {
+                {fromMeko.map((m, i) => {
                   const kept = m.fact_id ? plan.facts[m.fact_id] : undefined;
                   return (
                     <li key={`${m.source_id}-${i}`} className="space-y-1">

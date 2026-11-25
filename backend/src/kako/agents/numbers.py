@@ -11,7 +11,14 @@ any other number written in digits, and a spelled-out number with a unit ("nine 
 - a fact in the turn's snapshot (money, a rate as a percentage, a whole number, a date);
 - an allocation in one of the turn's what-ifs (a hypothetical fact, `scenario_override`);
 - a number in the household's own message, or in its earlier messages of the session (an amount
-  only from ₱100, as the tools take them), or the household's date.
+  only from ₱100, as the tools take them, 20k counted), or the household's date;
+- a value a what-if changed or gave a new item (`agents.scenarios`), the household's or assumed;
+- a figure of a run on another date (`get_figures_on`), a value Kako held over time that
+  `get_history` read, and a calculation's result, inputs and the numbers in its formula
+  (`calculate`);
+- a number in a document the answer cites (`doc:`): a statement or a reference document, read
+  with `read_document` or found by Meko (the brief's `K1`, a search's). Only when cited, so the
+  answer says where it comes from.
 
 A negative figure matches its amount ("₱5,050.00 more than the surplus" for -₱5,050.00).
 Written at a lower precision a value is rounded half up to it ("2.1 months", "₱12,460").
@@ -36,6 +43,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Final
 
+from kako.agents.answers import Citation
 from kako.agents.checks import Number, Subject, TextCheck
 from kako.agents.tools import MESSAGE_CHARS, TurnState, said_amounts
 from kako.engine.figures import Figure
@@ -138,6 +146,8 @@ def _add_held(pool: Pool, name: str, key: str | None, value: FactValue | None, o
 def _add_said(pool: Pool, message: str) -> None:
     """The numbers in the household's own words, as `said`."""
     said = said_amounts(message)
+    for centavos in said:  # 20k and 1.5M too, which the reader reads as scaled
+        pool.money.setdefault(Decimal(centavos) / 100, "said")
     for token in scan(message):
         for day in token.dates:
             pool.dates.setdefault(day, "said")
@@ -158,7 +168,70 @@ def _add_said(pool: Pool, message: str) -> None:
             target[token.kind].setdefault(token.value, "said")
 
 
-def pool_of(state: TurnState) -> Pool:
+def _add_value(pool: Pool, key: str, value: FactValue, name: str) -> None:
+    """A what-if's value of `key`, as a fact's would be."""
+    pool.refs.add(name)
+    kind = attribute(key).value_type
+    if kind == "money" and isinstance(value, int):
+        pool.money.setdefault(Decimal(value) / 100, name)
+    elif kind == "rate" and isinstance(value, Decimal):
+        pool.percent.setdefault(value * 100, name)
+    elif kind == "int" and isinstance(value, int):
+        pool.counts.setdefault(Decimal(value), name)
+        pool.months.setdefault(Decimal(value), name)
+    elif isinstance(value, date):
+        pool.dates.setdefault(value, name)
+
+
+def _add_quoted(pool: Pool, text: str, name: str) -> None:
+    """Every number in a cited document, under its ref: amounts of any size, percentages,
+    months, counts and dates."""
+    for token in scan(text):
+        for day in token.dates:
+            pool.dates.setdefault(day, name)
+        if token.kind == "month" and token.year_month is not None:
+            pool.dates.setdefault(date(*token.year_month, 1), name)
+        if token.value is None or token.places > MAX_PLACES:
+            continue
+        if token.kind == "number":
+            pool.counts.setdefault(token.value, name)
+            pool.money.setdefault(token.value, name)
+        elif token.pools == ("years",):
+            pool.months.setdefault(token.value * 12, name)
+            pool.counts.setdefault(token.value, name)
+        else:
+            target = {"money": pool.money, "months": pool.months, "percent": pool.percent}
+            target[token.kind].setdefault(token.value, name)
+
+
+def _add_calculation(pool: Pool, state: TurnState, ref: str) -> None:
+    calc = state.calculations[ref]
+    name = f"calc:{ref}"
+    pool.refs |= {ref, name}
+    result = calc.result
+    if calc.unit == "pesos":
+        pool.money.setdefault(abs(result), name)
+    elif calc.unit == "percent":
+        pool.percent.setdefault(abs(result) * 100, name)
+    elif calc.unit == "months":
+        pool.months.setdefault(result, name)
+    else:
+        pool.counts.setdefault(result, name)
+        pool.money.setdefault(abs(result), name)
+    for i in calc.inputs:  # "₱9,050.00 a month for 12 months is …"
+        if i.shown.endswith("%"):
+            pool.percent.setdefault(abs(i.value) * 100, name)
+        else:
+            pool.money.setdefault(abs(i.value), name)
+            pool.counts.setdefault(i.value, name)
+            pool.months.setdefault(i.value, name)
+    for constant in calc.constants:
+        pool.counts.setdefault(constant, name)
+        pool.months.setdefault(constant, name)
+        pool.percent.setdefault(constant, name)
+
+
+def pool_of(state: TurnState, cited: Sequence[Citation] = ()) -> Pool:
     """Everything a number in this turn may match: the turn's run first, then each what-if in the
     order it ran, the snapshot's facts, the what-ifs' allocations, the household's own words."""
     pool = Pool()
@@ -189,6 +262,24 @@ def pool_of(state: TurnState) -> Pool:
         _add_said(pool, words[:MESSAGE_CHARS])
     pool.dates.setdefault(state.snapshot.on, "date:today")
     pool.refs |= set(state.what_ifs)
+    # What a what-if changed: each value it used, the household's or assumed, and a new item's.
+    for ref, what_if in state.what_ifs.items():
+        for used in (*what_if.changes, *(v for n in what_if.new for v in n.values)):
+            _add_value(pool, used.attribute, used.after, f"what-if:{ref}")
+    for ref, dated in state.dated_runs.items():  # figures on another date
+        pool.refs.add(ref)
+        pool.dates.setdefault(dated.on, f"date:{ref}")
+        for figure in dated.run.figures:
+            pool.add_figure(figure, f"figure:{ref}:{refs.figure(figure)}")
+    for ref, fact in state.history_facts.items():  # values Kako held over time
+        _add_fact(pool, fact, f"history:{ref}")
+        if fact.valid_to is not None:
+            pool.dates.setdefault(fact.valid_to, f"history:{ref}")
+    for ref in state.calculations:
+        _add_calculation(pool, state, ref)
+    for citation in cited:  # a document the answer cites: its numbers, under its ref
+        if citation.kind == "knowledge":
+            _add_quoted(pool, citation.shown, citation.ref)
     # The brief's own refs (D1, P1, M1, K1), which a specialist's summary may name too.
     brief = state.brief
     named: tuple[tuple[str, Iterable[str]], ...] = (
@@ -270,9 +361,13 @@ def names_of(state: TurnState) -> tuple[str, ...]:
 
 
 def check_texts(
-    state: TurnState, texts: Sequence[tuple[Subject, str, str]], *, refs_allowed: bool = False
+    state: TurnState,
+    texts: Sequence[tuple[Subject, str, str]],
+    *,
+    refs_allowed: bool = False,
+    cited: Sequence[Citation] = (),
 ) -> tuple[TextCheck, ...]:
-    pool = pool_of(state)
+    pool = pool_of(state, cited)
     names = names_of(state)
     return tuple(
         check_text(s, label, text, pool, names, refs_allowed=refs_allowed)
@@ -301,7 +396,9 @@ def mismatch(checks: Sequence[TextCheck]) -> str:
         parts.append(
             f"the number check found numbers that match no figure, fact or what-if of this turn: "
             f"{numbers}. Write only figures exactly as a tool or the brief shows them (such as "
-            "₱9,050.00 or 9 months), or leave the number out; never work one out"
+            "₱9,050.00 or 9 months), or leave the number out; never work one out. A sum you need "
+            "is a calculation (calculate, then cite calc:C1); a number from a document passes "
+            "once you cite that document in sources"
         )
     refs = listed(refs=True)
     if refs:

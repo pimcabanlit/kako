@@ -42,10 +42,41 @@ const SOURCE_KINDS: Record<string, { label: string; tone: Tone }> = {
   memory: { label: "Meko memory", tone: "meko" },
   knowledge: { label: "Meko knowledge", tone: "meko" },
   conversation: { label: "Said in the session", tone: "plain" },
+  calculation: { label: "Calculated", tone: "plain" },
+  history: { label: "Kako's records", tone: "plain" },
+  document: { label: "Document", tone: "plain" },
 };
 
 export function sourceKind(source: Source): { label: string; tone: Tone } {
   return SOURCE_KINDS[source.kind] ?? { label: source.kind, tone: "plain" };
+}
+
+/** What a source chip shows after its kind: the value, the document's name, or nothing for the
+ * household's own words (shown elsewhere) and bare refs such as M1. */
+export function sourceDetail(source: Source): string | null {
+  if (source.kind === "conversation") return null;
+  if (source.kind === "document") return source.ref.replace(/^doc:/, "").replace(/-/g, " ");
+  const first = source.shown.split("\n")[0].trim();
+  if (!first || /^[A-Z]+\d+$/.test(first)) return null;
+  return first;
+}
+
+// The kinds of answer (backend agents/answers.py ANSWER_KINDS), as "show the working" names them.
+const ANSWER_KINDS: Record<string, string> = {
+  inform: "General information",
+  explain: "Your numbers explained",
+  look_up: "Looked up in your records",
+  compute: "A sum, worked out",
+  simulate: "A what-if, nothing saved",
+  advise: "Pros and cons",
+  plan: "A plan with options",
+  record: "News held for your yes",
+  small_talk: "A short reply",
+};
+
+export function answerKindWords(kind: string | null | undefined): string | null {
+  if (!kind) return null;
+  return ANSWER_KINDS[kind] ?? kind.replace(/_/g, " ");
 }
 
 /** A proposal's title on the approval card. */

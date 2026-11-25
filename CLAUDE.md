@@ -205,6 +205,7 @@ uv run kako test-set --architecture single --only q01,q07   # the single-agent b
 KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
 uv run kako test-set --without-preference    # the preference's four questions on the household without it, from test-set-specialists-without-preference.json (--save: data/test-set/results/preference.json)
 uv run kako conversations                 # the conversation test set: multi-turn sessions scored in code, replayed from data/recorded/conversations-<architecture>.json (--architecture, --only c01, --save; KAKO_MODEL_MODE=record spends)
+uv run kako conversations --set open      # the open-question set (data/test-set/open-questions.toml): 30 everyday questions, each answer's kind, sources and labels scored in code, from data/recorded/open-questions-<architecture>.json
 uv run kako dream end <session>           # end a session (once) and queue its dreaming run (--at; the API: POST /api/v1/sessions/{id}/end)
 uv run kako dream run                     # run the queued or failed dreaming runs: read the session, one extraction, checks in code, pending proposals (--session, --at)
 uv run kako dream settle                  # carry out each memory Meko extracted from a dreamed session: linked to what a person approved, or deleted (--at)
@@ -325,10 +326,17 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   drops first when over budget) and `brief_store.py` (`gather_brief`: Postgres, the session's
   earlier turns from `session_turn` and `turn_context`, the household's earlier sessions, then one
   `context_search`); `answers.py` (what agents
-  hand back: allocations with their amount specs, citations, proposals, options), `tools.py`
+  hand back: allocations with their amount specs, citations, proposals, options, an answer's kind
+  and sources), `tools.py`
   (`TurnState` and the agents' tools: `get_figures`, `get_facts`, `get_decisions`, one extra
   `search_memory`, `run_what_if`, the orchestrator's `read_turns`; amount specs and citations
-  resolved and checked in code),
+  resolved and checked in code), `scenarios.py` (pure: what the orchestrator's `run_what_if` may
+  change besides allocations, a fact for the run or a new item, each value a spec resolved in code:
+  `said:`, `assume:`, `+`/`-`; docs/architecture.md, "Answering any question"), `calculator.py`
+  (`calculate`: a formula over named inputs, parsed against a whitelist with `ast`, worked out in
+  exact decimals, never `eval`'d) and `lookups.py` (`get_history`, `get_figures_on` and
+  `read_document`, read-only, from what Kako knew at the turn; documents from `KAKO_DOCUMENTS_DIR` or
+  the demo household's files),
   `specialists.py` (the four specialists and `submit_proposal`), `orchestrator.py` (`answer_turn`:
   the `ask_*` tools, at most 4 a turn, and `submit_answer`), `reconciling.py` (the orchestrator's
   side of reconciliation: the rules' note on the proposals together, at most 3 splits each checked
@@ -357,7 +365,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   0), and `runner.py` runs the set through `ask` for either architecture and reports the score, model
   calls, tokens, cost and Meko calls; `evals/conversations.py` the conversation test set
   (`data/test-set/conversations.toml`): multi-turn sessions played through `run_turn`, each turn
-  scored in code on what the orchestrator was sent and on the answer; `evals/dreaming.py` dreaming's labelled set
+  scored in code on what the orchestrator was sent and on the answer, and the open-question set
+  (`data/test-set/open-questions.toml`) the same way, with each answer's kind, sources and labels; `evals/dreaming.py` dreaming's labelled set
   (`data/dreaming/labelled.toml`): each case's expected, maybe and forbidden proposals, the score
   and the cases run through extraction and classification; `evals/results.py` reads the saved
   test-set and dreaming results for the metrics page, and `evals/preference.py` the learned
@@ -495,7 +504,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   manager) use the scripted model in `tests/support/models.py`, never Foundry;
   `tests/integration/test_agent_logs.py` writes and reads `llm_call` and `agent_step`.
   `test_agent_tools.py` tests the tools on the worked example (amount specs, the rest, refusals,
-  citations, one search, proposals), and `test_agents_turn.py` runs session 2 with a scripted model:
+  citations, one search, proposals), `test_agents_answering.py` the tools for any question (value
+  specs, changes and new items with every refusal, the calculator's whitelist and rounding, history
+  as known then, figures on another date, documents issued by the turn, the number check on what the
+  turn worked out, an answer's kind, sources and labels), and `test_agents_turn.py` runs session 2 with a scripted model:
   options A and B with the worked example's figures, cited, what each agent was sent, and the
   parallel turn recorded and replayed strictly; `tests/integration/test_agents_turn.py` runs the same
   turn on the demo household in Postgres and local Meko (the brief's search and a specialist's), and
@@ -548,7 +560,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_evals_conversations.py` the conversation set's file and its checks on an answer, and
   `tests/integration/test_conversations.py` plays the set with a scripted model on Postgres (every
   check on what was sent passes; turn 55 of 60 reaches turn 3 through `read_turns`) and the
-  command's refusals; `tests/integration/test_upkeep.py` also keeps an ended session's recap once.
+  command's refusals; `tests/integration/test_open_questions.py` answers five open questions with a
+  scripted model on Postgres (a raise and a second car loan as scenarios, a statement, a value's
+  history, a sum: each labelled and sourced, nothing written to facts or proposals, the raise kept as
+  a `scenario_override`); `tests/integration/test_upkeep.py` also keeps an ended session's recap once.
   `test_meko_quota.py` and `test_meko_adapter.py` test the counter, the guard, `McpMeko` against a
   scripted server, `FakeMeko` and the demo upload; `tests/integration/test_meko_adapter.py` runs the
   adapter on local Meko with every call counted in Postgres (documents go to a throwaway datapack),
@@ -587,7 +602,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `metrics-view.tsx` (what Kako measured; docs/architecture.md, "The metrics screen"),
   `money-view.tsx` (where the money stands: overview with the donut, the monthly plan, each debt's
   amortization table, big moments, net worth; the view in the address, `?view=`;
-  docs/architecture.md, "The money screen"), `compare-view.tsx` (each option beside today's plan:
+  docs/architecture.md, "The money screen"), `answer-parts.tsx` (an answer's labels, its sources as
+  chips, the "Scenario, nothing saved" card and a calculation's working), `compare-view.tsx` (each option beside today's plan:
   the card's "Before → after", "Compare the options" and the month by month, on the session and
   plan screens; docs/architecture.md, "The session screen"), `docs-view.tsx` (the documentation:
   its menu, a page's blocks, "Copy page as Markdown", "On this page", whether Meko is reachable here;

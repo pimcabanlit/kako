@@ -510,6 +510,30 @@ reads, never what Kako works out.
    `agents/tools.py`, `turn_context` (migration 0009), `upkeep/recaps.py`, and
    `evals/conversations.py` with `data/test-set/conversations.toml`. Recording waits for Pim's yes.
 
+10. **Kako answers any money question (Nov 25).** Pim, after "what happens if my salary increases by
+    20000" was met with "Kako can't test that": "WHAT I DID WAS JUST TO ASK, NOT EDIT THE DATA, so
+    why cant it just answer????" and "it's not just all about what ifs … there could be general other
+    questions". Agreed with Pim on Nov 25: Kako reads, explains, works out and tries freely; it writes
+    data only when someone states news and an adult approves; it always shows its sources; it never
+    answers with a flat "can't", and declines only real limits (tax amounts, picking an investment
+    product, live market data), saying why and giving what it can; every household peso figure still
+    comes from code.
+    Done when: the orchestrator picks a kind of answer (inform, explain, look_up, compute, simulate,
+    advise, plan, record, small_talk) and asks the specialists only for a plan; `run_what_if` changes
+    any fact for the run and adds new items, nothing saved; a calculator works sums out in code with
+    its working shown; history, figures on another date and documents can be read; the number check
+    accepts what the turn worked out and a cited document's numbers; each answer shows its labels,
+    sources, a "Scenario, nothing saved" card and a calculation's working; an open-question set of 30
+    questions is scored in code and passes on a scripted model on Postgres; then, with Pim's yes, the
+    sessions, the test sets, the conversation set and the open set recorded again on Foundry.
+    Built Nov 25 (docs/architecture.md, "Answering any question"): `agents/scenarios.py`,
+    `agents/calculator.py`, `agents/lookups.py`, the kinds and sources in `agents/answers.py` and
+    `agents/orchestrator.py`, the labels and cards in `agents/shown.py` and
+    `web/src/components/answer-parts.tsx`, `data/demo-household/kb/general-guidance.md`, and
+    `data/test-set/open-questions.toml` (`kako conversations --set open`). The prompts changed, so the
+    recordings replay leniently until they are recorded again; recording waits for Pim's yes
+    (docs/tuning-log.md entry 16 holds the prediction).
+
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 
 1. **Video** under 5 minutes, following the storyboard.

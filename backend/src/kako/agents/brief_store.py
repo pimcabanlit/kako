@@ -18,7 +18,9 @@ recorded session replays the same way on any database.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Collection
+from collections import defaultdict
+from collections.abc import Collection, Sequence
+from dataclasses import replace
 from datetime import date, datetime
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -41,7 +43,7 @@ from kako.agents.brief import (
 from kako.agents.conversation import search_query
 from kako.agents.kept import TEST_SET_TITLE, KeptChange, KeptOption, KeptTurn, PastSession
 from kako.agents.replan_store import SessionChanges, gather_replan
-from kako.db.fact_store import load_entities, snapshot
+from kako.db.fact_store import load_entities, load_facts
 from kako.db.models import (
     Decision,
     DecisionOption,
@@ -56,6 +58,8 @@ from kako.db.models import (
     TurnContext,
 )
 from kako.engine import Run, compute
+from kako.facts.model import FactRow
+from kako.facts.snapshot import known, take_snapshot, window_end
 from kako.meko.adapter import Context, Meko
 
 HOUSEHOLD = cast(Table, Household.__table__)
@@ -496,6 +500,20 @@ async def _check_meko_scope(
         raise BriefStoreError("the conversation isn't one of this household's sessions")
 
 
+def known_facts(facts: Sequence[FactRow], known_at: datetime | None) -> tuple[FactRow, ...]:
+    """Every fact Kako held at `known_at` (not retracted then), each window ending where it did
+    then: a replacement recorded later hadn't closed it yet."""
+    successors: dict[uuid.UUID, list[FactRow]] = defaultdict(list)
+    for fact in facts:
+        if fact.replaces is not None:
+            successors[fact.replaces].append(fact)
+    return tuple(
+        replace(f, valid_to=window_end(f, successors.get(f.id, []), known_at))
+        for f in sorted(facts, key=lambda f: f.id)
+        if known(f, known_at)
+    )
+
+
 async def gather_brief(
     conn: AsyncConnection,
     meko: Meko | None,
@@ -546,7 +564,8 @@ async def gather_brief(
     if speaker is not None and writer is None:
         raise BriefStoreError("the message's writer isn't a person of this household")
     entities = await load_entities(conn, household_id)
-    snap = await snapshot(conn, household_id, on, known_at)
+    every = await load_facts(conn, household_id)
+    snap = take_snapshot(household_id, every, on, known_at)
     if run is None:
         run = compute(snap, entities)
     elif run.snapshot_hash != snap.hash:
@@ -628,5 +647,6 @@ async def gather_brief(
         search=query if query != message else None,
         approved_memories=approved,
         recap_memories=recaps,
+        known_facts=known_facts(every, known_at),
     )
     return render_brief(inputs, budget), inputs

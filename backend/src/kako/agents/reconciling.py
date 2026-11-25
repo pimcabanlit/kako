@@ -207,6 +207,11 @@ class Reconciler:
         async def run_what_if(arguments: dict[str, Any]) -> ToolResult:
             if self.open is None:
                 return await what_if_tool.run(arguments)
+            if arguments.get("changes") or arguments.get("new"):
+                raise ToolInputError(
+                    "while a conflict is open, a what-if is a split of the surplus: allocations "
+                    "only, no changes or new items"
+                )
             if len(self.splits) + self._in_flight >= MAX_SPLITS:
                 raise ToolInputError(
                     f"{MAX_SPLITS} splits tried: resolve with one that fits, or leave the choice "

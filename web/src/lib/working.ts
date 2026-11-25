@@ -88,6 +88,11 @@ export function describeTool(tool: string): string {
     submit_answer: "Handed in the answer",
     submit_claims: "Handed in what it found",
     propose_change: "Held a change for your yes",
+    read_turns: "Read earlier turns",
+    get_history: "Read values over time",
+    get_figures_on: "Read the engine's figures on another date",
+    read_document: "Read a document",
+    calculate: "Worked out a sum",
   };
   return words[tool] ?? tool;
 }

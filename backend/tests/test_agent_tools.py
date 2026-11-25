@@ -80,9 +80,10 @@ def _alloc(entity: dict[str, str], amount: str) -> dict[str, str]:
         ("P4000 or PHP 5,050.50, maybe 4000 pesos", {400_000, 505_050}),
         ("in 12 months, 3 times", set()),  # counts, not amounts
         ("₱1,234,567.5", {123_456_750}),
-        ("by 2030 with 150k saved, due 15/02/2028, the 2nd", set()),  # years, 150k, a date
+        ("by 2030 with 150k saved, due 15/02/2028, the 2nd", {15_000_000}),  # 150k, not the year
         ("₱2,030 or 2030 pesos or P2030", {203_000}),  # a year-like amount with a peso sign
-        ("1.5 million", set()),
+        ("1.5 million, 20k or ₱1.5M", {150_000_000, 2_000_000}),  # as people write amounts
+        ("6m to go", set()),  # a lower-case m is months
     ],
 )
 def test_said_amounts(message: str, amounts: set[int]) -> None:
@@ -178,15 +179,15 @@ async def test_a_what_if_over_the_surplus_is_rejected(house: Villanueva) -> None
     )
     assert over.outcome == "rejected"
     assert "Over-allocated" in over.content
-    assert "- plan.unallocated = -₱4,000.00 (negative)" in over.content
+    assert "- plan.unallocated = ₱9,050.00 → -₱4,000.00 (negative)" in over.content
     fits = await tool.run({"allocations": [_alloc(CARD, "said:4000"), _alloc(FUND, "rest")]})
     assert fits.outcome == "ok"
     assert list(state.what_ifs) == ["debt1-W1", "debt1-W2"]
     assert state.what_ifs["debt1-W1"].over_allocated
-    assert "- savings.months_to_target = 12 months" in fits.content
+    assert "- savings.months_to_target = none (nothing allocated to it) → 12 months" in fits.content
     # Figures that don't change aren't repeated; the unallocated surplus always is.
     assert "cashflow.monthly_income" not in fits.content
-    assert "- plan.unallocated = ₱0.00" in fits.content
+    assert "- plan.unallocated = ₱9,050.00 → ₱0.00" in fits.content
 
 
 async def test_read_tools(house: Villanueva) -> None:

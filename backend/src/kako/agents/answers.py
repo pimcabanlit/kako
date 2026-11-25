@@ -19,13 +19,52 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
 from kako.agents.checks import TextCheck
 from kako.engine.figures import Figure
 from kako.planning.reconcile import Conflict
 
-SourceKind = Literal["figure", "fact", "decision", "memory", "knowledge", "conversation"]
+SourceKind = Literal[
+    "figure", "fact", "decision", "memory", "knowledge", "conversation", "calculation", "history"
+]
+# A document Kako read from its own files (`read_document`) is cited as kind "knowledge" with
+# this prefix on its source id, and shown as a document, never as Meko's.
+FILE: Final = "file:"
+DOCUMENT: Final = "document"
+# What `recommendation_source` stores: an option cites only these.
+STORED_KINDS: tuple[SourceKind, ...] = (
+    "figure",
+    "fact",
+    "decision",
+    "memory",
+    "knowledge",
+    "conversation",
+)
+# The kind of answer a turn gives, which the orchestrator picks first (docs/architecture.md,
+# "Answering any question").
+AnswerKind = Literal[
+    "inform",
+    "explain",
+    "look_up",
+    "compute",
+    "simulate",
+    "advise",
+    "plan",
+    "record",
+    "small_talk",
+]
+ANSWER_KINDS: tuple[AnswerKind, ...] = (
+    "inform",
+    "explain",
+    "look_up",
+    "compute",
+    "simulate",
+    "advise",
+    "plan",
+    "record",
+    "small_talk",
+)
 Specialist = Literal["budget", "debt", "savings", "goals"]
 SPECIALISTS: tuple[Specialist, ...] = ("budget", "debt", "savings", "goals")
 
@@ -112,3 +151,7 @@ class TurnAnswer:
     # conversation is about now, and the question the reply asks the household, if any.
     topic: str | None = None
     asks: str | None = None
+    # The kind of answer, and what the reply rests on (each checked): None and () on a turn kept
+    # before answers had them, or a reply handed in without submit_answer.
+    kind: AnswerKind | None = None
+    sources: tuple[Citation, ...] = ()

@@ -16,6 +16,8 @@ from __future__ import annotations
 from typing import Final
 
 from kako.agents.answers import TurnAnswer
+from kako.agents.calculator import calculate_tool
+from kako.agents.lookups import document_tool, figures_on_tool, history_tool
 from kako.agents.model_manager import ModelManager
 from kako.agents.numbers import check_texts
 from kako.agents.orchestrator import (
@@ -55,8 +57,12 @@ async def answer_alone(manager: ModelManager, turn: TurnContext, state: TurnStat
         *read_tools(state, PATH),
         decisions_tool(state),
         turns_tool(state),
+        history_tool(state),
+        figures_on_tool(state),
+        document_tool(state),
+        calculate_tool(state, PATH),
         search_tool(state, PATH, "kako:orchestrator"),
-        what_if_tool(state, PATH),
+        what_if_tool(state, PATH, changes=True),
         proposal_tool(state),
         answer_tool(state, asked, reconciler),
     ]

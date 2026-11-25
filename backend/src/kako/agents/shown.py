@@ -14,15 +14,24 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import BaseModel
 
-from kako.agents.present import money
+from kako.agents.answers import DOCUMENT, FILE, Citation, TurnAnswer
+from kako.agents.present import figure_value, money
 from kako.agents.reconciling import LABELS
 from kako.agents.replan import changes_lines, why_lines
+from kako.agents.scenarios import shown_value
+from kako.facts.model import EntityRow
+from kako.planning.why import HEADLINE, figure_title
 from kako.settings import Settings
+from kako.upkeep.sentences import PHRASES
 
 if TYPE_CHECKING:
     from kako.agents.ask import Asked
+    from kako.agents.calculator import Calculation
+    from kako.agents.scenarios import Change
+    from kako.agents.tools import TurnState, WhatIf
 
 LOCAL_PREFIX: Final = "local-"  # a session's id with no Meko conversation
+SOURCE_CHARS: Final = 600  # the most of a source's words shown (a document is cited whole)
 
 
 class AllocationOut(BaseModel):
@@ -115,6 +124,35 @@ class CostOut(BaseModel):
     brief_budget: int | None = None
 
 
+class FigureChangeOut(BaseModel):
+    """One figure a what-if moves, before and after, in words."""
+
+    title: str  # "Money left over each month"
+    before: str  # "₱9,050.00", or "none" for a new item's
+    after: str
+
+
+class ScenarioOut(BaseModel):
+    """A what-if the answer rests on that changes facts or adds items: never saved as a fact,
+    shown with what it assumed and what it moves ("Scenario, nothing saved")."""
+
+    what_if: str
+    changes: list[str]  # each change in words: "Jun's salary (take-home pay a month): A → B"
+    assumptions: list[str]  # the values Kako assumed, not the household's
+    figures: list[FigureChangeOut]
+    note: str  # how it was run
+
+
+class CalculationOut(BaseModel):
+    """A calculation the answer cites, with its working."""
+
+    ref: str
+    label: str
+    formula: str
+    inputs: list[str]  # "income = ₱60,000.00 (figure: monthly income)"
+    result: str
+
+
 class TurnOut(BaseModel):
     session_id: uuid.UUID
     seed: str
@@ -131,6 +169,126 @@ class TurnOut(BaseModel):
     calc_run_id: uuid.UUID | None
     meko: MekoTurnOut
     cost: CostOut
+    # The kind of answer, what it rests on, and how it was worked out (none on a turn kept before
+    # answers had them): the labels under the reply, its sources, the scenarios and calculations.
+    kind: str | None = None
+    labels: list[str] = []
+    sources: list[SourceOut] = []
+    scenarios: list[ScenarioOut] = []
+    calculations: list[CalculationOut] = []
+
+
+GENERAL: Final = "General information"
+SCENARIO: Final = "Scenario, nothing saved"
+CALCULATED: Final = "Calculated"
+DOCUMENTS: Final = "From your documents"
+ANSWER_LABELS: Final = (GENERAL, SCENARIO, CALCULATED, DOCUMENTS)
+SCENARIO_NOTE: Final = (
+    "Worked out by Kako's engine for this question only. Nothing was saved, and the household's "
+    "facts are unchanged. Changes are run as if they start today."
+)
+MAX_SCENARIO_FIGURES: Final = 10
+
+
+def _change_words(change: Change, names: dict[uuid.UUID, str]) -> str:
+    phrase = PHRASES.get(change.attribute, change.attribute)
+    thing = names.get(change.entity_id, change.name) if change.entity_id else "The household"
+    after = shown_value(change.attribute, change.after)
+    if change.before is None:
+        return f"{thing} ({phrase}): {after}"
+    return f"{thing} ({phrase}): {shown_value(change.attribute, change.before)} → {after}"
+
+
+def scenario_shown(state: TurnState, what_if: WhatIf) -> ScenarioOut:
+    """A hypothetical what-if as the household reads it: what it changed, what Kako assumed, and
+    the headline figures before and after."""
+    names = {e.id: e.name for e in (*state.entities, *(n.entity for n in what_if.new))}
+    every = [*what_if.changes, *(v for n in what_if.new for v in n.values)]
+    changes = [_change_words(c, names) for c in what_if.changes]
+    for item in what_if.new:
+        values = ", ".join(
+            f"{PHRASES.get(v.attribute, v.attribute)} {shown_value(v.attribute, v.after)}"
+            for v in item.values
+        )
+        changes.append(f"New {item.entity.kind}, {item.entity.name}: {values}")
+    changes += [
+        f"{names.get(a.entity_id, a.entity_ref)} (planned amount a month): {money(a.centavos)}"
+        for a in what_if.allocations
+    ]
+    base = {f.ref: f for f in state.run.figures}
+    rank = {key: n for n, key in enumerate(HEADLINE)}
+    moved = [
+        f
+        for f in what_if.run.figures
+        if base.get(f.ref) is None or (base[f.ref].value, base[f.ref].flag) != (f.value, f.flag)
+    ]
+    nobody = uuid.UUID(int=0)
+    moved.sort(
+        key=lambda f: (rank.get(f.key, len(rank)), f.key, names.get(f.entity_id or nobody, ""))
+    )
+    figures = [
+        FigureChangeOut(
+            title=figure_title(f.key, _entity(f.entity_id, names)),
+            before=figure_value(base[f.ref]) if f.ref in base else "none",
+            after=figure_value(f),
+        )
+        for f in moved[:MAX_SCENARIO_FIGURES]
+    ]
+    return ScenarioOut(
+        what_if=what_if.ref,
+        changes=changes,
+        assumptions=[_change_words(c, names) for c in every if c.assumed],
+        figures=figures,
+        note=SCENARIO_NOTE,
+    )
+
+
+def _entity(entity_id: uuid.UUID | None, names: dict[uuid.UUID, str]) -> EntityRow | None:
+    if entity_id is None or entity_id not in names:
+        return None
+    return EntityRow(entity_id, uuid.UUID(int=0), "", names[entity_id], None, None)
+
+
+def calculation_shown(calc: Calculation) -> CalculationOut:
+    return CalculationOut(
+        ref=calc.ref,
+        label=calc.label,
+        formula=calc.formula,
+        inputs=[
+            f"{i.name} = {i.shown} ({'assumed by Kako' if i.assumed else i.source})"
+            for i in calc.inputs
+        ],
+        result=calc.shown,
+    )
+
+
+def labels_of(answer: TurnAnswer, state: TurnState | None) -> list[str]:
+    """The labels under a reply, from what it is and what it cites: General information,
+    Scenario, nothing saved, Calculated, From your documents."""
+    labels: list[str] = []
+    if answer.kind in ("inform", "advise") and not any(
+        c.kind in ("figure", "fact", "history") for c in answer.sources
+    ):
+        labels.append(GENERAL)
+    hypothetical = state is not None and any(
+        c.what_if in state.what_ifs and state.what_ifs[c.what_if].hypothetical
+        for c in answer.sources
+        if c.what_if is not None
+    )
+    if hypothetical:
+        labels.append(SCENARIO)
+    if any(c.kind == "calculation" for c in answer.sources):
+        labels.append(CALCULATED)
+    if any(c.kind == "knowledge" for c in answer.sources):
+        labels.append(DOCUMENTS)
+    return labels
+
+
+def _source_out(c: Citation) -> SourceOut:
+    """A source as shown: a document Kako read from its own files is a document, not something
+    from Meko (violet means Meko only)."""
+    kind = DOCUMENT if c.kind == "knowledge" and c.source_id.startswith(FILE) else c.kind
+    return SourceOut(kind=kind, ref=c.ref, shown=c.shown[:SOURCE_CHARS])
 
 
 def turn_shown(asked: Asked, settings: Settings) -> TurnOut:
@@ -154,7 +312,7 @@ def turn_shown(asked: Asked, settings: Settings) -> TurnOut:
                 )
                 for a in o.allocations
             ],
-            sources=[SourceOut(kind=c.kind, ref=c.ref, shown=c.shown) for c in o.citations],
+            sources=[_source_out(c) for c in o.citations],
             specialists=list(o.specialists),
             recommendation_ids=list(recs.get(o.label, ())),
         )
@@ -189,6 +347,23 @@ def turn_shown(asked: Asked, settings: Settings) -> TurnOut:
             before_run_id=asked.before_run_id,
             revisit_decision_ids=[r.decision_id for r in asked.replan.revisit],
         )
+    state = asked.state
+    scenarios: list[ScenarioOut] = []
+    calculations: list[CalculationOut] = []
+    if state is not None:
+        cited_what_ifs = dict.fromkeys(
+            c.what_if for c in answer.sources if c.what_if in state.what_ifs
+        )
+        scenarios = [
+            scenario_shown(state, state.what_ifs[ref])
+            for ref in cited_what_ifs
+            if ref is not None and state.what_ifs[ref].hypothetical
+        ]
+        calculations = [
+            calculation_shown(state.calculations[c.source_id])
+            for c in answer.sources
+            if c.kind == "calculation" and c.source_id in state.calculations
+        ]
     conversation = asked.conversation_id
     in_meko = conversation is not None and not conversation.startswith(LOCAL_PREFIX)
     return TurnOut(
@@ -224,4 +399,9 @@ def turn_shown(asked: Asked, settings: Settings) -> TurnOut:
             brief_tokens=asked.state.brief.tokens if asked.state is not None else None,
             brief_budget=asked.state.brief.budget if asked.state is not None else None,
         ),
+        kind=answer.kind,
+        labels=labels_of(answer, state),
+        sources=[_source_out(c) for c in answer.sources],
+        scenarios=scenarios,
+        calculations=calculations,
     )

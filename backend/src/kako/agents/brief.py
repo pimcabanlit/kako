@@ -57,7 +57,7 @@ from kako.agents.quoting import plain as plain
 from kako.agents.replan import Replan, brief_lines
 from kako.engine.figures import Run
 from kako.facts.attributes import CATALOG
-from kako.facts.model import EntityRow
+from kako.facts.model import EntityRow, FactRow
 from kako.facts.snapshot import Snapshot
 from kako.meko.adapter import Context
 
@@ -147,6 +147,9 @@ class BriefInputs:
     approved_memories: frozenset[str] = frozenset()
     # Meko memory ids that meko_link ties to this household's sessions: Kako's recaps.
     recap_memories: frozenset[str] = frozenset()
+    # Every fact Kako held at the turn's known_at, in any window, each with the end it had then:
+    # what get_history and get_figures_on read (`agents.lookups`). Empty: only the snapshot.
+    known_facts: tuple[FactRow, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -32,9 +32,12 @@ from typing import Any, Final
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from kako.agents.answers import ANSWER_KINDS
 from kako.agents.ask import MEKO_CALLS, Asked, run_turn, start_session
 from kako.agents.chat import ChatReply, ChatRequest
 from kako.agents.recorded import ChatBackend
+from kako.agents.shown import ANSWER_LABELS as LABELS
+from kako.agents.shown import labels_of
 from kako.agents.tools import ORCHESTRATOR
 from kako.api.proposals import people
 from kako.db.meko_log import DbCallLog
@@ -46,9 +49,13 @@ from kako.meko.mcp import open_meko
 from kako.settings import Settings
 
 CONVERSATIONS: Final = TEST_SET.with_name("conversations.toml")
-ID: Final = re.compile(r"^c\d{2}$")
+# The open-question set: questions nobody planned for, one turn each, in the same format.
+OPEN_QUESTIONS: Final = TEST_SET.with_name("open-questions.toml")
+ID: Final = re.compile(r"^[co]\d{2}$")
 PERSON: Final = re.compile(r"^[a-z]+$")
-TURN_KEYS: Final = frozenset({"by", "message", "proposes", "words", "any", "lacks", "options"})
+TURN_KEYS: Final = frozenset(
+    {"by", "message", "proposes", "words", "any", "lacks", "options", "kinds", "sourced", "labels"}
+)
 CONVERSATION_KEYS: Final = frozenset({"id", "title", "on", "known_at", "turn"})
 
 
@@ -65,6 +72,9 @@ class Turn:
     any: tuple[str, ...] = ()
     lacks: tuple[str, ...] = ()
     options: tuple[int, int] | None = None
+    kinds: tuple[str, ...] = ()  # the kinds of answer that fit
+    sourced: bool = False  # the answer names at least one source
+    labels: tuple[str, ...] = ()  # labels the answer must carry, such as "Calculated"
 
 
 @dataclass(frozen=True)
@@ -168,6 +178,15 @@ def _turn(raw: Any, number: int, fail: Callable[[str], ConversationSetError]) ->
         ):
             raise bad("options must be [min, max] within 0 to 4")
         bounds = (options[0], options[1])
+    kinds = strings("kinds")
+    if any(k not in ANSWER_KINDS for k in kinds):
+        raise bad(f"kinds are among: {', '.join(ANSWER_KINDS)}")
+    sourced = raw.get("sourced", False)
+    if not isinstance(sourced, bool):
+        raise bad("sourced is true or false")
+    labels = strings("labels")
+    if any(label not in LABELS for label in labels):
+        raise bad(f"labels are among: {', '.join(LABELS)}")
     return Turn(
         by,
         message.strip(),
@@ -176,6 +195,9 @@ def _turn(raw: Any, number: int, fail: Callable[[str], ConversationSetError]) ->
         strings("any"),
         strings("lacks"),
         bounds,
+        kinds,
+        sourced,
+        labels,
     )
 
 
@@ -298,6 +320,14 @@ def reply_checks(turn: Turn, asked: Asked | None) -> list[Check]:
         low, high = turn.options
         n = len(answer.options)
         checks.append(Check(f"{low} to {high} options", low <= n <= high, f"{n} offered"))
+    if turn.kinds:
+        named = " or ".join(turn.kinds)
+        checks.append(Check(f"a {named} answer", answer.kind in turn.kinds, str(answer.kind)))
+    if turn.sourced:
+        checks.append(Check("names its sources", bool(answer.sources)))
+    shown_labels = labels_of(answer, asked.state)
+    for label in turn.labels:
+        checks.append(Check(f"labelled {label!r}", label in shown_labels, ", ".join(shown_labels)))
     return checks
 
 

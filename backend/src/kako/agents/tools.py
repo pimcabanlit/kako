@@ -18,17 +18,18 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Final
 
-from kako.agents.answers import Allocation, Citation
+from kako.agents.answers import FILE, Allocation, Citation
 from kako.agents.brief import FREE_TEXT, Brief, BriefInputs, data, decision_lines
 from kako.agents.chat import ToolSpec
 from kako.agents.checks import CheckLog, MemoryCheckLog
 from kako.agents.conversation import History, full_text
-from kako.agents.present import KIND_ORDER, Refs, fact_value, figure_value, money
+from kako.agents.present import KIND_ORDER, Refs, day, fact_value, figure_value, money
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult
 from kako.agents.turn import short
 from kako.engine import EngineInputError, Override, Run, compute
@@ -37,11 +38,17 @@ from kako.facts.model import EntityRow, FactRow
 from kako.facts.snapshot import Snapshot
 from kako.meko.adapter import Meko
 from kako.planning.reconcile import fits
+from kako.upkeep.sentences import PHRASES
 
-if TYPE_CHECKING:  # proposing builds on these tools
+if TYPE_CHECKING:  # these build on the tools
+    from kako.agents.calculator import Calculation
+    from kako.agents.lookups import DatedRun, Document
     from kako.agents.proposing import HeldChange
+    from kako.agents.scenarios import Change, NewItem
 
 ALLOCATABLE: Final = ("debt", "account", "goal")  # plan.allocation's entity kinds
+# A what-if's other overrides and the new items they name (`agents.scenarios.overrides`).
+Extra = tuple[Sequence[Override], Sequence[EntityRow]]
 MAX_ALLOCATIONS: Final = 8
 MAX_REFS: Final = 40
 MESSAGE_CHARS: Final = 2_000  # the most of the household's message an agent is shown
@@ -56,6 +63,18 @@ AMOUNT: Final = re.compile(
     re.IGNORECASE,
 )
 YEAR: Final = re.compile(r"(?:19|20)\d\d")
+# An amount with a multiplier, as people write it: 20k, ₱1.5M, 20 thousand (a lower-case m is
+# months, never a million).
+SCALED: Final = re.compile(
+    r"(?<![\w.,/])(?:₱|PHP ?|P)?(\d+(?:\.\d+)?) ?(k|K|M|mn|thousand|million)(?![\w])",
+)
+SCALE: Final = {
+    "k": 1_000,
+    "thousand": 1_000,
+    "m": 1_000_000,
+    "mn": 1_000_000,
+    "million": 1_000_000,
+}
 SAID_SPEC: Final = re.compile(r"(?:₱|PHP ?|P)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d{1,2})?", re.IGNORECASE)
 
 
@@ -64,9 +83,14 @@ def _centavos(whole: str, cents: str) -> int:
 
 
 def said_amounts(message: str) -> set[int]:
-    """Every peso amount of ₱100 or more in the household's message, in centavos. A bare year
-    (2030) counts only with a peso sign or "pesos"."""
+    """Every peso amount of ₱100 or more in the household's message, in centavos: 20k and 1.5M
+    too. A bare year (2030) counts only with a peso sign or "pesos"."""
     found = set()
+    for number, scale in SCALED.findall(message):
+        pesos = Decimal(number) * SCALE[scale.lower()]
+        centavos = int((pesos * 100).to_integral_value())
+        if centavos >= MIN_SAID and pesos * 100 == centavos:
+            found.add(centavos)
     for sign, whole, cents, pesos in AMOUNT.findall(message):
         if not (sign or pesos or cents) and YEAR.fullmatch(whole):
             continue
@@ -100,6 +124,14 @@ class WhatIf:
     allocations: tuple[Allocation, ...]
     run: Run
     over_allocated: bool
+    # Facts with other values, and new items, for this run only (`agents.scenarios`): a what-if
+    # with either is a hypothetical, never a plan option.
+    changes: tuple[Change, ...] = ()
+    new: tuple[NewItem, ...] = ()
+
+    @property
+    def hypothetical(self) -> bool:
+        return bool(self.changes or self.new)
 
 
 @dataclass
@@ -127,10 +159,21 @@ class TurnState:
     said_on: date | None = None  # the household's date when it spoke (the session's date)
     # The session's earlier turns as the orchestrator reads them (`agents.conversation`).
     history: History | None = None
+    # What the look-ups read this turn (`agents.lookups`, `agents.calculator`), for citations and
+    # the number check: calculations, history lines, runs on other dates, documents.
+    calculations: dict[str, Calculation] = field(default_factory=dict)
+    history_facts: dict[str, FactRow] = field(default_factory=dict)  # by line ref: H1
+    dated_runs: dict[str, DatedRun] = field(default_factory=dict)  # by ref: orch-R1
+    documents: tuple[Document, ...] = ()  # what read_document may read
+    documents_read: dict[str, Document] = field(default_factory=dict)  # by name
+    new_refs: dict[uuid.UUID, str] = field(default_factory=dict)  # a what-if's new items
 
     @property
     def refs(self) -> Refs:
-        return self.brief.refs
+        if not self.new_refs:
+            return self.brief.refs
+        by_id = {**self.brief.refs.by_id, **self.new_refs}
+        return Refs(by_id, {ref: entity_id for entity_id, ref in by_id.items()})
 
     @property
     def snapshot(self) -> Snapshot:
@@ -196,6 +239,8 @@ class TurnState:
         head, _, rest = ref.partition(":")
         if rest and self.visible(head, path):
             what_if, ref, run = head, rest, self.what_ifs[head].run
+        elif rest and head in self.dated_runs and path == ORCHESTRATOR:
+            what_if, ref, run = head, rest, self.dated_runs[head].run
         key, _, entity_ref = ref.partition("@")
         entity_id = None
         if entity_ref:
@@ -258,9 +303,14 @@ class TurnState:
             raise ToolInputError(f"{spec} is {money(centavos)}: an allocation can't be negative")
         return centavos, f"{kind}:{value}"
 
-    def allocations(self, raw: Any, path: str = ORCHESTRATOR) -> tuple[Allocation, ...]:
+    def allocations(
+        self, raw: Any, path: str = ORCHESTRATOR, extra: Extra = ((), ()), *, empty: bool = False
+    ) -> tuple[Allocation, ...]:
         """Parse `[{"entity": ref, "amount": spec}, …]`. `rest` is worked out last: the surplus
-        less every other allocation, including current ones not named here."""
+        less every other allocation, including current ones not named here (with `extra`, a
+        what-if's other changes, the surplus they leave)."""
+        if empty and raw in ([], None):
+            return ()
         if not isinstance(raw, list) or not raw:
             raise ToolInputError("allocations must be a non-empty list")
         if len(raw) > MAX_ALLOCATIONS:
@@ -289,7 +339,7 @@ class TurnState:
         for entity_id, (ref, spec) in named.items():
             if spec == "rest":
                 amounts = {k: v for k, (v, _) in fixed.items()}
-                rest = self._rest(amounts, entity_id)
+                rest = self._rest(amounts, entity_id, extra)
                 if rest < 0:
                     raise ToolInputError(
                         f"the other allocations already use {money(-rest)} more than the surplus"
@@ -297,22 +347,22 @@ class TurnState:
                 result.append(Allocation(entity_id, ref, rest, "rest"))
         return tuple(sorted(result, key=lambda a: a.entity_ref))
 
-    def _rest(self, fixed: dict[uuid.UUID, int], taker: uuid.UUID) -> int:
+    def _rest(self, fixed: dict[uuid.UUID, int], taker: uuid.UUID, extra: Extra = ((), ())) -> int:
         """What the engine leaves unallocated with the fixed amounts and the taker at ₱0: the
         engine's own sum, so closed entities count exactly as it counts them."""
-        run = self._compute({**fixed, taker: 0})
+        run = self._compute({**fixed, taker: 0}, extra)
         unallocated = run.get("plan.unallocated").value
         if not isinstance(unallocated, int):
             raise ToolInputError("the surplus has no value, so there is no rest to allocate")
         return unallocated
 
-    def _compute(self, amounts: dict[uuid.UUID, int]) -> Run:
+    def _compute(self, amounts: dict[uuid.UUID, int], extra: Extra = ((), ())) -> Run:
         overrides = [
             Override(uuid.uuid4(), entity_id, "plan.allocation", centavos, self.snapshot.on)
             for entity_id, centavos in amounts.items()
         ]
         try:
-            return compute(self.snapshot, self.entities, overrides)
+            return compute(self.snapshot, (*self.entities, *extra[1]), [*overrides, *extra[0]])
         except EngineInputError as exc:
             raise ToolInputError(f"the engine can't run these allocations: {exc}") from None
 
@@ -345,12 +395,35 @@ class TurnState:
             )
             if found is not None and found.kind == ("memory" if kind == "memory" else "knowledge"):
                 return found
+        if kind == "doc" and value in self.documents_read:
+            document = self.documents_read[value]
+            return Citation("knowledge", f"doc:{value}", f"{FILE}{value}", document.text)
+        if kind == "calc" and value in self.calculations:
+            calc = self.calculations[value]
+            return Citation(
+                "calculation", f"calc:{value}", value, f"{calc.label}: {calc.working()}"
+            )
+        if kind == "history" and value in self.history_facts:
+            fact = self.history_facts[value]
+            name = next((e.name for e in self.entities if e.id == fact.entity_id), "The household")
+            phrase = PHRASES.get(fact.attribute, fact.attribute)
+            shown = f"{name}, {phrase}: {fact_shown(fact)} from {day(fact.valid_from)}"
+            return Citation("history", f"history:{value}", str(fact.id), shown)
         if ref.strip() == "said":
             return Citation("conversation", "said", self.turn_seed, self.said_shown)
         raise ToolInputError(
             f"can't cite {ref!r}: use figure:<ref>, figure:<what-if>:<ref>, fact:<ref>, "
-            "memory:<ref>, doc:<ref>, decision:<ref> or said"
+            "memory:<ref>, doc:<ref>, decision:<ref>, calc:<ref>, history:<ref> or said"
         )
+
+    def sources(self, raw: Any) -> tuple[Citation, ...]:
+        """An answer's sources: what the reply rests on, each one checked, in any mix (0 to
+        MAX_REFS)."""
+        if raw is None:
+            return ()
+        if not isinstance(raw, list) or len(raw) > MAX_REFS:
+            raise ToolInputError(f"sources must be a list of at most {MAX_REFS} citations")
+        return tuple(self.citation(str(r), ORCHESTRATOR) for r in dict.fromkeys(map(str, raw)))
 
     def citations(self, raw: Any, agent_path: str) -> tuple[Citation, ...]:
         if not isinstance(raw, list) or not raw or len(raw) > MAX_REFS:
@@ -378,9 +451,22 @@ class TurnState:
         self.what_ifs[ref] = result
         return result
 
-    def what_if(self, prefix: str, allocations: tuple[Allocation, ...]) -> WhatIf:
-        run = self._compute({a.entity_id: a.centavos for a in allocations})
-        return self.add_what_if(self.next_ref(prefix), allocations, run)
+    def what_if(
+        self,
+        prefix: str,
+        allocations: tuple[Allocation, ...],
+        changes: tuple[Change, ...] = (),
+        new: tuple[NewItem, ...] = (),
+    ) -> WhatIf:
+        from kako.agents.scenarios import overrides
+
+        extra = overrides(changes, new, self.snapshot.on)
+        for item in new:
+            self.new_refs[item.entity.id] = item.ref
+        run = self._compute({a.entity_id: a.centavos for a in allocations}, extra)
+        result = self.add_what_if(self.next_ref(prefix), allocations, run)
+        result.changes, result.new = changes, new
+        return result
 
     def kinds(self) -> dict[uuid.UUID, str]:
         return {e.id: e.kind for e in self.entities}
@@ -515,53 +601,132 @@ def read_tools(state: TurnState, path: str = ORCHESTRATOR) -> list[Tool]:
     ]
 
 
-def what_if_tool(state: TurnState, path: str = ORCHESTRATOR) -> Tool:
+CHANGES: Final = {
+    "type": "array",
+    "items": object_schema(
+        {
+            "fact": {
+                "type": "string",
+                "description": "<entity ref>/<attribute>, such as income:jun-salary/"
+                "income.monthly_net, or a household attribute alone",
+            },
+            "value": {
+                "type": "string",
+                "description": "none, said:<value>, assume:<value>, fact:<ref>, figure:<ref>, "
+                "calc:<ref>, yes/no or a choice; + or - in front for a change to today's value",
+            },
+        }
+    ),
+}
+NEW_ITEMS: Final = {
+    "type": "array",
+    "items": object_schema(
+        {
+            "kind": {"type": "string", "enum": ["income", "expense", "debt", "goal"]},
+            "name": {"type": "string"},
+            "values": {
+                "type": "array",
+                "items": object_schema(
+                    {"attribute": {"type": "string"}, "value": {"type": "string"}}
+                ),
+            },
+        }
+    ),
+}
+
+
+def what_if_tool(state: TurnState, path: str = ORCHESTRATOR, *, changes: bool = False) -> Tool:
+    """`run_what_if`. With `changes` (the orchestrator, the single agent) it may also change any
+    fact for the run and add new items (`agents.scenarios`); a specialist only moves the
+    surplus."""
     prefix = prefix_of(path)
 
     async def run_what_if(arguments: dict[str, Any]) -> ToolResult:
-        allocations = state.allocations(arguments.get("allocations"), path)
-        result = state.what_if(prefix, allocations)
+        from kako.agents.scenarios import describe, overrides, read_changes, read_new
+
+        changed: tuple[Change, ...] = ()
+        new: tuple[NewItem, ...] = ()
+        if changes:
+            changed = read_changes(state, arguments.get("changes"), path)
+            new = read_new(state, arguments.get("new"), path)
+        extra = overrides(changed, new, state.snapshot.on)
+        hypothetical = bool(changed or new)
+        allocations = state.allocations(
+            arguments.get("allocations"), path, extra, empty=hypothetical or changes
+        )
+        if not (allocations or hypothetical):
+            raise ToolInputError("give allocations, changes or new items")
+        result = state.what_if(prefix, allocations, changed, new)
         named = "; ".join(
             f"{a.entity_ref} gets {money(a.centavos)} a month ({a.spec})" for a in allocations
         )
-        lines = [f"What-if {result.ref}: {named}. Other allocations stay as they are."]
+        lines = [f"What-if {result.ref}" + (f": {named}." if named else ":")]
+        if hypothetical:
+            lines[0] += " Nothing is saved: these values are for this run only."
+            lines += [f"- {line}" for line in describe(changed, new)]
+            if any(c.assumed for c in (*changed, *(v for n in new for v in n.values))):
+                lines.append("Assumed values are yours, not the household's: say so in the reply.")
+        lines.append(
+            "Other allocations stay as they are." if named else "Allocations stay as they are."
+        )
         if result.over_allocated:
             lines.append(
-                "Over-allocated: these allocations add up to more than the surplus "
+                "With these changes, the allocations add up to more than the surplus "
+                "(or the surplus has no value)."
+                if hypothetical
+                else "Over-allocated: these allocations add up to more than the surplus "
                 "(or the surplus has no value)."
             )
-        lines.append(f"Figures that change (cite as figure:{result.ref}:<ref>):")
-        lines += [
-            f"- {state.refs.figure(f)} = {figure_value(f)}" for f in _changed(state, result.run)
-        ]
-        named_ids = {a.entity_id for a in allocations}
+        lines.append(f"Figures that change (cite as figure:{result.ref}:<ref>; before → after):")
+        base = {f.ref: f for f in state.run.figures}
+        for f in _changed(state, result.run):
+            before = base.get(f.ref)
+            shown = (
+                figure_value(f) if before is None else f"{figure_value(before)} → {figure_value(f)}"
+            )
+            lines.append(f"- {state.refs.figure(f)} = {shown}")
+        named_ids = {a.entity_id for a in allocations} | {n.entity.id for n in new}
         payoffs = [
             f
             for f in in_order(state, result.run.figures)
             if f.key == "debt.payoff_months" and f.entity_id in named_ids
         ]
         summary = f"{result.ref}: " + ", ".join(
-            f"{a.entity_ref} {money(a.centavos)}" for a in allocations
+            [f"{a.entity_ref} {money(a.centavos)}" for a in allocations]
+            + [f"{c.entity_ref or c.attribute} → {c.spec}" for c in changed]
+            + [n.ref for n in new]
         )
         for payoff in payoffs:
             summary += f"; {state.refs.entity(payoff.entity_id)} paid off in {figure_value(payoff)}"
         return ToolResult(
             "\n".join(lines),
             short(summary),
-            outcome="rejected" if result.over_allocated else "ok",
+            outcome="rejected" if result.over_allocated and not hypothetical else "ok",
             what_if=result.ref,
             value=result,
         )
 
+    properties: dict[str, Any] = {"allocations": ALLOCATIONS}
+    description = (
+        "Try monthly allocations through the engine. Each amount is none, rest (the rest of "
+        "the surplus, worked out in code), figure:<ref>, fact:<ref> or said:<amount> (an "
+        "amount in the household's message). Returns the figures that change, as a what-if "
+        "ref you can cite."
+    )
+    if changes:
+        properties |= {"changes": CHANGES, "new": NEW_ITEMS}
+        description = (
+            "Run a what-if through the engine; nothing is saved. allocations: monthly amounts "
+            "(none, rest, figure:<ref>, fact:<ref>, said:<amount>), or []. changes: facts with "
+            "another value for this run only, such as income:jun-salary/income.monthly_net with "
+            "+said:20000 (₱20,000 more), none (₱0) or said:80000; an expense, a debt's balance or "
+            "rate, the fund's balance (a one-off amount: +said:50000), a goal. new: an income, "
+            "expense, debt or goal the household doesn't have, with its values (assume: a value "
+            "they didn't give, and say so). Returns the figures that change, before → after, as "
+            "a what-if ref you can cite."
+        )
     return Tool(
-        ToolSpec(
-            "run_what_if",
-            "Try monthly allocations through the engine. Each amount is none, rest (the rest of "
-            "the surplus, worked out in code), figure:<ref>, fact:<ref> or said:<amount> (an "
-            "amount in the household's message). Returns the figures that change, as a what-if "
-            "ref you can cite.",
-            object_schema({"allocations": ALLOCATIONS}),
-        ),
+        ToolSpec("run_what_if", description, object_schema(properties)),
         run_what_if,
     )
 

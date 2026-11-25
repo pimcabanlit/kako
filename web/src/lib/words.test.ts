@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Proposal } from "./types.ts";
-import { attributeWords, initials, lifeEvent, proposalTitle, sourceKind } from "./words.ts";
+import {
+  answerKindWords,
+  attributeWords,
+  initials,
+  lifeEvent,
+  proposalTitle,
+  sourceDetail,
+  sourceKind,
+} from "./words.ts";
 
 function proposal(kind: string, extra: Partial<Proposal> = {}): Proposal {
   return {
@@ -28,8 +36,29 @@ test("attributes and sources in plain words; violet only for Meko", () => {
   assert.equal(attributeWords("new.attribute"), "new.attribute");
   assert.equal(sourceKind({ kind: "memory", ref: "M1", shown: "" }).tone, "meko");
   assert.equal(sourceKind({ kind: "knowledge", ref: "K1", shown: "" }).tone, "meko");
-  for (const kind of ["figure", "fact", "decision", "conversation", "other"])
+  for (const kind of ["figure", "fact", "decision", "conversation", "calculation", "history", "document", "other"])
     assert.notEqual(sourceKind({ kind, ref: "", shown: "" }).tone, "meko", kind);
+  assert.equal(sourceKind({ kind: "document", ref: "doc:sss", shown: "" }).label, "Document");
+  assert.equal(sourceKind({ kind: "calculation", ref: "calc:C1", shown: "" }).label, "Calculated");
+});
+
+test("what a source chip shows after its kind", () => {
+  assert.equal(
+    sourceDetail({ kind: "document", ref: "doc:general-guidance", shown: "# General guidance\n..." }),
+    "general guidance",
+  );
+  assert.equal(sourceDetail({ kind: "figure", ref: "figure:x", shown: "₱9,050.00" }), "₱9,050.00");
+  assert.equal(sourceDetail({ kind: "calculation", ref: "calc:C1", shown: "a\nb" }), "a");
+  assert.equal(sourceDetail({ kind: "conversation", ref: "said", shown: "my words" }), null);
+  assert.equal(sourceDetail({ kind: "decision", ref: "decision:D1", shown: "D1" }), null);
+});
+
+test("kinds of answer in words", () => {
+  assert.equal(answerKindWords("simulate"), "A what-if, nothing saved");
+  assert.equal(answerKindWords("look_up"), "Looked up in your records");
+  assert.equal(answerKindWords("new_kind"), "new kind");
+  assert.equal(answerKindWords(null), null);
+  assert.equal(answerKindWords(undefined), null);
 });
 
 test("proposal titles and life events", () => {
