@@ -335,3 +335,67 @@ async def test_demo_record_refuses_before_it_could_spend(
     assert await asyncio.to_thread(_main, ["demo", "record", "session-4"]) == 1
     assert "this database holds" in capsys.readouterr().err
     assert not (tmp_path / "new.json").exists()
+
+
+async def test_the_household_without_what_dreaming_learned(
+    migrated: AsyncEngine,
+    demo_env: None,
+    test_meko_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`--without-learning` (the preference's effect, Phase 5, task 4): Session 2 replays, the
+    preference is never written, Session 4 isn't replayed but the rows it writes are loaded, and the
+    preference questions replay from their recording to the saved scores. Refused on a household
+    that holds the preference, and on a database that holds the household already."""
+    assert await asyncio.to_thread(_main, ["demo", "run", "--without-learning", "--test-set"]) == 1
+    assert "can't replay the test set" in capsys.readouterr().err
+    async with throwaway_datapack(test_meko_url) as datapack_id:
+        monkeypatch.setenv("KAKO_MEKO_DATAPACK_ID", datapack_id)
+        get_settings.cache_clear()
+        assert await asyncio.to_thread(_main, ["demo", "run", "--without-learning"]) == 0
+        out = capsys.readouterr().out
+        assert "What dreaming learns in the story is left out" in out
+        assert "Session 4 came after it, so its recording isn't replayed" in out
+        assert "== Session 2, turn s2:t1 ==" in out
+        assert "== Session 4" not in out
+        assert "Dreaming over Session 3" not in out
+        async with migrated.connect() as conn:
+            attributes = set((await conn.execute(text("SELECT attribute FROM fact"))).scalars())
+            salary = (
+                await conn.execute(
+                    text(
+                        "SELECT value_money FROM fact WHERE attribute = 'income.monthly_net' "
+                        "AND valid_from = '2026-12-01'"
+                    )
+                )
+            ).scalar_one()
+        assert "preference.debt_vs_flexibility" not in attributes
+        assert salary == 6_800_000  # Mara's new job, changes.csv row 11, in centavos
+        assert await asyncio.to_thread(_main, ["demo", "run", "--without-learning"]) == 1
+        assert "needs an empty database" in capsys.readouterr().err
+
+        assert await asyncio.to_thread(_main, ["test-set", "--without-preference"]) == 0
+        out = capsys.readouterr().out
+        # Replayed by call key: on another datapack a brief can rank Meko's excerpts differently,
+        # so the score isn't held to the saved one here (it is on the recording's database).
+        line = next(x for x in out.splitlines() if x.startswith("specialists: "))
+        assert "over 4 questions" in line
+        assert line.endswith("(replay)")
+        assert (
+            await asyncio.to_thread(
+                _main, ["test-set", "--without-preference", "--architecture", "single"]
+            )
+            == 1
+        )
+    get_settings.cache_clear()
+
+
+async def test_without_preference_refuses_a_household_that_learned_it(
+    migrated: AsyncEngine, demo_env: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    async with migrated.connect() as conn:
+        await load_demo(conn, read_demo(), through=datetime(2026, 12, 1, 12, tzinfo=MANILA))
+        await conn.commit()
+    assert await asyncio.to_thread(_main, ["test-set", "--without-preference"]) == 1
+    assert "This household holds the preference" in capsys.readouterr().err
