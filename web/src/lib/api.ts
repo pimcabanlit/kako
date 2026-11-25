@@ -6,6 +6,7 @@ import type {
   Decisions,
   Household,
   Metrics,
+  Money,
   Plan,
   PlanSummary,
   Proposal,
@@ -112,6 +113,7 @@ export const api = {
   decisions: (signal?: AbortSignal) =>
     call<Decisions>("/decisions", { signal }),
   metrics: (signal?: AbortSignal) => call<Metrics>("/metrics", { signal }),
+  money: (signal?: AbortSignal) => call<Money>("/money", { signal }),
   mekoMetrics: (signal?: AbortSignal) =>
     call<DatapackMetrics>("/metrics/meko", { signal }),
   proposals: (signal?: AbortSignal) =>

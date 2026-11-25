@@ -570,3 +570,110 @@ export type DatapackMetrics = {
   brief_tokens: string | null;
   brief_pct_of_context: string | null;
 };
+
+// GET /api/v1/money: where the household's money stands on its date (api/money.py).
+export type MoneyTile = { label: string; value: string; negative: boolean };
+
+export type SplitPart = {
+  key: "needs" | "wants" | "debt" | "savings" | "unplanned";
+  label: string;
+  amount: number; // centavos, for the chart
+  text: string;
+  share: string;
+};
+
+export type PlanLineKind = "in" | "need" | "want" | "debt" | "savings";
+
+export type PlanLine = {
+  kind: PlanLineKind;
+  name: string;
+  amount: string | null;
+  left: string | null;
+  fill: number; // what is left after it, as a share of the pay
+  change: string | null; // "was ₱4,000.00", "new"
+};
+
+export type PlanVersion = {
+  label: string;
+  on: string;
+  lines: PlanLine[];
+  unplanned: string | null;
+};
+
+export type ScheduleRow = {
+  month: number;
+  on: string;
+  owed: string;
+  interest: string;
+  payment: string;
+  principal: string;
+  left: string;
+  fill: number; // what is left as a share of today's balance
+  rolled_in: string | null;
+  rolled_from: string | null;
+};
+
+export type MoneyDebt = {
+  id: string;
+  name: string;
+  order: number | null;
+  balance: string;
+  since: string | null;
+  rate: string | null;
+  minimum: string | null;
+  extra: string | null;
+  paying: string | null;
+  payoff_on: string | null;
+  payoff_in: string | null;
+  interest_left: string | null;
+  why_not: string | null;
+  rows: ScheduleRow[];
+  paid_total: string | null;
+  interest_total: string | null;
+  principal_total: string | null;
+};
+
+export type Holding = { name: string; kind: string; amount: string | null; since: string | null };
+
+export type MoneyMilestone = {
+  kind: "emergency_fund" | "debt_paid" | "goal_reached";
+  on: string;
+  within: string;
+  name: string;
+  on_track: boolean | null;
+};
+
+export type MoneyMoment = {
+  kind: "thirteenth_month" | "ahead";
+  on: string;
+  month_only: boolean;
+  title: string;
+  value: string;
+};
+
+export type Money = {
+  as_of: string;
+  tiles: MoneyTile[];
+  split: { total: string; parts: SplitPart[]; over: string | null } | null;
+  plan: PlanVersion;
+  before: PlanVersion | null;
+  debts: MoneyDebt[];
+  standing: {
+    owns: Holding[];
+    owes: Holding[];
+    owned: string | null;
+    owed: string | null;
+    net: string | null;
+    negative: boolean;
+  };
+  milestones: MoneyMilestone[];
+  moments: MoneyMoment[];
+  decisions: {
+    id: string;
+    question: string;
+    chosen: string;
+    on: string;
+    session_title: string;
+    revisit: number;
+  }[];
+};
