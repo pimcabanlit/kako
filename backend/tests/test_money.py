@@ -209,7 +209,9 @@ def test_the_screen_on_dec_1_in_words(house: Villanueva) -> None:
     assert (car.rate, car.paying, car.extra, car.payoff_on) == (
         "9% a year", "₱12,400.00", None, date(2028, 10, 1),
     )  # fmt: skip
-    assert [r.rolled_in for r in car.rows if r.rolled_in] == ["₱12,550.00"]
+    assert [(r.rolled_in, r.rolled_from) for r in car.rows if r.rolled_in] == [
+        ("₱12,550.00", "Credit card")
+    ]
     assert car.rows[0].fill < 1
     assert car.rows[-1].fill == 0
     assert [(m.title, m.value, m.month_only) for m in screen.moments] == [

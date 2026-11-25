@@ -75,6 +75,7 @@ class RowOut(_Out):
     left: str
     fill: float
     rolled_in: str | None
+    rolled_from: str | None
 
 
 class DebtOut(_Out):

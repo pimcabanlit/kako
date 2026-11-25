@@ -84,6 +84,7 @@ class RowView:
     left: str
     fill: float  # what is left as a share of the balance today, for its bar
     rolled_in: str | None  # "₱12,550.00", when a paid-off debt's payment rolls in this month
+    rolled_from: str | None  # the debt (or debts) paid off the month before: "Credit card"
 
 
 @dataclass(frozen=True)
@@ -243,7 +244,11 @@ def _rate(snapshot: Snapshot, entity_id: uuid.UUID) -> str | None:
 
 
 def debt_view(
-    holding: Holding, schedule: DebtSchedule | None, run: Run, snapshot: Snapshot
+    holding: Holding,
+    schedule: DebtSchedule | None,
+    run: Run,
+    snapshot: Snapshot,
+    paid_in: Mapping[int, Sequence[str]] | None = None,
 ) -> DebtView:
     minimum_fact = snapshot.get(holding.entity_id, "debt.minimum_payment")
     extra_fact = snapshot.get(holding.entity_id, "plan.allocation")
@@ -273,6 +278,9 @@ def debt_view(
                 left=money(r.left),
                 fill=_fill(r.left, schedule.balance),
                 rolled_in=money(r.rolled_in) if r.rolled_in else None,
+                rolled_from=" and ".join((paid_in or {}).get(r.month - 1, ())) or None
+                if r.rolled_in
+                else None,
             )
             for r in schedule.rows
         )
@@ -368,6 +376,10 @@ def money_screen(
         Tile("Net worth", "unknown" if net is None else money(net), net is not None and net < 0),
     )
     schedules = {s.entity_id: s for s in view.schedules}
+    paid_in: dict[int, list[str]] = {}
+    for s in view.schedules:
+        if s.months is not None:
+            paid_in.setdefault(s.months, []).append(s.name)
     st = view.standing
     return MoneyScreen(
         as_of=on,
@@ -375,7 +387,9 @@ def money_screen(
         split=split_view(view.split),
         plan=plan,
         before=before,
-        debts=tuple(debt_view(h, schedules.get(h.entity_id), run, snapshot) for h in st.owes),
+        debts=tuple(
+            debt_view(h, schedules.get(h.entity_id), run, snapshot, paid_in) for h in st.owes
+        ),
         standing=StandingView(
             owns=tuple(_holding(h) for h in st.owns),
             owes=tuple(_holding(h) for h in st.owes),
