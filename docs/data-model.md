@@ -1,4 +1,4 @@
-# Kako data model v0.15
+# Kako data model v0.16
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -47,7 +47,8 @@ in the same change once agreed.
   sessions), and session 4's replan against the latest decision with all three to revisit; no
   schema change. v0.15 (Nov 25) is the session screen (Phase 5, task 1): `session_turn` keeps each
   turn as the household saw it, so a past session reopens like a chat, and its writer joins
-  `session_participant` (migration 0007).
+  `session_participant` (migration 0007). v0.16 (Nov 25) is the metrics page (task 4): a kept turn's
+  cost also names its brief's size and budget; no schema change.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -307,7 +308,8 @@ One turn of a session as the household saw it: the session screen reads it to re
 is kept: the reply and every text as number-checked, the options with their allocations and sources,
 how a conflict ended, the numbers the check flagged, the changes waiting for a yes (their proposal
 ids; their status is read from `proposal`), a replan's other two parts, the plan's ids and what the
-turn cost. Every figure in it came from the engine; the ids in it point to the rows behind it. A turn
+turn cost, with the brief every agent was sent (`brief_tokens`, estimated high) and its budget then
+(`brief_budget`), both absent on a turn kept before Nov 25. Every figure in it came from the engine; the ids in it point to the rows behind it. A turn
 that fails leaves no row (its `agent_step` and `llm_call` rows stay). Written once, never updated.
 
 | Column | Type | Notes |

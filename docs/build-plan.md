@@ -271,6 +271,25 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    case), brief size against the whole context, number-check pass rate, dreaming score, agent test-set
    score against the single-agent baseline, the session-4 answer scored with and without the promoted
    preference, and Context Gaps before and after scores.
+   Built Nov 25: `GET /api/v1/metrics` works every figure out in code from stored rows and saved
+   results (`metrics/turns.py`, pure; `db/metrics_read.py`; `evals/results.py`): each turn's model
+   calls, tokens, cost and seconds (average and worst case, the worst one named) for the household's
+   sessions and for the agent test set's by architecture, its brief's size against its budget, the
+   number check, the test set against the single-agent baseline, the learned preference's effect,
+   dreaming's labelled set and its runs, Context Gaps' scores before and after, and the Meko calls
+   each Free-tier allowance has left. `GET /api/v1/metrics/meko` reads Meko's own `datapack_metrics`
+   live (context size, how much `context_search` saves sending, relevance) and sets the brief
+   against the whole context. The preference's effect is measured on the four test-set questions
+   whose answer should cite it (q10, q12, q16, q21): the household without what dreaming learned
+   (`kako demo run --without-learning`), recorded on Foundry once (`kako test-set
+   --without-preference`, US$0.26, tuning log entry 13), against the same questions with it: 81.4%
+   with, 59.3% without, and 81.3% against 72.9% leaving out the check that names the preference. The
+   screen at `/metrics` (sidebar, "Metrics") shows each part with its own empty and error states, and
+   Meko's part fails on its own. Measured on the demo story through Dec 1, replayed: a household
+   turn 26.7 seconds on average and 40.6 at worst, 51,028 tokens and US$0.0452; the brief 2,430
+   tokens, 6.5% of the datapack's 37,458; every number checked passed; specialists 93.3% against
+   one agent's 90.7%; dreaming 15 of 15. Context Gaps need Meko Cloud, so locally the section says
+   none yet. Checked in both themes, at phone width, and loading, empty and error.
 5. **Demo datapack on Meko Cloud.** Seed sessions 1 to 3 through the real flow once; rehearse session 4.
    Done when: a full rehearsal runs on Meko Cloud and the call counter shows the allowance left.
 6. **Shoulds, if time:** a what-if kept as an AMP branch; the specialist conflict drawn on screen.
