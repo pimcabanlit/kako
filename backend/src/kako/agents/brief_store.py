@@ -8,19 +8,26 @@ memory found by the search is marked approved only when `meko_link` ties it to o
 household's facts or decisions; Meko's own metadata can be written by any client of the datapack,
 so it never decides that. The search runs only in a conversation of this household's sessions, on
 the household's datapack. Figures never come from Meko.
+
+Who wrote the message, the session's earlier turns and the household's earlier sessions come from
+Postgres (`person`; `session_turn` as the household saw each turn, with `turn_context`'s notes; the
+decisions made in a session), so a turn follows its conversation with Meko on or off, and a
+recorded session replays the same way on any database.
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection
 from datetime import date, datetime
-from typing import cast
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Table, Text, and_, or_, select
+from sqlalchemy import Table, Text, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from kako.agents.brief import (
+    PAST_SESSIONS,
     Approval,
     Brief,
     BriefInputs,
@@ -31,6 +38,8 @@ from kako.agents.brief import (
     is_preference,
     render_brief,
 )
+from kako.agents.conversation import search_query
+from kako.agents.kept import TEST_SET_TITLE, KeptChange, KeptOption, KeptTurn, PastSession
 from kako.agents.replan_store import SessionChanges, gather_replan
 from kako.db.fact_store import load_entities, snapshot
 from kako.db.models import (
@@ -43,6 +52,8 @@ from kako.db.models import (
     Person,
     Proposal,
     Session,
+    SessionTurn,
+    TurnContext,
 )
 from kako.engine import Run, compute
 from kako.meko.adapter import Context, Meko
@@ -53,6 +64,8 @@ PROPOSAL = cast(Table, Proposal.__table__)
 DECISION = cast(Table, Decision.__table__)
 OPTION = cast(Table, DecisionOption.__table__)
 SESSION = cast(Table, Session.__table__)
+SESSION_TURN = cast(Table, SessionTurn.__table__)
+TURN_CONTEXT = cast(Table, TurnContext.__table__)
 MEKO_LINK = cast(Table, MekoLink.__table__)
 LIFE_EVENT = cast(Table, LifeEvent.__table__)
 MAX_LIFE_EVENTS = 5  # the most recent ones the brief shows
@@ -60,10 +73,180 @@ FACT = cast(Table, Fact.__table__)
 BUDGET_RANGE = range(500, 20_001)  # KAKO_BRIEF_TOKEN_BUDGET's bounds
 SEARCH_LIMIT_RANGE = range(0, 11)  # KAKO_BRIEF_SEARCH_LIMIT's bounds
 SEARCH_AGENT = "kako:orchestrator"  # the brief's search is the orchestrator's, once per turn
+KEPT_LIMIT = 500  # the most of one session's turns read, the newest
 
 
 class BriefStoreError(Exception):
     """The household to brief on doesn't exist."""
+
+
+def _kept_turn(number: int, row: Any) -> KeptTurn:
+    """A kept turn from its `session_turn` row (as shown) and its `turn_context` notes."""
+    shown: dict[str, Any] = row.shown if isinstance(row.shown, dict) else {}
+    reply = shown.get("reply")
+    options = tuple(
+        KeptOption(
+            label=str(o.get("label", "")),
+            summary=str(o.get("summary", "")),
+            what_if=str(o.get("what_if", "")),
+            allocations=tuple(
+                f"{a.get('entity', '')} {a.get('spec', '')}"
+                for a in o.get("allocations") or ()
+                if isinstance(a, dict)
+            ),
+            recommended=bool(o.get("recommended")),
+        )
+        for o in shown.get("options") or ()
+        if isinstance(o, dict)
+    )
+    changes = []
+    for c in shown.get("changes") or ():
+        if not isinstance(c, dict):
+            continue
+        try:
+            proposal_id = uuid.UUID(str(c.get("proposal_id")))
+        except ValueError:
+            proposal_id = None
+        changes.append(KeptChange(proposal_id, str(c.get("kind", "")), str(c.get("shown", ""))))
+    return KeptTurn(
+        number=number,
+        seed=row.meko_turn_seed,
+        said_by=row.display_name,
+        message=row.message,
+        reply=reply if isinstance(reply, str) else "",
+        options=options,
+        changes=tuple(changes),
+        replan=shown.get("replan") is not None,
+        topic=row.topic,
+        asks=row.asks,
+    )
+
+
+async def session_turns(
+    conn: AsyncConnection, household_id: uuid.UUID, session_id: uuid.UUID
+) -> tuple[KeptTurn, ...]:
+    """A session's kept turns, oldest first and numbered from 1, with the orchestrator's notes on
+    each: at most the newest `KEPT_LIMIT`. Only a session of this household. The turn being
+    answered isn't among them: a turn is kept only once it is answered."""
+    rows = list(
+        await conn.execute(
+            select(
+                SESSION_TURN.c.meko_turn_seed,
+                SESSION_TURN.c.message,
+                SESSION_TURN.c.shown,
+                PERSON.c.display_name,
+                TURN_CONTEXT.c.topic,
+                TURN_CONTEXT.c.asks,
+            )
+            .join(SESSION, SESSION.c.id == SESSION_TURN.c.session_id)
+            .outerjoin(PERSON, PERSON.c.id == SESSION_TURN.c.said_by)
+            .outerjoin(
+                TURN_CONTEXT,
+                and_(
+                    TURN_CONTEXT.c.session_id == SESSION_TURN.c.session_id,
+                    TURN_CONTEXT.c.meko_turn_seed == SESSION_TURN.c.meko_turn_seed,
+                ),
+            )
+            .where(SESSION_TURN.c.session_id == session_id, SESSION.c.household_id == household_id)
+            .order_by(SESSION_TURN.c.created_at.desc(), SESSION_TURN.c.meko_turn_seed.desc())
+            .limit(KEPT_LIMIT + 1)
+        )
+    )
+    total = len(rows)
+    if total > KEPT_LIMIT:  # a very long session: number the newest by their place in it
+        total = (
+            await conn.execute(select(func.count()).where(SESSION_TURN.c.session_id == session_id))
+        ).scalar_one()
+        rows = rows[:KEPT_LIMIT]
+    first = total - len(rows) + 1
+    return tuple(_kept_turn(first + i, row) for i, row in enumerate(reversed(rows)))
+
+
+async def _past_sessions(
+    conn: AsyncConnection, household_id: uuid.UUID, session_id: uuid.UUID
+) -> tuple[PastSession, ...]:
+    """The household's newest sessions with kept turns, started before this one and dated no
+    later, newest first (S1, S2, …), each with its turns and the decisions made in it. The agent
+    test set's sessions are neither given earlier sessions nor recapped in others' briefs, so a
+    question scores the same whatever was asked before it."""
+    this = (
+        await conn.execute(
+            select(SESSION.c.started_at, SESSION.c.household_date, SESSION.c.title).where(
+                SESSION.c.id == session_id, SESSION.c.household_id == household_id
+            )
+        )
+    ).one_or_none()
+    if this is None:
+        raise BriefStoreError("the session isn't one of this household's")
+    if this.title.startswith(TEST_SET_TITLE):
+        return ()
+    has_turns = select(SESSION_TURN.c.id).where(SESSION_TURN.c.session_id == SESSION.c.id).exists()
+    rows = list(
+        await conn.execute(
+            select(SESSION.c.id, SESSION.c.title, SESSION.c.household_date, SESSION.c.ended_at)
+            .where(
+                SESSION.c.household_id == household_id,
+                SESSION.c.id != session_id,
+                SESSION.c.started_at < this.started_at,
+                SESSION.c.household_date <= this.household_date,
+                ~SESSION.c.title.startswith(TEST_SET_TITLE, autoescape=True),
+                has_turns,
+            )
+            .order_by(SESSION.c.started_at.desc(), SESSION.c.id)
+            .limit(PAST_SESSIONS)
+        )
+    )
+    past = []
+    for n, row in enumerate(rows, start=1):
+        past.append(
+            PastSession(
+                ref=f"S{n}",
+                title=row.title,
+                on=row.household_date,
+                turns=await session_turns(conn, household_id, row.id),
+                decisions=await session_decisions(conn, household_id, row.id),
+                ended=row.ended_at is not None,
+            )
+        )
+    return tuple(past)
+
+
+async def session_decisions(
+    conn: AsyncConnection, household_id: uuid.UUID, session_id: uuid.UUID
+) -> tuple[str, ...]:
+    """The decisions made in a session, each as "question chose label", in the order made."""
+    rows = await conn.execute(
+        select(DECISION.c.question, OPTION.c.label)
+        .join(OPTION, OPTION.c.id == DECISION.c.chosen_option_id)
+        .where(DECISION.c.session_id == session_id, DECISION.c.household_id == household_id)
+        .order_by(DECISION.c.valid_from, DECISION.c.id)
+    )
+    return tuple(f"{r.question} chose {r.label}" for r in rows)
+
+
+async def statuses_of(
+    conn: AsyncConnection,
+    household_id: uuid.UUID,
+    ids: Collection[uuid.UUID],
+    known_at: datetime | None,
+) -> dict[uuid.UUID, str]:
+    """Where each proposal stands, as known at `known_at` (now, when None): one decided later was
+    still pending then. Only this household's."""
+    if not ids:
+        return {}
+    rows = await conn.execute(
+        select(PROPOSAL.c.id, PROPOSAL.c.status, PROPOSAL.c.decided_at).where(
+            PROPOSAL.c.household_id == household_id, PROPOSAL.c.id.in_(list(ids))
+        )
+    )
+    return {
+        r.id: (
+            "pending"
+            if known_at is not None and r.decided_at is not None and r.decided_at > known_at
+            else r.status
+        )
+        for r in rows
+    }
 
 
 async def _approvals(
@@ -172,6 +355,27 @@ async def _approved_memories(
         )
     )
     rows = await conn.execute(of_facts.union(of_decisions))
+    return frozenset(rows.scalars())
+
+
+async def _recap_memories(
+    conn: AsyncConnection, household_id: uuid.UUID, memory_ids: list[str]
+) -> frozenset[str]:
+    """The memories `meko_link` ties to this household's sessions: Kako's recaps."""
+    if not memory_ids:
+        return frozenset()
+    rows = await conn.execute(
+        select(MEKO_LINK.c.meko_id)
+        .join(
+            SESSION,
+            and_(MEKO_LINK.c.kako_table == "session", SESSION.c.id == MEKO_LINK.c.kako_id),
+        )
+        .where(
+            SESSION.c.household_id == household_id,
+            MEKO_LINK.c.meko_kind == "memory",
+            MEKO_LINK.c.meko_id.in_(memory_ids),
+        )
+    )
     return frozenset(rows.scalars())
 
 
@@ -306,12 +510,18 @@ async def gather_brief(
     run: Run | None = None,
     changes: SessionChanges | None = None,
     session_on: date | None = None,
+    session_id: uuid.UUID | None = None,
+    speaker: uuid.UUID | None = None,
 ) -> tuple[Brief, BriefInputs]:
     """The brief for one turn, and what it was rendered from (the snapshot, the engine run it
     describes, the decisions), which the agents' tools read. At most one Meko call: a
     `context_search` on the household's message (none when there is no message, no Meko, or a
     search limit of 0). With `changes` approved in the session (dated `session_on`), the brief
-    says what they changed against the plan the household last decided on (`agents.replan`)."""
+    says what they changed against the plan the household last decided on (`agents.replan`).
+    With `session_id`, the brief has the session's state, kept by code from its earlier turns, and
+    the recaps of the household's earlier sessions, and the search looks for what the conversation
+    is about as well as the message (`conversation.search_query`); with `speaker` (a person of
+    this household), who wrote the message."""
     if budget not in BUDGET_RANGE or search_limit not in SEARCH_LIMIT_RANGE:
         raise ValueError("the brief's budget or search limit is out of its settings' bounds")
     household = (
@@ -323,14 +533,18 @@ async def gather_brief(
     ).one_or_none()
     if household is None:
         raise BriefStoreError(f"household {household_id} doesn't exist")
-    people = tuple(
-        (r.display_name, r.role)
+    members = [
+        r
         for r in await conn.execute(
-            select(PERSON.c.display_name, PERSON.c.role)
+            select(PERSON.c.id, PERSON.c.display_name, PERSON.c.role)
             .where(PERSON.c.household_id == household_id)
             .order_by(PERSON.c.role, PERSON.c.display_name)
         )
-    )
+    ]
+    people = tuple((r.display_name, r.role) for r in members)
+    writer = next(((r.display_name, r.role) for r in members if r.id == speaker), None)
+    if speaker is not None and writer is None:
+        raise BriefStoreError("the message's writer isn't a person of this household")
     entities = await load_entities(conn, household_id)
     snap = await snapshot(conn, household_id, on, known_at)
     if run is None:
@@ -343,16 +557,41 @@ async def gather_brief(
         if is_preference(f.attribute) and f.proposal_id is not None
     }
     dreamed = {f.id for f in snap.facts if f.source_kind == "dreaming"}
+    title = None
+    earlier: tuple[KeptTurn, ...] = ()
+    past: tuple[PastSession, ...] = ()
+    if session_id is not None:
+        title = (
+            await conn.execute(
+                select(SESSION.c.title).where(
+                    SESSION.c.id == session_id, SESSION.c.household_id == household_id
+                )
+            )
+        ).scalar_one_or_none()
+        if title is None:
+            raise BriefStoreError("the session isn't one of this household's")
+        earlier = await session_turns(conn, household_id, session_id)
+        past = await _past_sessions(conn, household_id, session_id)
+    filed = {
+        c.proposal_id
+        for t in (*earlier, *(t for p in past for t in p.turns))
+        for c in t.changes
+        if c.proposal_id is not None
+    }
+    query = search_query(message, earlier) if message.strip() else ""
     context: Context | None = None
     approved: frozenset[str] = frozenset()
-    if meko is not None and conversation_id and message.strip() and search_limit > 0:
+    recaps: frozenset[str] = frozenset()
+    if meko is not None and conversation_id and query and search_limit > 0:
         await _check_meko_scope(
             conn, meko, household_id, household.meko_datapack_id, conversation_id
         )
         context = await meko.search_context(
-            conversation_id, message, agent_id=SEARCH_AGENT, limit=search_limit
+            conversation_id, query, agent_id=SEARCH_AGENT, limit=search_limit
         )
-        approved = await _approved_memories(conn, household_id, [m.id for m in context.memories])
+        found = [m.id for m in context.memories]
+        approved = await _approved_memories(conn, household_id, found)
+        recaps = await _recap_memories(conn, household_id, found)
     decisions = await _decisions(conn, household_id, on, known_at)
     replan = None
     if changes is not None:
@@ -380,7 +619,14 @@ async def gather_brief(
         life_events=await _life_events(conn, household_id, known_at),
         replan=replan,
         message=message,
+        writer=writer,
+        session_title=title,
+        earlier=earlier,
+        past_sessions=past,
+        statuses=await statuses_of(conn, household_id, filed, known_at),
         context=context,
+        search=query if query != message else None,
         approved_memories=approved,
+        recap_memories=recaps,
     )
     return render_brief(inputs, budget), inputs

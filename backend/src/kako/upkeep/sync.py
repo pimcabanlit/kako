@@ -3,7 +3,8 @@
 `keep_up` reads the household's facts and their links, then, one step at a time, adds Kako's own
 memory of a fact (as `kako:upkeep`, in a conversation of its own), rewrites one whose sentence
 changed (a replaced fact in the past tense), and deletes a memory linked to a retracted fact, or one
-in Meko's words linked to a replaced fact. Each step is a Meko call, then its link written or
+in Meko's words linked to a replaced fact; then shares what was approved for sharing, and adds the
+recap of each ended session (`recaps.py`). Each step is a Meko call, then its link written or
 removed in its own transaction, so a run that stops leaves only finished steps behind and the next
 run picks up the rest. A memory is changed or deleted as the agent that wrote it, the only one Meko
 allows; one Meko no longer holds counts as gone. At most `max_steps` steps a run, and none at all
@@ -34,6 +35,7 @@ from kako.meko.quota import MekoQuotaError
 from kako.settings import Settings
 from kako.upkeep.plan import Link, Step, plan_upkeep
 from kako.upkeep.promote import SHARE_CALLS, Share, share, shares_owed
+from kako.upkeep.recaps import Recap, recap_metadata, recaps_owed
 
 HOUSEHOLD = cast(Table, Household.__table__)
 FACT = cast(Table, Fact.__table__)
@@ -53,13 +55,14 @@ class UpkeepReport:
     rewritten: int = 0
     deleted: int = 0
     shared: int = 0  # promoted to collective memory, or a decision record uploaded
+    recapped: int = 0  # an ended session's recap added as Kako's own memory
     waiting: int = 0  # steps left for the next run
     busy: bool = False  # another run held the household
     problems: list[str] = field(default_factory=list)
 
     @property
     def steps(self) -> int:
-        return self.added + self.rewritten + self.deleted + self.shared
+        return self.added + self.rewritten + self.deleted + self.shared + self.recapped
 
 
 def session_key(household_id: uuid.UUID) -> str:
@@ -149,7 +152,8 @@ async def _run(
         household = await _household(conn, household_id)
         steps = await plan_for(conn, household_id)
         shares = await shares_owed(conn, household_id)
-    if not steps and not shares:
+        recaps = await recaps_owed(conn, household_id)
+    if not steps and not shares and not recaps:
         return
     if household.meko_datapack_id is not None and meko.datapack_id != household.meko_datapack_id:
         raise UpkeepError("Meko isn't on this household's datapack")
@@ -160,22 +164,26 @@ async def _run(
             session_key=session_key(household_id),
         )
     except (MekoQuotaError, MekoCallLimitError):
-        report.waiting = len(steps) + len(shares)
+        report.waiting = len(steps) + len(shares) + len(recaps)
         return
     for n, step in enumerate(steps):
         if n >= max_steps:
-            report.waiting = len(steps) - n + len(shares)
+            report.waiting = len(steps) - n + len(shares) + len(recaps)
             return
         try:
             await _step(engine, meko, household_id, conversation_id, step, now, report)
         except (MekoQuotaError, MekoCallLimitError):
-            report.waiting = len(steps) - n + len(shares)
+            report.waiting = len(steps) - n + len(shares) + len(recaps)
             return
         except MekoError as exc:
             report.problems.append(f"fact {step.fact.id}: {step.kind}: {safe_error(exc)}")
-    await _share_all(
+    left = await _share_all(
         engine, meko, household_id, conversation_id, shares, now, max_steps - len(steps), report
     )
+    if left is not None:
+        await _recap_all(engine, meko, conversation_id, recaps, now, left, report)
+    else:
+        report.waiting += len(recaps)
 
 
 async def _share_all(
@@ -187,24 +195,67 @@ async def _share_all(
     now: datetime,
     calls_left: int,
     report: UpkeepReport,
-) -> None:
+) -> int | None:
     """The approved promotions, after the facts' steps, within the calls the run has left. A share
-    starts only with room for every call it may make, so none stops halfway for want of calls."""
+    starts only with room for every call it may make, so none stops halfway for want of calls.
+    The calls left after them; None when the run must stop (a share is left waiting)."""
     for n, item in enumerate(shares):
         cost = SHARE_CALLS[item.target]
         if cost > calls_left:
             report.waiting += len(shares) - n
-            return
+            return None
         calls_left -= cost
         try:
             await share(engine, meko, household_id, conversation_id, item, agent=AGENT, now=now)
         except (MekoQuotaError, MekoCallLimitError):
             report.waiting += len(shares) - n
-            return
+            return None
         except MekoError as exc:
             report.problems.append(f"{item.target} {item.row_id}: share: {safe_error(exc)}")
             continue
         report.shared += 1
+    return calls_left
+
+
+async def _recap_all(
+    engine: AsyncEngine,
+    meko: Meko,
+    conversation_id: str,
+    recaps: list[Recap],
+    now: datetime,
+    calls_left: int,
+    report: UpkeepReport,
+) -> None:
+    """Each ended session's recap, one Meko call each, after the shares: added as Kako's own
+    memory, then linked to the session with the text written."""
+    for n, item in enumerate(recaps):
+        if calls_left < 1:
+            report.waiting += len(recaps) - n
+            return
+        calls_left -= 1
+        try:
+            memory_id = await meko.add_memory(
+                conversation_id, item.text, recap_metadata(item.session_id), agent_id=AGENT
+            )
+        except (MekoQuotaError, MekoCallLimitError):
+            report.waiting += len(recaps) - n
+            return
+        except MekoError as exc:
+            report.problems.append(f"session {item.session_id}: recap: {safe_error(exc)}")
+            continue
+        async with engine.begin() as conn:
+            await conn.execute(
+                MEKO_LINK.insert().values(
+                    kako_table="session",
+                    kako_id=item.session_id,
+                    meko_kind="memory",
+                    meko_id=memory_id,
+                    created_at=now,
+                    agent_id=AGENT,
+                    text=item.text,
+                )
+            )
+        report.recapped += 1
 
 
 async def _step(

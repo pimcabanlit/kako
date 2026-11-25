@@ -204,11 +204,12 @@ uv run kako test-set                      # the agent test set's score, replayed
 uv run kako test-set --architecture single --only q01,q07   # the single-agent baseline, some questions (--household, --save: data/test-set/results/)
 KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
 uv run kako test-set --without-preference    # the preference's four questions on the household without it, from test-set-specialists-without-preference.json (--save: data/test-set/results/preference.json)
+uv run kako conversations                 # the conversation test set: multi-turn sessions scored in code, replayed from data/recorded/conversations-<architecture>.json (--architecture, --only c01, --save; KAKO_MODEL_MODE=record spends)
 uv run kako dream end <session>           # end a session (once) and queue its dreaming run (--at; the API: POST /api/v1/sessions/{id}/end)
 uv run kako dream run                     # run the queued or failed dreaming runs: read the session, one extraction, checks in code, pending proposals (--session, --at)
 uv run kako dream settle                  # carry out each memory Meko extracted from a dreamed session: linked to what a person approved, or deleted (--at)
 uv run kako dream check                   # V-14 against Meko: each extracted memory linked, waiting on a pending proposal, or gone; exit 1 if not (--household)
-uv run kako meko sync                     # Meko upkeep: a memory per fact, a replaced one rewritten in the past tense, a retracted one's deleted, what was approved for sharing promoted or uploaded (--household, --at; also after each approval)
+uv run kako meko sync                     # Meko upkeep: a memory per fact, a replaced one rewritten in the past tense, a retracted one's deleted, what was approved for sharing promoted or uploaded, an ended session's recap added (--household, --at; also after each approval)
 uv run kako meko check                    # V-13: every link to a memory, promoted memory or document points to one Meko holds, and no upkeep is owed; exit 1 if not (--household)
 uv run kako gaps sync                     # Context Gaps: each new weak search in Meko's log as an open gap (Meko Cloud only; local Meko says it has no self-learning tools) (--household)
 uv run kako gaps list                     # the gaps, their questions and outcomes (--status open|answered|verified|dismissed|all, --household)
@@ -314,12 +315,20 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   and a note from code between rounds),
   `present.py` (what agents see: stable
   refs such as `debt:credit-card`, figures and facts written out as ₱9,050.00, 12 months, Feb 15,
-  2028), `brief.py` (`render_brief`, pure: the brief within `KAKO_BRIEF_TOKEN_BUDGET`, people's and
-  Meko's words wrapped in `<data>` blocks, and what it drops first when over budget) and
-  `brief_store.py` (`gather_brief`: Postgres, then one `context_search`); `answers.py` (what agents
+  2028), `quoting.py` (people's and Meko's words wrapped as `<data>`, escaped), `kept.py` (a
+  session's turns as kept, the types only), `conversation.py` (pure: the session's earlier turns as
+  chat messages within `KAKO_HISTORY_TOKEN_BUDGET`, compacted by code beyond it, the turn's new
+  message, the search query, and an earlier session's recap; docs/architecture.md, "The
+  conversation"), `brief.py` (`render_brief`, pure: the brief within `KAKO_BRIEF_TOKEN_BUDGET`,
+  people's and Meko's words wrapped in `<data>` blocks, this session's state (writer, topic, last
+  question, options with their moves, changes filed) and the earlier sessions' recaps, and what it
+  drops first when over budget) and `brief_store.py` (`gather_brief`: Postgres, the session's
+  earlier turns from `session_turn` and `turn_context`, the household's earlier sessions, then one
+  `context_search`); `answers.py` (what agents
   hand back: allocations with their amount specs, citations, proposals, options), `tools.py`
   (`TurnState` and the agents' tools: `get_figures`, `get_facts`, `get_decisions`, one extra
-  `search_memory`, `run_what_if`; amount specs and citations resolved and checked in code),
+  `search_memory`, `run_what_if`, the orchestrator's `read_turns`; amount specs and citations
+  resolved and checked in code),
   `specialists.py` (the four specialists and `submit_proposal`), `orchestrator.py` (`answer_turn`:
   the `ask_*` tools, at most 4 a turn, and `submit_answer`), `reconciling.py` (the orchestrator's
   side of reconciliation: the rules' note on the proposals together, at most 3 splits each checked
@@ -346,7 +355,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `evals/` the agent test set: `questions.py` reads and checks `data/test-set/questions.toml`,
   `scoring.py` scores one answer against what its question expects (each check named, a failed turn
   0), and `runner.py` runs the set through `ask` for either architecture and reports the score, model
-  calls, tokens, cost and Meko calls; `evals/dreaming.py` dreaming's labelled set
+  calls, tokens, cost and Meko calls; `evals/conversations.py` the conversation test set
+  (`data/test-set/conversations.toml`): multi-turn sessions played through `run_turn`, each turn
+  scored in code on what the orchestrator was sent and on the answer; `evals/dreaming.py` dreaming's labelled set
   (`data/dreaming/labelled.toml`): each case's expected, maybe and forbidden proposals, the score
   and the cases run through extraction and classification; `evals/results.py` reads the saved
   test-set and dreaming results for the metrics page, and `evals/preference.py` the learned
@@ -375,8 +386,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   it, links in `meko_link` with the text written, at most 60 steps a run, one run per household at a
   time; after each approval, at the end of `kako demo run`, `kako meko sync`), `promote.py` (what was
   approved for sharing: a preference's sentence added and promoted, never twice, or a decision
-  record uploaded, each linked), `records.py` (pure: the decision record's Markdown) and `check.py`
-  (V-13, promoted memories and documents included). `gaps/` is Context Gaps: `questions.py` (pure:
+  record uploaded, each linked), `records.py` (pure: the decision record's Markdown), `recaps.py`
+  (an ended session's recap, written by code, owed once as one of Kako's own memories, linked to the
+  session) and `check.py` (V-13, promoted memories, documents and recaps included). `gaps/` is Context Gaps: `questions.py` (pure:
   which weak searches are a shortfall of coverage, and the question, written by code) and `store.py`
   (`collect_gaps` from Meko's search log, `answer_gap`, `dismiss_gap`, and `verify_gaps`, which
   replays an answered search once its proposal is approved and upkeep has written its facts'
@@ -392,10 +404,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   (`data/demo-household/learning.toml`, read by `read_learning` in `demo/sessions.py`): before
   session 4, Session 3 dreamed over (code finds the pattern, no model call), the preference
   (changes.csv row 6, left out of the load) approved, its sharing confirmed and shared in Meko, once
-  (`kako demo record` records a session the same way).
+  (`kako demo record` records a session the same way, after replaying the sessions before it).
   `db/llm_log.py`, `db/agent_steps.py` and `db/number_checks.py` write those three tables, each row
   committed on its own. `db/turn_store.py` keeps each turn as shown (`session_turn`, once per seed, its
-  writer joined to the session) and reads the sessions list and a session's turns with their steps.
+  writer joined to the session, and in the same transaction its `turn_context`: the brief as sent,
+  which earlier turns went where, the search, the orchestrator's topic and question) and reads the
+  sessions list and a session's turns with their steps.
   `db/plan_read.py` reads a plan for the plan screen (`list_plans`, `read_plan`), only the household's:
   its options and allocations, each option's why (the cited figures and every figure and fact they
   were built from, each fact's source in words, the decisions with their rejected options, Meko's
@@ -526,7 +540,15 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   tool output doesn't change when the entities' ids sort the other way.
   `test_brief.py` builds the worked example's brief in memory (under budget, with the approved
   preference; Meko results wrapped; trimming in order), and `tests/integration/test_brief_store.py`
-  gathers it from the demo household in Postgres and local Meko, with its one search counted.
+  gathers it from the demo household in Postgres and local Meko, with its one search counted, the
+  session state and the earlier sessions, only the household's (the test set's never recapped).
+  `test_conversation.py` tests the conversation in memory (word for word, escaping, 60 turns
+  compacted in blocks that only move forward, the last 8 kept, the digest, the search, `read_turns`,
+  the orchestrator reading it and the specialists not, `said:` from an earlier turn);
+  `test_evals_conversations.py` the conversation set's file and its checks on an answer, and
+  `tests/integration/test_conversations.py` plays the set with a scripted model on Postgres (every
+  check on what was sent passes; turn 55 of 60 reaches turn 3 through `read_turns`) and the
+  command's refusals; `tests/integration/test_upkeep.py` also keeps an ended session's recap once.
   `test_meko_quota.py` and `test_meko_adapter.py` test the counter, the guard, `McpMeko` against a
   scripted server, `FakeMeko` and the demo upload; `tests/integration/test_meko_adapter.py` runs the
   adapter on local Meko with every call counted in Postgres (documents go to a throwaway datapack),

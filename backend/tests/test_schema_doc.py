@@ -20,7 +20,7 @@ TABLES = Base.metadata.tables
 
 def test_the_same_tables() -> None:
     assert sorted(TABLES) == sorted(doc_tables())
-    assert len(TABLES) == 29
+    assert len(TABLES) == 30
 
 
 @pytest.mark.parametrize("name", sorted(doc_tables()))

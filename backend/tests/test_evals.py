@@ -281,6 +281,7 @@ async def test_the_single_agent_answers_alone_with_the_same_checks(
         "get_figures",
         "get_facts",
         "get_decisions",
+        "read_turns",
         "search_memory",
         "run_what_if",
         "propose_change",

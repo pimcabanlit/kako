@@ -449,7 +449,9 @@ reads, never what Kako works out.
      what-if, guessing a figure's name), each costing an extra call; a sharper tool message would
      avoid them.
    - A what-if can't yet try a one-off amount (the ₱48,000 13th-month pay), a spending change or an
-     income change.
+     income change, so "what if I lose my job?" can only be answered in words (item 8 stops it
+     being filed as a real change). Next: income, spending and one-off what-ifs in the engine and
+     `run_what_if`, shown before and after like the options.
    - Dreaming runs only when someone runs it, and a session nobody ends stays open.
 
 7. **Documentation inside the app (Nov 25).** The sidebar's footer (the household's name and date)
@@ -472,6 +474,41 @@ reads, never what Kako works out.
    datapacks need Meko Pro). The approved mockup and drafts stay in `docs/mockups/` as the record.
    Checked on the demo story through Dec 1, in both themes, at desktop and phone width (no sideways
    scroll), with no console errors.
+
+8. **Kako follows the chat and its writer (Nov 25).** Pim's chats on the laptop, as Jun: "what if
+   my salary goes to 200000 per month." was met with "whose salary, Jun's or Mara's?"; "Jun",
+   answering that question, with "what would you like to look at today?"; "no, just give me the
+   simulation" with the current plan, the job-loss question forgotten; and "what if i lose my
+   job" was filed as a real pending job loss. Each turn's brief held the household's state and one
+   Meko search on the new message, but never who wrote it or the session's earlier turns.
+   Done when: the brief names who wrote the message; from the second turn on it shows the
+   session's last turns, read from Postgres (so Meko off too), within the budget; a what-if is
+   never filed as a change; the household's earlier words in the session count as said; tested
+   with a scripted two-turn session on Postgres; and sessions 2 and 4 recorded again on Foundry.
+   Built Nov 25: "Who is writing" and "This session so far" in `agents/brief.py`, read by
+   `agents/brief_store.py` (`session_turn`, this household's sessions only), dropped oldest first
+   before the facts list; `propose_change` refuses words that ask a what-if (`agents/proposing.py`,
+   English and Filipino); the number check takes the household's earlier messages in the session
+   as said, and lets a specialist's summary name the brief's own refs (`D1`). No prompt file or
+   tool definition changed, so the test set's recordings stand. Recorded: docs/tuning-log.md
+   entry 14.
+
+9. **A context strategy for the chat (Nov 25).** Pim: "last 4 turns only? … it's not realistic." A
+   session can run long, and any turn may depend on any earlier one. Plan agreed with Pim on Nov 25
+   (the four changes: code compacts, not a model; the conversation goes in as chat turns before the
+   brief, for caching; specialists get the session state and a self-contained question, never the
+   transcript; session recaps are written by code and kept in Postgres and Meko).
+   Done when: the orchestrator reads the session's earlier turns as chat messages, word for word
+   within a budget and compacted by code beyond it, with `read_turns` for what was left out; the
+   brief carries the session state (writer, topic, last question, options with their moves, changes
+   filed) and recaps of earlier sessions; an ended session's recap is kept in Meko; each turn's
+   context is logged; the conversation test set's checks on what the orchestrator was sent pass on a
+   scripted model, including turn 55 of a 60-turn session reaching turn 3; then, with Pim's yes, the
+   sessions, test sets and the conversation set recorded again on Foundry.
+   Built Nov 25 (docs/architecture.md, "The conversation"): `agents/conversation.py` (the history and
+   the recaps, pure), `agents/kept.py`, the session state in `agents/brief.py`, `read_turns` in
+   `agents/tools.py`, `turn_context` (migration 0009), `upkeep/recaps.py`, and
+   `evals/conversations.py` with `data/test-set/conversations.toml`. Recording waits for Pim's yes.
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 

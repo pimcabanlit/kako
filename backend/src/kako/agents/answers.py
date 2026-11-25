@@ -108,3 +108,7 @@ class TurnAnswer:
     resolution: Resolution | None = None  # None when the rules found no conflict
     checks: tuple[TextCheck, ...] = ()  # the number check on every text, as finally shown
     why: str | None = None  # in a replan: why the new plan is what it is, number-checked
+    # The orchestrator's notes for the next turn (`turn_context`), number-checked: what the
+    # conversation is about now, and the question the reply asks the household, if any.
+    topic: str | None = None
+    asks: str | None = None

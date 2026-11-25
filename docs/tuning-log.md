@@ -604,3 +604,117 @@ it led to.
 - **Change made:** none to the prompts. The metrics page shows both scores, each with and without
   the citation, and says what the difference rests on. A what-if that reads "moved X to Y" as "set
   Y to X" is worth a test-set question of its own.
+
+### 14. Each turn knows its writer and the session so far: sessions 2 and 4 again (Nov 25, 2026)
+
+- **Change tested:** Pim tried Kako on the laptop (Meko off, live models) as Jun. "what if my salary
+  goes to 200000 per month." was met with "whose salary, Jun's or Mara's?"; "Jun", answering that
+  question, with a greeting; "no, just give me the simulation" with the current plan; and "what if
+  i lose my job" was filed as a real pending job loss. The brief now says who wrote the message
+  ("Who is writing": "I", "me" and "my" mean them) and, from the second turn on, "This session so
+  far": the last four turns as the household saw them, read from `session_turn`. `propose_change`
+  refuses words that ask a what-if, and the number check counts the household's earlier messages
+  in the session as said. No prompt file or tool definition changes. The test set's requests don't
+  change (no writer, one turn a session). Session 2 gains Mara as the writer; session 4's turn 1
+  Mara, turn 2 Jun and turn 1 as the session so far, so both are recorded again. Pim approved
+  about US$0.20 (Nov 25).
+- **Prediction (written before the runs):**
+  - **Session 2:** the same options as entry 12 (A all on the card, 9 months; B Jun's split, 17
+    months, the fund's target in 12), `recommended` empty since Mara and Jun disagree, no
+    `propose_change`. The reply is a little more likely to speak to Mara by name ("you'd rather
+    clear the card fast") now that she is named as the writer; no "whose" question. 8 to 11 calls,
+    **US$0.03 to US$0.05**.
+  - **Session 4, turn 1:** one `propose_change` (the new job and ₱68,000.00 from Dec 1), no
+    specialist, 2 calls, as entries 9 and 12.
+  - **Session 4, turn 2:** the replan against Session 3's decision of Oct 18 with Sessions 1, 2 and
+    3 to revisit, the same two options (A Jun's ₱10,000 on the card, the rest to the fund,
+    recommended on the preference; B all on the card, 3 months). The new "session so far" shows
+    Mara's news and Kako's "waiting for your yes" reply; I expect it to change nothing in the
+    options and at most a phrase in the reply ("Mara's new job, which you approved"). The likeliest
+    miss is entry 12's: refs written in the household's text, sent back once. 10 to 15 calls,
+    **US$0.08 to US$0.15**.
+  - In all, **US$0.11 to US$0.20**.
+- **Run:** each on an empty database and a throwaway local Meko datapack (gpt-5.4 and gpt-5-mini):
+  `KAKO_MODEL_MODE=record uv run kako demo record session-2`, then `session-4` (entry 12's kept as
+  `session-2-run12.json` and `session-4-run12.json`). Session 4's first recording is kept as
+  `session-4-run14a.json`; after the change below Pim approved one more run (about US$0.12), and
+  session 4 was recorded again. Spent **US$0.27**:
+
+  | | Model calls | Tokens | Cost |
+  | --- | --- | --- | --- |
+  | Session 2 | 6 | 33,610 | US$0.0381 |
+  | Session 4, first recording (s4:t1 and s4:t2) | 17 | 105,085 | US$0.1221 |
+  | Session 4, kept (s4:t1 and s4:t2) | 14 | 94,478 | US$0.1105 |
+
+- **Result:**
+  - **Session 2** as predicted: A, all on the card (9 months, ₱12,460.10 of interest) and B, Jun's
+    split (17 months; the fund's target in 12), the over-allocation caught in code and left to the
+    household ("Mara wants the card cleared fast and Jun wants more cash in the emergency fund"),
+    no "whose" question, no `propose_change`. 6 calls, under the predicted 8 to 11: no answer was
+    sent back this time. Option A's summary names a figure by its key ("plan.unallocated is
+    ₱0.00"), which the number check allows and a household shouldn't read.
+  - **Session 4, turn 1** as predicted, both times: one `propose_change`, 2 calls.
+  - **Session 4, turn 2, first recording:** the replan as predicted, but the budget specialist's
+    summary said "Decisions D1, D2 and D3 need revisiting", and the number check flagged D1, D2 and
+    D3: the brief's own decision refs, which a specialist's summary couldn't name. Shown in the
+    demo as flagged numbers. 15 calls.
+  - **Session 4, turn 2, kept:** the replan against Session 3's decision of Oct 18 with Sessions 1,
+    2 and 3 to revisit; A, Jun's ₱10,000 on the card and ₱15,050.00 to the fund (card in 7 months
+    with ₱9,358.80 of interest, the fund's target in 4), recommended on the preference and the three
+    decisions; nothing flagged. 12 calls, inside 10 to 15. **One miss against the prediction:**
+    option B isn't the whole surplus on the card (entry 12: 3 months) but the ₱16,000.00 left
+    unallocated (`figure:plan.unallocated`), with the fund at ₱0.00: 5 months. Its label still says
+    "all extra on the card", and the savings specialist's summary says 3 months for its own
+    all-on-the-card what-if, so the options and a specialist's words disagree. The figures are the
+    engine's for the moves each ran; the label overstates option B. Nobody asked about who was
+    writing, and the reply doesn't mention the session so far, as predicted.
+- **Root cause:** for the flagged refs: the number check let a specialist's summary name the
+  turn's what-ifs, figures and facts but not the brief's decisions (`D1`), so a summary that named
+  them was flagged after one send-back. For option B: the orchestrator ran its own all-on-the-card
+  what-if with the unallocated figure rather than the surplus; a model's reading of "all of it",
+  not a change of this entry.
+- **Change made:** the number check lets a specialist's summary name the brief's own refs (`D1`,
+  `P1`, `M1`, `K1`, and with their prefixes); the household's texts still allow none. Follow-ups: an
+  option's label checked against its what-if ("all extra" when some of the surplus stays
+  unallocated), and figure keys in an option's summary written as words. As in entry 12, demo mode
+  replays session 4 with its requests differing from the recording, because `demo record` doesn't
+  replay session 2 before recording session 4, so the brief's Meko search sees a different
+  datapack; the replies are replayed and reported.
+
+### 15. The conversation as context: sessions, both test sets and the conversation set (Nov 25, 2026)
+
+- **Change tested:** the context strategy agreed with Pim on Nov 25 (docs/architecture.md, "The
+  conversation"). The orchestrator's system prompt is the shared rules and its role alone; the
+  session's earlier turns follow as chat messages, compacted by code beyond
+  `KAKO_HISTORY_TOKEN_BUDGET`; then the brief and the new message. The brief carries the session
+  state and recaps of earlier sessions; `submit_answer` takes `topic` and `asks`; the orchestrator
+  and the single agent gain `read_turns`; the prompts gain "The conversation" and "What Kako can
+  test". Specialists get a self-contained question. Every orchestrator request changes, so every
+  recording is made again: sessions 2 and 4 (`kako demo record`, session 4 now after session 2 is
+  replayed, so its brief recaps Session 2), the test set for both architectures and without the
+  preference, and the new conversation set (`kako conversations`, specialists). Waiting for Pim's
+  yes; estimate about **US$1.60 to US$2.00**, under the daily cap of US$3.
+- **Prediction (written before the runs):**
+  - **Session 2:** as entry 14: A all on the card (9 months), B Jun's split (17 months, the fund's
+    target in 12), the choice left to the household, no `propose_change`; `topic` about paying down
+    the card, `asks` the choice between A and B. 6 to 10 calls, **US$0.03 to US$0.06**.
+  - **Session 4:** turn 1 one `propose_change`, 2 calls. Turn 2 the replan against Oct 18 with
+    Sessions 1 to 3 to revisit, A recommended on the preference. The brief now recaps Session 2 and
+    the orchestrator reads turn 1 as a chat turn; I expect no change to the options, and the
+    reply may name Mara's news as "the new job you just approved". 12 to 16 calls, **US$0.10 to
+    US$0.16**.
+  - **Test set:** single-turn questions see no earlier sessions and no history, so only the layout
+    and the new fields change. Specialists within one question of entry 12 (93.3%), single within
+    one question of 90.7%; cost about entry 12's (US$0.62 and US$0.49), without the preference
+    about US$0.12. The likeliest new miss: a `topic` or `asks` with a number in it, sent back once.
+  - **Conversation set** (8 turns):
+    - c01: no turn files a change (the what-if guard and the prompt). Turn 1 shows the runway in
+      months and doesn't ask whose job. Turn 2 ("Jun") reads as Jun answering, not a greeting, and
+      stays on the job. Turn 3 gives the runway again, plainly. The likeliest miss: turn 1 asks
+      "should I show the runway?" instead of showing it.
+    - c02: turn 1 files Mara's salary at ₱72,000.00 from Feb 1, 2027, naming Mara. Turn 2 (Jun) says
+      the raise waits for a yes before the plan changes, and asks nobody whose salary.
+    - c03: turn 1 as session 2. Turn 2 ("go with B") names B with its moves from the session state
+      and says how to accept it; the likeliest miss is offering A and B again (the options check
+      fails), since there is no "accept an option" step yet.
+    - About 20 to 30 calls, **US$0.15 to US$0.30**. Score: 85% to 95% of checks.

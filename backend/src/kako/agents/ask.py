@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from kako.agents.answers import TurnAnswer
 from kako.agents.brief_store import gather_brief
 from kako.agents.checks import record
+from kako.agents.conversation import history
 from kako.agents.model_manager import ModelManager
 from kako.agents.orchestrator import answer_turn
 from kako.agents.present import money
@@ -47,7 +48,7 @@ from kako.db.models import LlmCall, Session
 from kako.db.number_checks import DbCheckLog
 from kako.db.plan_store import SavedAnswer, save_answer
 from kako.db.proposal_store import Evidence, ProposalError, propose
-from kako.db.turn_store import TurnStoreError, keep_turn
+from kako.db.turn_store import KeptContext, TurnStoreError, keep_turn
 from kako.facts.proposals import PayloadError, idempotency_key
 from kako.health import safe_error
 from kako.meko.adapter import Meko, Turn
@@ -214,6 +215,8 @@ async def run_turn(
             search_limit=settings.brief_search_limit,
             changes=changes,
             session_on=session.on,
+            session_id=session.session_id,
+            speaker=speaker,
         )
     before_run_id = None
     async with engine.connect() as conn:
@@ -230,6 +233,7 @@ async def run_turn(
         conversation,
         checks=checks,
         said_on=session.on,
+        history=history(inputs.earlier, settings.history_token_budget),
     )
     manager = ModelManager(settings, backend, DbLlmLog(engine))
     turn = manager.turn(
@@ -318,10 +322,27 @@ async def run_turn(
             message=message,
             shown=shown.model_dump(mode="json"),
             created_at=datetime.now(UTC),
+            context=kept_context(state, answer),
         )
     except TurnStoreError as exc:
         raise SessionError(str(exc)) from None
     return replace(asked, shown=shown)
+
+
+def kept_context(state: TurnState, answer: TurnAnswer) -> KeptContext:
+    """What the turn's agents were given (the brief, the conversation's window, the search) and
+    the orchestrator's notes for the next turn, as `turn_context` keeps them."""
+    window = state.history.as_json() if state.history is not None else {}
+    inputs = state.inputs
+    searched = inputs.context is not None
+    return KeptContext(
+        brief=state.brief.text,
+        brief_tokens=state.brief.tokens,
+        history=window,
+        search_query=(inputs.search or inputs.message) if searched else None,
+        topic=answer.topic,
+        asks=answer.asks,
+    )
 
 
 async def _keep_proposals(
@@ -430,6 +451,14 @@ def trace_turn(
         metadata["kako_prompts"] = versions
     if speaker is not None:  # who wrote the message: dreaming names them on what it proposes
         metadata["kako_said_by"] = str(speaker)
+    if state.history is not None and state.inputs.earlier:  # what the orchestrator read of it
+        metadata["kako_context"] = {
+            k: v
+            for k, v in state.history.as_json().items()
+            if k in ("verbatim", "digest", "left_out")
+        }
+    if answer.topic:
+        metadata["kako_topic"] = answer.topic
     # Numbers the check couldn't match, by text: Meko keeps the texts as shown, so a reader of the
     # trace (or Meko's own extraction) can tell which numbers no figure, fact or said amount backs.
     checks = [*answer.checks, *(p.check for p in answer.proposals if p.check is not None)]

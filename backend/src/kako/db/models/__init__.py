@@ -19,7 +19,7 @@ from kako.db.models.planning import (
     Scenario,
     ScenarioOverride,
 )
-from kako.db.models.sessions import Session, SessionParticipant, SessionTurn
+from kako.db.models.sessions import Session, SessionParticipant, SessionTurn, TurnContext
 from kako.db.models.system import LlmCall, MekoCall, NumberCheck
 
 __all__ = [
@@ -52,4 +52,5 @@ __all__ = [
     "Session",
     "SessionParticipant",
     "SessionTurn",
+    "TurnContext",
 ]

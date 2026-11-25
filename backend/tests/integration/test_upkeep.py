@@ -19,6 +19,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from kako.agents.brief_store import _recap_memories
 from kako.cli import main as _main
 from kako.db.fact_store import load_facts
 from kako.db.meko_log import DbCallLog
@@ -31,6 +32,7 @@ from kako.settings import Settings, get_settings
 from kako.upkeep.check import check_links
 from kako.upkeep.sync import AGENT, keep_up_with, session_key
 from tests.conftest import MakeSettings
+from tests.integration.test_brief_store import _session_with_turns
 from tests.integration.test_meko_adapter import throwaway_datapack
 
 pytestmark = pytest.mark.integration
@@ -254,3 +256,72 @@ async def _link_ids(engine: AsyncEngine) -> list[str]:
     async with engine.connect() as conn:
         rows = await conn.execute(text("SELECT meko_id FROM meko_link ORDER BY meko_id"))
         return [r for (r,) in rows]
+
+
+async def test_an_ended_session_is_recapped_once_as_kakos_own_memory(
+    migrated: AsyncEngine, test_meko_url: str, make_settings: MakeSettings
+) -> None:
+    """A session's recap, written by code from its kept turns, goes to Meko once it has ended:
+    one memory as `kako:upkeep`, linked to the session, found by a later search, and marked as
+    Kako's recap by the brief (docs/data-model.md, "What Kako keeps in Meko")."""
+    async with migrated.connect() as conn:
+        household_id = await load_demo(conn, read_demo(), through=BEFORE_THE_NEWS)
+        people = {
+            name: person
+            for name, person in await conn.execute(
+                text("SELECT display_name, id FROM person WHERE household_id = :h"),
+                {"h": household_id},
+            )
+        }
+        session_id = await _session_with_turns(
+            conn,
+            household_id,
+            [
+                (people["Jun"], "What if I lose my job?", "Kako can show your runway instead."),
+                (people["Jun"], "Just give me the simulation", "Here is the runway."),
+            ],
+            title="Jun's worry",
+            topics={2: ("Jun's job and the household's runway", None)},
+        )
+        await conn.commit()
+    async with throwaway_datapack(test_meko_url) as datapack_id:
+        settings = make_settings(meko_mcp_url=test_meko_url, meko_datapack_id=datapack_id)
+
+        # Not ended yet: no recap is owed.
+        first = await keep_up_with(migrated, settings, household_id, now=NEWS)
+        assert first.recapped == 0
+        assert first.problems == []
+        assert await _check(settings, migrated, household_id) == []
+
+        async with migrated.begin() as conn:
+            await conn.execute(
+                text("UPDATE session SET ended_at = :t WHERE id = :s"),
+                {"t": NEWS, "s": session_id},
+            )
+        assert await _check(settings, migrated, household_id) == [
+            f"session {session_id}: ended, its recap not in Meko yet (kako meko sync)"
+        ]
+
+        ended = await keep_up_with(migrated, settings, household_id, now=NEWS)
+        assert (ended.recapped, ended.added, ended.problems) == (1, 0, [])
+        async with migrated.connect() as conn:
+            (memory_id, agent, written), *others = list(
+                await conn.execute(
+                    text(
+                        "SELECT meko_id, agent_id, text FROM meko_link "
+                        "WHERE kako_table = 'session' AND kako_id = :s"
+                    ),
+                    {"s": session_id},
+                )
+            )
+            marked = await _recap_memories(conn, household_id, [memory_id, "not-a-recap"])
+        assert others == []
+        assert agent == AGENT
+        assert written.startswith("In the Villanueva household, Jun's worry (Dec 1, 2026): ")
+        assert "Just give me the simulation" in written
+        assert marked == {memory_id}
+        assert written in await _find(settings, migrated, household_id, "Jun's job runway")
+        assert await _check(settings, migrated, household_id) == []
+
+        # Written once: a recap is the session as it ended.
+        assert (await keep_up_with(migrated, settings, household_id, now=NEWS)).steps == 0

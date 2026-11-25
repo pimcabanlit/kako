@@ -1,31 +1,40 @@
 """The brief: what every agent starts a planning turn from (docs/architecture.md, step 3).
 
-Code builds it, within a token budget (`KAKO_BRIEF_TOKEN_BUDGET`, about 3,000): the household, its
-entities with their refs, the engine's key figures, the approved preferences and constraints, the
-other facts in the snapshot, the active decisions with their reasons, the pending proposals, and
-the results of **one** Meko `context_search` on the household's message. Specialists start from it
-instead of searching on their own.
+Code builds it, within a token budget (`KAKO_BRIEF_TOKEN_BUDGET`, about 3,000): the household, this
+session's state, its entities with their refs, the engine's key figures, the approved preferences
+and constraints, the other facts in the snapshot, the active decisions with their reasons, the
+pending proposals, the recaps of the household's earlier sessions, and the results of **one** Meko
+`context_search`. Specialists start from it instead of searching on their own.
+
+The session's state is kept by code from its turns, read from Postgres so it holds with Meko on or
+off (`session_lines`): who wrote this turn's message (so "I" and "my" have an owner), what the
+conversation is about and what Kako asked last (the orchestrator's notes on its last answer), the
+options on the table with the moves behind them (so "go with B" can be run again on today's
+figures), and the changes filed for a yes with where they stand. The conversation itself goes to
+the orchestrator alone, as chat messages before the brief (`agents.conversation`). An earlier
+session is recapped by code (`conversation.recap`): no model summarises anything.
 
 Two kinds of text, kept apart:
 
 - **Kako's own**: figures and facts from Postgres, written by code (`agents.present`). Every
   number an agent may use is here or comes from a tool.
 - **People's and models' words**: memories, knowledge-base excerpts, the reasons behind a
-  decision, a proposal's explanation, free-text preferences. Each is wrapped in a `<data>` block
-  with its source, and angle brackets inside are escaped, so nothing in it reads as instructions
-  (REVIEW.md rule 5). A memory is marked approved only when `meko_link` ties it to one of this
-  household's facts or decisions (`BriefInputs.approved_memories`, read from Postgres, never from
-  Meko's metadata); any other memory is a candidate, never a fact. A memory can quote an amount
-  people said: that is a claim, not a figure, and the number check (V-10) holds agents to the
-  engine's figures.
+  decision, a proposal's explanation, free-text preferences, the orchestrator's notes, the recaps.
+  Each is wrapped in a `<data>` block with its source, and angle brackets inside are escaped, so
+  nothing in it reads as instructions (REVIEW.md rule 5). A memory is marked approved only when
+  `meko_link` ties it to one of this household's facts or decisions
+  (`BriefInputs.approved_memories`, read from Postgres, never from Meko's metadata); any other
+  memory is a candidate, never a fact. A memory can quote an amount people said: that is a claim,
+  not a figure, and the number check (V-10) holds agents to the engine's figures.
 - **Names and short labels** (the household, people, entities, a decision's question, its options,
   a session's title) are people's or a model's words too: each is put on one line, escaped and cut
   (`plain`), so none can start a heading, a figure line or a `<data>` block of its own.
 
 When the brief is over budget, code drops what agents can fetch again, in this order: Meko results
 (lowest ranked first), the rejected options of decisions, pending proposals past the first three,
-then the facts list (agents read facts with `get_facts`). The figures, preferences and decisions
-are never dropped; if they alone are over budget, building the brief fails.
+the earlier sessions' recaps (the oldest first), then the facts list (agents read facts with
+`get_facts`). The figures, preferences, decisions and the session's state are never dropped; if
+they alone are over budget, building the brief fails.
 
 `render_brief` is pure; `gather_brief` (in `kako.agents.brief_store`) reads Postgres and Meko.
 """
@@ -33,12 +42,18 @@ are never dropped; if they alone are over budget, building the brief fails.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 
 from kako.agents.chat import estimate_text_tokens
+from kako.agents.conversation import QUERY_CHARS, TOPIC_CHARS, recap_line
+from kako.agents.kept import KeptTurn, PastSession
 from kako.agents.present import GLOSSARY, Refs, day, fact_value, figure_value
+from kako.agents.quoting import NAME_CHARS as NAME_CHARS
+from kako.agents.quoting import QUOTE_CHARS as QUOTE_CHARS
+from kako.agents.quoting import data as data
+from kako.agents.quoting import plain as plain
 from kako.agents.replan import Replan, brief_lines
 from kako.engine.figures import Run
 from kako.facts.attributes import CATALOG
@@ -53,10 +68,10 @@ PREFERENCE_KEYS = frozenset({"household.emergency_months_target"})
 FREE_TEXT = frozenset(
     key for key, a in CATALOG.items() if a.value_type == "text" and a.choices is None
 )
-QUOTE_CHARS = 400  # the most of one memory, excerpt or reason the brief keeps
-NAME_CHARS = 80  # the most of one name or label
 QUESTION_CHARS = 200
 KEPT_PROPOSALS = 3
+PAST_SESSIONS = 3  # the most earlier sessions the brief recaps, the newest
+SESSION_CHANGES = 6  # the most of this session's filed changes the session state lists
 
 
 class BriefError(Exception):
@@ -119,9 +134,19 @@ class BriefInputs:
     life_events: tuple[LifeEventView, ...] = ()  # approved, as known then, oldest first
     replan: Replan | None = None  # after a change approved in this session (`agents.replan`)
     message: str = ""
+    writer: tuple[str, str] | None = None  # who wrote the message: (display name, role)
+    session_title: str | None = None  # the session this turn is in
+    # Every kept turn of this session before this one, oldest first.
+    earlier: tuple[KeptTurn, ...] = ()
+    past_sessions: tuple[PastSession, ...] = ()  # the household's earlier sessions, newest first
+    # Where each proposal the kept turns filed stands, as known at the turn: pending, approved…
+    statuses: Mapping[uuid.UUID, str] = field(default_factory=dict)
     context: Context | None = None
+    search: str | None = None  # what the search looked for, when not the message alone
     # Meko memory ids that meko_link ties to this household's facts or decisions.
     approved_memories: frozenset[str] = frozenset()
+    # Meko memory ids that meko_link ties to this household's sessions: Kako's recaps.
+    recap_memories: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -140,28 +165,6 @@ class Brief:
     excerpts: dict[str, str] = field(default_factory=dict)
 
 
-def _escape(text: str) -> str:
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def plain(text: str, limit: int = NAME_CHARS) -> str:
-    """A name or a short label from people or a model: one line, escaped, at most `limit`
-    characters. It can't start a line of its own or open or close a `<data>` block."""
-    body = " ".join(text.split())
-    if len(body) > limit:
-        body = body[: limit - 1] + "…"
-    return _escape(body)
-
-
-def data(text: str, *, limit: int = QUOTE_CHARS, **attributes: str) -> str:
-    """People's or a model's words, wrapped so they read as data, never as instructions, and cut
-    at `limit` characters."""
-    attrs = "".join(
-        f' {k}="{_escape(v).replace(chr(34), "&quot;")}"' for k, v in attributes.items()
-    )
-    return f"<data{attrs}>{plain(text, limit)}</data>"
-
-
 @dataclass(frozen=True)
 class _Parts:
     """The brief's droppable parts; `render` writes whatever is left."""
@@ -170,6 +173,7 @@ class _Parts:
     knowledge: tuple[int, ...]
     rejected_options: bool = True
     proposals: int = 1_000
+    past_sessions: int = PAST_SESSIONS  # how many of the newest earlier sessions to recap
     facts: bool = True
 
 
@@ -192,6 +196,64 @@ def decision_lines(ref: str, decision: DecisionView, *, rejected: bool = True) -
             for option in decision.options
             if option.rejected_reason is not None
         ]
+    return lines
+
+
+def session_lines(inputs: BriefInputs) -> list[str]:
+    """This session's state, kept by code from its turns: who is writing, what the conversation is
+    about, what Kako asked last, the options on the table with the moves behind them, and the
+    changes filed for a yes with where they stand. Every agent of the turn reads it; the
+    conversation itself goes to the orchestrator alone (`agents.conversation`)."""
+    turns = inputs.earlier
+    if inputs.writer is None and inputs.session_title is None and not turns:
+        return []
+    lines = ["## This session (kept by code)"]
+    if inputs.session_title is not None:
+        lines.append(f"{plain(inputs.session_title)}: this message is turn {len(turns) + 1}.")
+    writer = None
+    if inputs.writer is not None:
+        writer, role = inputs.writer
+        name = plain(writer)
+        lines.append(
+            f'{name} ({plain(role)}) wrote this turn\'s message. "I", "me" and "my" in it mean '
+            f"{name}; don't ask whose."
+        )
+    others = dict.fromkeys(t.said_by for t in turns if t.said_by and t.said_by != writer)
+    if others:
+        lines.append("Also wrote in this session: " + ", ".join(plain(o) for o in others) + ".")
+    noted = next((t for t in reversed(turns) if t.topic), None)
+    if noted is not None and noted.topic:
+        lines.append(
+            f"What it is about (Kako's note at turn {noted.number}): "
+            + data(noted.topic, limit=TOPIC_CHARS, source="kako")
+        )
+    if turns and turns[-1].asks:
+        lines.append(
+            f"Kako's last reply (turn {turns[-1].number}) asked: "
+            + data(turns[-1].asks, source="kako")
+            + " Read the new message as the answer unless it plainly starts something new."
+        )
+    offered = next((t for t in reversed(turns) if t.options), None)
+    if offered is not None:
+        lines.append(
+            f"Options Kako offered at turn {offered.number}, with the moves behind each "
+            "(run_what_if runs the same moves on today's figures):"
+        )
+        for option in offered.options:
+            moves = "; ".join(plain(a, 120) for a in option.allocations) or "no moves"
+            mark = " (recommended)" if option.recommended else ""
+            lines.append(f"- {plain(option.label)}{mark}: {moves}")
+    changes = [(t.number, c) for t in turns for c in t.changes]
+    if changes:
+        lines.append("Changes filed for a yes in this session:")
+        if len(changes) > SESSION_CHANGES:
+            lines.append(f"- ({len(changes) - SESSION_CHANGES} earlier ones left out)")
+        for number, change in changes[-SESSION_CHANGES:]:
+            status = inputs.statuses.get(change.proposal_id) if change.proposal_id else None
+            lines.append(
+                f"- turn {number}: {plain(change.shown, 200)}" + (f" ({status})" if status else "")
+            )
+    lines.append("")
     return lines
 
 
@@ -220,8 +282,9 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
         ", ".join(f"{plain(name)} ({plain(role)})" for name, role in inputs.people)
         or "None recorded.",
         "",
-        "## Entities (ref: name)",
     ]
+    lines += session_lines(inputs)
+    lines += ["## Entities (ref: name)"]
     for entity in sorted(inputs.entities, key=lambda e: refs.by_id[e.id]):
         is_open = (entity.opened_on is None or entity.opened_on <= snap.on) and (
             entity.closed_on is None or snap.on < entity.closed_on
@@ -300,6 +363,16 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
     if len(kept) < len(inputs.proposals):
         lines.append(f"- and {len(inputs.proposals) - len(kept)} more")
 
+    past = inputs.past_sessions[: parts.past_sessions]
+    if inputs.past_sessions:
+        lines += [
+            "",
+            "## Earlier sessions (recaps written by code; figures in them were right then)",
+        ]
+        lines += [recap_line(p, inputs.statuses) for p in past]
+        if len(past) < len(inputs.past_sessions):
+            lines.append(f"- and {len(inputs.past_sessions) - len(past)} older")
+
     lines += ["", "## From Meko, for the household's message (cite as memory:<ref>, doc:<ref>)"]
     context = inputs.context
     memories: dict[str, str] = {}
@@ -308,21 +381,20 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
     if context is None:
         lines.append("No search was made.")
     else:
-        if inputs.message:
-            lines.append("Searched for: " + data(inputs.message, source="household"))
+        query = inputs.search if inputs.search is not None else inputs.message
+        if query:
+            lines.append("Searched for: " + data(query, limit=QUERY_CHARS, source="household"))
         for n, i in enumerate(parts.memories, start=1):
             memory = context.memories[i]
-            approved = memory.id in inputs.approved_memories
+            if memory.id in inputs.approved_memories:
+                status = "approved"
+            elif memory.id in inputs.recap_memories:
+                status = "Kako's recap of an earlier session: what was said, not a fact"
+            else:
+                status = "candidate, not approved"
             memories[f"M{n}"] = memory.id
             excerpts[f"M{n}"] = memory.text
-            lines.append(
-                f"- M{n}: "
-                + data(
-                    memory.text,
-                    source="meko-memory",
-                    status="approved" if approved else "candidate, not approved",
-                )
-            )
+            lines.append(f"- M{n}: " + data(memory.text, source="meko-memory", status=status))
         for n, i in enumerate(parts.knowledge, start=1):
             hit = context.knowledge[i]
             knowledge[f"K{n}"] = hit.document_id
@@ -364,8 +436,21 @@ def render_brief(inputs: BriefInputs, budget: int) -> Brief:
     steps: Sequence[tuple[_Parts, str]] = (
         (replace(parts, rejected_options=False), "the rejected options of decisions"),
         (replace(parts, rejected_options=False, proposals=KEPT_PROPOSALS), "older proposals"),
+        *(
+            (
+                replace(parts, rejected_options=False, proposals=KEPT_PROPOSALS, past_sessions=n),
+                "an earlier session's recap",
+            )
+            for n in range(min(len(inputs.past_sessions), PAST_SESSIONS) - 1, -1, -1)
+        ),
         (
-            replace(parts, rejected_options=False, proposals=KEPT_PROPOSALS, facts=False),
+            replace(
+                parts,
+                rejected_options=False,
+                proposals=KEPT_PROPOSALS,
+                past_sessions=0,
+                facts=False,
+            ),
             "the facts list (agents read facts with get_facts)",
         ),
     )

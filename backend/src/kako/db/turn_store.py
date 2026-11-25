@@ -17,13 +17,21 @@ from sqlalchemy import Table, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from kako.db.models import AgentStep, Person, Session, SessionParticipant, SessionTurn
+from kako.db.models import (
+    AgentStep,
+    Person,
+    Session,
+    SessionParticipant,
+    SessionTurn,
+    TurnContext,
+)
 
 SESSION = cast(Table, Session.__table__)
 SESSION_TURN = cast(Table, SessionTurn.__table__)
 PARTICIPANT = cast(Table, SessionParticipant.__table__)
 AGENT_STEP = cast(Table, AgentStep.__table__)
 PERSON = cast(Table, Person.__table__)
+TURN_CONTEXT = cast(Table, TurnContext.__table__)
 
 
 class TurnStoreError(Exception):
@@ -63,6 +71,18 @@ class TurnRow:
     steps: tuple[StepRow, ...]
 
 
+@dataclass(frozen=True)
+class KeptContext:
+    """What the turn's agents were given, and the orchestrator's notes for the next turn."""
+
+    brief: str
+    brief_tokens: int
+    history: dict[str, Any]  # agents.conversation.History.as_json
+    search_query: str | None
+    topic: str | None
+    asks: str | None
+
+
 async def keep_turn(
     engine: AsyncEngine,
     *,
@@ -72,8 +92,10 @@ async def keep_turn(
     message: str,
     shown: dict[str, Any],
     created_at: datetime,
+    context: KeptContext | None = None,
 ) -> uuid.UUID:
-    """Keep the turn as shown, once; its writer joins the session's participants."""
+    """Keep the turn as shown, once, with its context (`turn_context`) in the same transaction;
+    its writer joins the session's participants."""
     turn_id = uuid.uuid4()
     async with engine.begin() as conn:
         done = await conn.execute(
@@ -91,6 +113,21 @@ async def keep_turn(
         )
         if done.rowcount != 1:
             raise TurnStoreError(f"session {session_id} already has a turn {seed!r}")
+        if context is not None:
+            await conn.execute(
+                insert(TURN_CONTEXT).values(
+                    id=uuid.uuid4(),
+                    session_id=session_id,
+                    meko_turn_seed=seed,
+                    brief=context.brief,
+                    brief_tokens=context.brief_tokens,
+                    history=context.history,
+                    search_query=context.search_query,
+                    topic=context.topic,
+                    asks=context.asks,
+                    created_at=created_at,
+                )
+            )
         if said_by is not None:
             await conn.execute(
                 insert(PARTICIPANT)

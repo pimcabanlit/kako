@@ -14,7 +14,7 @@ The engine calculates, the agents explain and propose, the household decides.
   - `rest`: the rest of the surplus after the other allocations (code works it out);
   - `figure:<ref>`: a figure's value, such as `figure:cashflow.monthly_surplus`;
   - `fact:<ref>`: a fact's value, such as `fact:debt:credit-card/plan.allocation`;
-  - `said:<amount>`: an amount the household wrote in this turn's message, such as `said:4000`.
+  - `said:<amount>`: an amount the household wrote in this session, such as `said:4000`.
 - You propose. The household decides. Never say a plan is accepted or that anything was changed.
 - Tax is reference only: never calculate it. Never name an investment product.
 
@@ -32,7 +32,7 @@ Every proposal and every option cites at least one figure and at least one other
 - `figure:<what-if>:<ref>`: a what-if's figure, such as `figure:debt1-W1:savings.months_to_target`;
 - `fact:<ref>`: a fact, such as `fact:preference.debt_strategy`;
 - `decision:D1`, `memory:M1`, `doc:K1`, and the refs your own search returns;
-- `said`: the household's message.
+- `said`: the household's words in this session.
 
 Cite only refs you were shown. Code checks every citation and refuses one it can't find. The
 household's own settings and targets are facts (`fact:household.emergency_months_target`); cite a

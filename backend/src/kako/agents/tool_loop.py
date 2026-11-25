@@ -98,6 +98,7 @@ async def run_agent(
     system: SystemPrompt,
     user: str,
     tools: Sequence[Tool],
+    history: Sequence[Message] = (),
     max_output_tokens: int,
     max_tool_calls: int = 4,
     between_rounds: Callable[[], str | None] | None = None,
@@ -110,7 +111,9 @@ async def run_agent(
         raise ValueError(f"{path}: two tools share a name")
     finals = [t for t in tools if t.final]
     turn.prompts.update({p.name: p for p in system.prompts})
-    messages = [Message("system", system.text), Message("user", user)]
+    # The conversation so far (the orchestrator's), between the system prompt and the turn's own
+    # message, so the next turn's request starts the same way (`agents.conversation`).
+    messages = [Message("system", system.text), *history, Message("user", user)]
     counted = model_calls = 0
     text = ""
     sent_back = False  # an empty reply was sent back once

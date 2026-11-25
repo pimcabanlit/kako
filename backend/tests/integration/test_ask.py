@@ -40,6 +40,12 @@ async def test_ask_records_and_the_command_replays(
         household_id = await load_demo(
             conn, read_demo(), through=datetime(2026, 9, 15, 9, tzinfo=MANILA)
         )
+        mara = (
+            await conn.execute(
+                text("SELECT id FROM person WHERE household_id = :h AND display_name = 'Mara'"),
+                {"h": household_id},
+            )
+        ).scalar_one()
         await conn.commit()
     path = tmp_path / "session-2.json"
     settings = make_settings(model_strong="kako-strong", model_fast="kako-fast")
@@ -54,6 +60,7 @@ async def test_ask_records_and_the_command_replays(
         known_at=None,
         title="Session 2",
         seed=SEED,
+        speaker=mara,  # the brief names her: the replay below must say it is Mara too
     )
     printed = render_answer(asked)
     assert "A: all extra on the card: Card paid off in 9 months" in printed
@@ -90,7 +97,15 @@ async def test_ask_records_and_the_command_replays(
         ("reconciliation", "pass", True),
     ]
 
-    # The command answers the same turn from the recording, with no model and no Meko.
+    # The command answers the same turn from the recording, with no model and no Meko. On this
+    # database the recorded session would now be an earlier session, recapped in the new one's
+    # brief, so it is set aside first: the command then starts from what the recording saw.
+    async with migrated.begin() as conn:
+        for table in ("turn_context", "session_turn"):
+            await conn.execute(
+                text(f"DELETE FROM {table} WHERE session_id = :s"),  # noqa: S608 (a constant)
+                {"s": asked.session_id},
+            )
     monkeypatch.setenv("KAKO_DATABASE_URL", test_database_url)
     monkeypatch.setenv("KAKO_MODEL_MODE", "replay")
     monkeypatch.setenv("KAKO_RECORDED_RESPONSES", str(path))
@@ -98,6 +113,9 @@ async def test_ask_records_and_the_command_replays(
     get_settings.cache_clear()  # read the settings again, with the replay
     assert await asyncio.to_thread(_main, [*args, "--by", "Nobody"]) == 1
     assert "No one called Nobody in the household." in capsys.readouterr().err
+    # Someone else writing changes the brief, so the recording no longer fits it.
+    assert await asyncio.to_thread(_main, [*args, "--title", "Session 2", "--by", "Jun"]) == 1
+    assert "has changed since it was recorded" in capsys.readouterr().err
     assert await asyncio.to_thread(_main, [*args, "--title", "Session 2", "--by", "Mara"]) == 0
     out = capsys.readouterr().out
     assert "B: split: Card paid off in 17 months" in out

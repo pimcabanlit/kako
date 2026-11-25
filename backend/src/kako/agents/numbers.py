@@ -10,15 +10,16 @@ any other number written in digits, and a spelled-out number with a unit ("nine 
 - a figure of the turn's run, or of one of the turn's what-ifs (the asks together included);
 - a fact in the turn's snapshot (money, a rate as a percentage, a whole number, a date);
 - an allocation in one of the turn's what-ifs (a hypothetical fact, `scenario_override`);
-- a number in the household's own message (an amount only from ₱100, as the tools take them), or
-  the household's date.
+- a number in the household's own message, or in its earlier messages of the session (an amount
+  only from ₱100, as the tools take them), or the household's date.
 
 A negative figure matches its amount ("₱5,050.00 more than the surplus" for -₱5,050.00).
 Written at a lower precision a value is rounded half up to it ("2.1 months", "₱12,460").
 Never a match: a number run into letters (`W1`), a number with a multiplier (`150k`, `₱2M`,
 "12 thousand"), or one written with more than 6 decimals. Agents write numbers as the tools show
 them. A specialist's summary, which the orchestrator reads, may name the turn's own refs exactly
-(`debt1-W1`, `figure:debt1-W1:<ref>`, `fact:<ref>`); the reply, the options and the reason may not.
+(`debt1-W1`, `figure:debt1-W1:<ref>`, `fact:<ref>`, and the brief's `D1`, `P1`, `M1`, `K1`); the
+reply, the options and the reason may not.
 Other spelled-out numbers ("two options") aren't checked.
 
 The texts: the reply, each option's label and summary, the resolution's reason and each
@@ -134,6 +135,29 @@ def _add_held(pool: Pool, name: str, key: str | None, value: FactValue | None, o
         pool.dates.setdefault(value, name)
 
 
+def _add_said(pool: Pool, message: str) -> None:
+    """The numbers in the household's own words, as `said`."""
+    said = said_amounts(message)
+    for token in scan(message):
+        for day in token.dates:
+            pool.dates.setdefault(day, "said")
+        if token.kind == "month" and token.year_month is not None:
+            pool.dates.setdefault(date(*token.year_month, 1), "said")
+        if token.value is None or token.places > MAX_PLACES:
+            continue
+        if token.kind == "number":
+            # A bare number is a count ("2 kids"), and an amount only from ₱100, as the tools
+            # take amounts from the household's words ("4000 extra").
+            pool.counts.setdefault(token.value, "said")
+            if int(token.value * 100) in said:
+                pool.money.setdefault(token.value, "said")
+        elif token.pools == ("years",):
+            pool.months.setdefault(token.value * 12, "said")
+        else:
+            target = {"money": pool.money, "months": pool.months, "percent": pool.percent}
+            target[token.kind].setdefault(token.value, "said")
+
+
 def pool_of(state: TurnState) -> Pool:
     """Everything a number in this turn may match: the turn's run first, then each what-if in the
     order it ran, the snapshot's facts, the what-ifs' allocations, the household's own words."""
@@ -159,27 +183,22 @@ def pool_of(state: TurnState) -> Pool:
             pool.money.setdefault(Decimal(a.centavos) / 100, f"allocation:{ref}:{a.entity_ref}")
     for name, key, value, on in _held(state):  # what this turn proposed, from their words
         _add_held(pool, name, key, value, on)
-    said = said_amounts(state.message[:MESSAGE_CHARS])
-    for token in scan(state.message[:MESSAGE_CHARS]):
-        for day in token.dates:
-            pool.dates.setdefault(day, "said")
-        if token.kind == "month" and token.year_month is not None:
-            pool.dates.setdefault(date(*token.year_month, 1), "said")
-        if token.value is None or token.places > MAX_PLACES:
-            continue
-        if token.kind == "number":
-            # A bare number is a count ("2 kids"), and an amount only from ₱100, as the tools
-            # take amounts from the household's words ("4000 extra").
-            pool.counts.setdefault(token.value, "said")
-            if int(token.value * 100) in said:
-                pool.money.setdefault(token.value, "said")
-        elif token.pools == ("years",):
-            pool.months.setdefault(token.value * 12, "said")
-        else:
-            target = {"money": pool.money, "months": pool.months, "percent": pool.percent}
-            target[token.kind].setdefault(token.value, "said")
+    # The household's words: this turn's message, then its earlier messages in the session,
+    # which a reply may quote back ("you asked about ₱200,000 a month").
+    for words in (state.message, *(t.message for t in state.inputs.earlier)):
+        _add_said(pool, words[:MESSAGE_CHARS])
     pool.dates.setdefault(state.snapshot.on, "date:today")
     pool.refs |= set(state.what_ifs)
+    # The brief's own refs (D1, P1, M1, K1), which a specialist's summary may name too.
+    brief = state.brief
+    named: tuple[tuple[str, Iterable[str]], ...] = (
+        ("decision", brief.decisions),
+        ("proposal", brief.proposals),
+        ("memory", brief.memories),
+        ("doc", brief.knowledge),
+    )
+    for prefix, short_refs in named:
+        pool.refs |= {r for ref in short_refs for r in (ref, f"{prefix}:{ref}")}
     return pool
 
 
