@@ -604,3 +604,33 @@ it led to.
 - **Change made:** none to the prompts. The metrics page shows both scores, each with and without
   the citation, and says what the difference rests on. A what-if that reads "moved X to Y" as "set
   Y to X" is worth a test-set question of its own.
+
+### 14. Each turn knows its writer and the session so far: sessions 2 and 4 again (Nov 25, 2026)
+
+- **Change tested:** Pim tried Kako on the laptop (Meko off, live models) as Jun. "what if my salary
+  goes to 200000 per month." was met with "whose salary, Jun's or Mara's?"; "Jun", answering that
+  question, with a greeting; "no, just give me the simulation" with the current plan; and "what if
+  i lose my job" was filed as a real pending job loss. The brief now says who wrote the message
+  ("Who is writing": "I", "me" and "my" mean them) and, from the second turn on, "This session so
+  far": the last four turns as the household saw them, read from `session_turn`. `propose_change`
+  refuses words that ask a what-if, and the number check counts the household's earlier messages
+  in the session as said. No prompt file or tool definition changes. The test set's requests don't
+  change (no writer, one turn a session). Session 2 gains Mara as the writer; session 4's turn 1
+  Mara, turn 2 Jun and turn 1 as the session so far, so both are recorded again. Pim approved
+  about US$0.20 (Nov 25).
+- **Prediction (written before the runs):**
+  - **Session 2:** the same options as entry 12 (A all on the card, 9 months; B Jun's split, 17
+    months, the fund's target in 12), `recommended` empty since Mara and Jun disagree, no
+    `propose_change`. The reply is a little more likely to speak to Mara by name ("you'd rather
+    clear the card fast") now that she is named as the writer; no "whose" question. 8 to 11 calls,
+    **US$0.03 to US$0.05**.
+  - **Session 4, turn 1:** one `propose_change` (the new job and ₱68,000.00 from Dec 1), no
+    specialist, 2 calls, as entries 9 and 12.
+  - **Session 4, turn 2:** the replan against Session 3's decision of Oct 18 with Sessions 1, 2 and
+    3 to revisit, the same two options (A Jun's ₱10,000 on the card, the rest to the fund,
+    recommended on the preference; B all on the card, 3 months). The new "session so far" shows
+    Mara's news and Kako's "waiting for your yes" reply; I expect it to change nothing in the
+    options and at most a phrase in the reply ("Mara's new job, which you approved"). The likeliest
+    miss is entry 12's: refs written in the household's text, sent back once. 10 to 15 calls,
+    **US$0.08 to US$0.15**.
+  - In all, **US$0.11 to US$0.20**.
