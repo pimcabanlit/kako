@@ -20,3 +20,15 @@ export function hostName(host: string): string {
 export function isLoopbackHost(host: string | null): boolean {
   return host !== null && LOOPBACK.has(hostName(host));
 }
+
+// The pictures in public/, by their exact paths (hosts.test.ts holds this list to the folder).
+// Next.js's image optimizer reads each with a request of its own that carries no Host at all, so
+// the Host check would refuse them and every picture would show broken. They are the same files
+// the public repo holds, so serving them on any Host gives nothing away. A list, not a pattern:
+// a page, a route or an /api path that merely ends in ".png" keeps the Host check.
+export const PUBLIC_PICTURES: ReadonlySet<string> = new Set(["/kako-mark.png", "/swirl.jpg"]);
+
+/** Whether a request's path is one of the pictures in public/, which need no Host check. */
+export function isPublicPicture(pathname: string): boolean {
+  return PUBLIC_PICTURES.has(pathname);
+}

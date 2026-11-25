@@ -16,7 +16,8 @@ import {
   useState,
 } from "react";
 
-import { Sidebar } from "@/components/sidebar";
+import { Sidebar, SidebarRail } from "@/components/sidebar";
+import { SIDEBAR_ID } from "@/components/sidebar-toggle";
 import { api, ApiError } from "@/lib/api";
 import { landed, mayHaveLanded } from "@/lib/turns";
 import type { Household, SessionSummary } from "@/lib/types";
@@ -224,10 +225,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ShellContext.Provider value={shell}>
       <div className="flex h-dvh overflow-hidden">
-        <aside className="hidden w-[272px] shrink-0 border-r border-line bg-surface/60 backdrop-blur md:flex">
-          <Suspense fallback={null}>
-            <Sidebar />
-          </Suspense>
+        {/* Open or collapsed to the rail, as the page says (data-sidebar on <html>): CSS picks the
+            side, so the choice holds from the first paint. */}
+        <aside
+          id={SIDEBAR_ID}
+          className="hidden w-[272px] shrink-0 overflow-hidden border-r border-line bg-surface/60 backdrop-blur transition-[width] duration-200 ease-out motion-reduce:transition-none md:flex collapsed:w-[60px]"
+        >
+          <div className="flex w-[272px] shrink-0 collapsed:hidden">
+            <Suspense fallback={null}>
+              <Sidebar />
+            </Suspense>
+          </div>
+          <div className="hidden w-[60px] shrink-0 collapsed:flex">
+            <Suspense fallback={null}>
+              <SidebarRail />
+            </Suspense>
+          </div>
         </aside>
         {drawer && (
           <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Sessions">
@@ -239,7 +252,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
             <aside className="relative flex h-full w-[82%] max-w-[300px] border-r border-line bg-surface">
               <Suspense fallback={null}>
-                <Sidebar onNavigate={() => setDrawer(false)} />
+                <Sidebar onNavigate={() => setDrawer(false)} onClose={() => setDrawer(false)} />
               </Suspense>
             </aside>
           </div>

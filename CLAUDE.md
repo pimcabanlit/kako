@@ -540,13 +540,16 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons, laid out like ChatGPT,
   Claude and Gemini (docs/architecture.md, "The session screen" and "The plan screen"). `next.config.ts` passes `/api/v1/*` (waiting up to 5 minutes for a turn)
   to the backend; `src/proxy.ts` refuses any Host but loopback (`src/lib/hosts.ts`), as the backend
-  does, and `dev` and `start` listen on 127.0.0.1 only. `src/app/`: `globals.css` (the tokens of `docs/look-and-feel.md`, dark and light,
+  does (only a picture in `public/` is let through), and `dev` and `start` listen on 127.0.0.1 only. `src/app/`: `globals.css` (the tokens of `docs/look-and-feel.md`, dark and light,
   and the shared classes: panel, edge, chip, btn), `layout.tsx` (the fonts, the theme set before the
   first paint, the app shell), `page.tsx` (a new session), `sessions/[id]/page.tsx` (a session),
   `plans/page.tsx` (the newest plan), `plans/[id]/page.tsx` (one version), `timeline/page.tsx`,
   `decisions/page.tsx`, `metrics/page.tsx`, `money/page.tsx`, `system/page.tsx` (the system check), `docs/page.tsx` (to the first page) and `docs/[slug]/page.tsx` (one documentation page). `src/components/`: `app-shell.tsx` (the frame, and what every
   screen shares: the household, who is writing, the sessions, the one turn that can run),
-  `sidebar.tsx` (with the household menu in its footer: System check, Documentation, the people), `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as", the
+  `sidebar.tsx` (with the household menu in its footer: System check, Documentation, the people; and
+  `SidebarRail`, the sidebar collapsed to icons), `sidebar-toggle.tsx` (collapse and open again: `data-sidebar`
+  on <html>, kept as `kako-sidebar`, set before the first paint by `layout.tsx`), `brand.tsx` (the mark,
+  `public/kako-mark.png`, and the wordmark), `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as", the
   "synthetic data, not financial advice" line every screen keeps), `new-session.tsx`,
   `session-view.tsx` (the conversation, polled only while a turn runs), `turn.tsx` (a message and
   Kako's answer: options, replan, resolution), `approval-card.tsx` (a turn's changes, approved or
@@ -576,7 +579,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   each book's cover and picture, the pattern across the shelf, the bookmarks, the facts by kind),
   `metrics.ts` (the metrics screen's words and formats), `money.ts` (the money screen's views, signed
   amounts, months and the donut's arcs), `compare.ts` (a change's chip, an option's card rows), `turns.ts` (whether a turn whose request ended with no answer was kept after all),
-  `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`; `docs/` the documentation's pages as data (`types.ts` the
+  `text.ts`, `words.ts`, `sidebar.ts` (open or collapsed) and `hosts.ts` (the loopback Host check,
+  and the pictures in `public/` it lets through, since Next.js's image optimizer asks for them with no Host),
+  each with a `*.test.ts`; `docs/` the documentation's pages as data (`types.ts` the
   blocks, `pages/` one module per page, `index.ts` the menu, `inline.ts` code, bold and links in a line, `markdown.ts`
   a page as Markdown and its contents, `here.ts` Meko here in words), held by `docs.test.ts` (every link resolves). `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
