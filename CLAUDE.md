@@ -536,7 +536,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_demo_mode.py` also loads the household without what dreaming learned and refuses
   `--without-preference` on one that learned it.
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons, laid out like ChatGPT,
-  Claude and Gemini (docs/architecture.md, "The session screen" and "The plan screen"). `next.config.ts` passes `/api/v1/*`
+  Claude and Gemini (docs/architecture.md, "The session screen" and "The plan screen"). `next.config.ts` passes `/api/v1/*` (waiting up to 5 minutes for a turn)
   to the backend; `src/proxy.ts` refuses any Host but loopback (`src/lib/hosts.ts`), as the backend
   does, and `dev` and `start` listen on 127.0.0.1 only. `src/app/`: `globals.css` (the tokens of `docs/look-and-feel.md`, dark and light,
   and the shared classes: panel, edge, chip, btn), `layout.tsx` (the fonts, the theme set before the
@@ -571,7 +571,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   a decision's standing, an older `#decision-<id>` link), `shelf.ts` (the decisions shelf: its chips,
   each book's cover and picture, the pattern across the shelf, the bookmarks, the facts by kind),
   `metrics.ts` (the metrics screen's words and formats), `money.ts` (the money screen's views, signed
-  amounts, months and the donut's arcs), `compare.ts` (a change's chip, an option's card rows),
+  amounts, months and the donut's arcs), `compare.ts` (a change's chip, an option's card rows), `turns.ts` (whether a turn whose request ended with no answer was kept after all),
   `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.

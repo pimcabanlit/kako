@@ -429,6 +429,10 @@ reads, never what Kako works out.
    loaded through Dec 1, the backend on port 8001 with Meko off and live Foundry models (about
    US$0.03 a question, under the US$3 daily cap), and the web app on port 3001. The demo's database,
    its recordings and Meko Cloud are untouched; live mode never writes a recording.
+   The first question on the laptop (Nov 25) ran 49 seconds on live models (6 calls, US$0.06) and
+   was kept, but the screen said HTTP 500: Next.js's pass-through gives up after 30 seconds. The web
+   app now waits up to 5 minutes, and a request that ends with no answer reads the session again
+   before calling the turn failed (docs/architecture.md, "The session screen").
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 

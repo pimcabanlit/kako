@@ -18,6 +18,7 @@ import {
 
 import { Sidebar } from "@/components/sidebar";
 import { api, ApiError } from "@/lib/api";
+import { landed, mayHaveLanded } from "@/lib/turns";
 import type { Household, SessionSummary } from "@/lib/types";
 
 export type Loaded<T> =
@@ -61,6 +62,36 @@ export function useShell(): Shell {
 }
 
 const SPEAKER_KEY = "kako-speaker";
+
+// How often, and for how long, a turn whose request ended with no answer is looked for.
+const LANDED_POLL_MS = 2000;
+const LANDED_POLLS = 150;
+
+/** The session's kept turns before a turn is sent; null when they can't be read. */
+async function seedsOf(sessionId: string): Promise<string[] | null> {
+  try {
+    return (await api.turns(sessionId)).turns.map((t) => t.seed);
+  } catch {
+    return null; // the turn's own request will say what is wrong
+  }
+}
+
+/** The seed of the turn if the backend kept it after all, waiting while it still runs. */
+async function keptAnyway(turn: PendingTurn, before: string[]): Promise<string | null> {
+  for (let i = 0; i < LANDED_POLLS; i++) {
+    let now;
+    try {
+      now = await api.turns(turn.sessionId);
+    } catch {
+      return null;
+    }
+    const found = landed(before, now, turn.message);
+    if (found.kind === "kept") return found.seed;
+    if (found.kind === "lost") return null;
+    await new Promise((resolve) => setTimeout(resolve, LANDED_POLL_MS));
+  }
+  return null;
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) return error.message;
@@ -128,16 +159,26 @@ export function AppShell({ children }: { children: ReactNode }) {
   const run = useCallback(
     async (turn: PendingTurn) => {
       setPending({ ...turn, status: "running", error: undefined });
+      const before = await seedsOf(turn.sessionId);
       try {
         const answer = await api.takeTurn(turn.sessionId, turn.message, turn.saidBy);
         // Held until the session's screen has read the kept turn, so the answer never blinks.
         setPending({ ...turn, status: "done", seed: answer.seed });
       } catch (error) {
-        setPending({
-          ...turn,
-          status: "failed",
-          error: errorMessage(error, "The turn stopped before Kako could answer."),
-        });
+        // The connection may have ended before a long turn did: look before calling it failed.
+        const seed =
+          before && error instanceof ApiError && mayHaveLanded(error.status)
+            ? await keptAnyway(turn, before)
+            : null;
+        setPending(
+          seed
+            ? { ...turn, status: "done", seed }
+            : {
+                ...turn,
+                status: "failed",
+                error: errorMessage(error, "The turn stopped before Kako could answer."),
+              },
+        );
       }
       noteChange();
     },

@@ -343,6 +343,13 @@ new to learn about where things are:
   under the orchestrator's ask, each what-if split, what was sent back or refused and why, what each
   specialist proposed, and the turn's model calls, tokens, cost and Meko trace. While a turn runs,
   the steps appear as they are logged.
+- **A long turn outlasts its connection.** A turn on live models can run a minute or more. The web
+  app's pass-through to the backend waits up to 5 minutes (`experimental.proxyTimeout` in
+  `next.config.ts`; Next.js gives up after 30 seconds by default and answers 500). If the request
+  still ends with no answer (the connection dropped, or something between answered 500 or 504),
+  the screen reads the session again before it says the turn failed: a turn kept since it was
+  sent, with the same words, is shown as answered, one still running is waited for, and only then
+  is the error shown (`web/src/lib/turns.ts`). "Try again" never sends a turn that was kept.
 - **The composer**: Enter sends, Shift+Enter starts a new line, "Writing as" picks Mara, Jun or Lia,
   and "Synthetic data. Not financial advice." sits under it on every screen.
 
