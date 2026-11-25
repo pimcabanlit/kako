@@ -74,7 +74,7 @@ async def _demo_run_twice(migrated: AsyncEngine, capsys: pytest.CaptureFixture[s
     assert "Villanueva household: loaded with its whole story; 15 documents" in out
     assert "== Session 2, turn s2:t1 ==" in out
     assert "A: all extra on the card" in out
-    assert "B: split it, ₱4,000 on the card and the rest to the emergency fund" in out
+    assert "B: Jun's split: Put ₱4,000.00 extra a month on the credit card" in out
     # Session 4: the new job proposed, approved by Mara in the story, then the three-part replan.
     assert "== Session 4, turn s4:t1 ==" in out
     assert "replace_fact: Mara's salary: income.monthly_net = ₱68,000.00 from Dec 1, 2026" in out
@@ -194,7 +194,7 @@ async def test_a_request_that_differs_is_reported_or_refused(
     replayed = await replay_session(migrated, settings, demo, session, household_id)
     # The planted call at least: on a machine whose Meko ranks the excerpts differently, more.
     assert "s2:t1/orchestrator/1" in replayed.drifted
-    assert replayed.calls == 10
+    assert replayed.calls == 6
     assert [a.answer.options[0].label for a in replayed.asked] == ["A: all extra on the card"]
     with pytest.raises(RecordingError, match="'s2:t1/orchestrator/1' has changed"):
         await replay_session(migrated, settings, demo, session, household_id, strict=True)

@@ -634,3 +634,49 @@ it led to.
     miss is entry 12's: refs written in the household's text, sent back once. 10 to 15 calls,
     **US$0.08 to US$0.15**.
   - In all, **US$0.11 to US$0.20**.
+- **Run:** each on an empty database and a throwaway local Meko datapack (gpt-5.4 and gpt-5-mini):
+  `KAKO_MODEL_MODE=record uv run kako demo record session-2`, then `session-4` (entry 12's kept as
+  `session-2-run12.json` and `session-4-run12.json`). Session 4's first recording is kept as
+  `session-4-run14a.json`; after the change below Pim approved one more run (about US$0.12), and
+  session 4 was recorded again. Spent **US$0.27**:
+
+  | | Model calls | Tokens | Cost |
+  | --- | --- | --- | --- |
+  | Session 2 | 6 | 33,610 | US$0.0381 |
+  | Session 4, first recording (s4:t1 and s4:t2) | 17 | 105,085 | US$0.1221 |
+  | Session 4, kept (s4:t1 and s4:t2) | 14 | 94,478 | US$0.1105 |
+
+- **Result:**
+  - **Session 2** as predicted: A, all on the card (9 months, ₱12,460.10 of interest) and B, Jun's
+    split (17 months; the fund's target in 12), the over-allocation caught in code and left to the
+    household ("Mara wants the card cleared fast and Jun wants more cash in the emergency fund"),
+    no "whose" question, no `propose_change`. 6 calls, under the predicted 8 to 11: no answer was
+    sent back this time. Option A's summary names a figure by its key ("plan.unallocated is
+    ₱0.00"), which the number check allows and a household shouldn't read.
+  - **Session 4, turn 1** as predicted, both times: one `propose_change`, 2 calls.
+  - **Session 4, turn 2, first recording:** the replan as predicted, but the budget specialist's
+    summary said "Decisions D1, D2 and D3 need revisiting", and the number check flagged D1, D2 and
+    D3: the brief's own decision refs, which a specialist's summary couldn't name. Shown in the
+    demo as flagged numbers. 15 calls.
+  - **Session 4, turn 2, kept:** the replan against Session 3's decision of Oct 18 with Sessions 1,
+    2 and 3 to revisit; A, Jun's ₱10,000 on the card and ₱15,050.00 to the fund (card in 7 months
+    with ₱9,358.80 of interest, the fund's target in 4), recommended on the preference and the three
+    decisions; nothing flagged. 12 calls, inside 10 to 15. **One miss against the prediction:**
+    option B isn't the whole surplus on the card (entry 12: 3 months) but the ₱16,000.00 left
+    unallocated (`figure:plan.unallocated`), with the fund at ₱0.00: 5 months. Its label still says
+    "all extra on the card", and the savings specialist's summary says 3 months for its own
+    all-on-the-card what-if, so the options and a specialist's words disagree. The figures are the
+    engine's for the moves each ran; the label overstates option B. Nobody asked about who was
+    writing, and the reply doesn't mention the session so far, as predicted.
+- **Root cause:** for the flagged refs: the number check let a specialist's summary name the
+  turn's what-ifs, figures and facts but not the brief's decisions (`D1`), so a summary that named
+  them was flagged after one send-back. For option B: the orchestrator ran its own all-on-the-card
+  what-if with the unallocated figure rather than the surplus; a model's reading of "all of it",
+  not a change of this entry.
+- **Change made:** the number check lets a specialist's summary name the brief's own refs (`D1`,
+  `P1`, `M1`, `K1`, and with their prefixes); the household's texts still allow none. Follow-ups: an
+  option's label checked against its what-if ("all extra" when some of the surplus stays
+  unallocated), and figure keys in an option's summary written as words. As in entry 12, demo mode
+  replays session 4 with its requests differing from the recording, because `demo record` doesn't
+  replay session 2 before recording session 4, so the brief's Meko search sees a different
+  datapack; the replies are replayed and reported.
