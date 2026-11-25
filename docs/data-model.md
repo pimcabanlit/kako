@@ -1,4 +1,4 @@
-# Kako data model v0.18
+# Kako data model v0.19
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -54,7 +54,9 @@ snapshot without changing any figure; F-DEBT-2's months also keep each debt's sc
 a schedule can show the month a freed payment rolls in; no schema change. v0.18 (Nov 25) is before
 and after an option (Phase 5a, item 5): formulas C-1 to C-3 under "Before and after an option",
 each option worked out again from its turn's own snapshot and set beside today's plan; no schema
-change, nothing stored.
+change, nothing stored. v0.19 (Nov 25) is prompt versions: each model call logs the prompts its system
+message was built from (`llm_call.prompts`, migration 0008), and each Meko turn names them
+(`kako_prompts`).
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -718,6 +720,7 @@ daily cap sums real calls only (`recorded_replay` false, `created_at` since midn
 | `outcome` | TEXT | `ok`, `error`, `budget_exceeded` |
 | `recorded_replay` | BOOLEAN | A recorded response replayed (tests, demo mode), not a real call |
 | `created_at` | TIMESTAMPTZ | |
+| `prompts` | JSONB | The prompts the call's system message was built from, by name, each with its `source` (`repo`) and the `sha256` of its text as loaded: `{"common": {...}, "debt": {...}}`. Empty for a call with no agent prompt (`check-models`) and rows from before migration 0008. See [architecture.md](architecture.md#prompt-versions) |
 
 Checks: token counts, latency and cost are not negative.
 
@@ -771,7 +774,7 @@ Meko is where agents find context. Postgres stays the record. The mapping:
 
 | Kako thing | In Meko | How it is written | Notes |
 | --- | --- | --- | --- |
-| A planning session | A **conversation** (one per session) | `conversation_create`, then `conversation_add_message` per turn with `plan` and `reasoning` | The conversation id is the trace id; every Meko call made with it becomes a span. Kako stores the turn seed on each recommendation |
+| A planning session | A **conversation** (one per session) | `conversation_create`, then `conversation_add_message` per turn with `plan` and `reasoning` | The conversation id is the trace id; every Meko call made with it becomes a span. Kako stores the turn seed on each recommendation. Each turn's metadata names Kako's ids and the prompt versions its agents ran with (`kako_prompts`: by name, `{source, sha256}`, as on `llm_call.prompts`) |
 | A fact (approved, or the seed) | A **memory** in Kako's words, one sentence, written by `kako:upkeep` with metadata `{kako_source: "fact", fact_id, attribute, valid_from}`, linked in `meko_link` with the text written | `memory_add` by Meko upkeep (`kako/upkeep/`): after every approval, at the end of `kako demo run`, and with `kako meko sync` | A plain sentence naming the household and the thing, because Meko's search boosts named entities: "In the Villanueva household, from Dec 1, 2026, Mara's salary (take-home pay a month) is ₱68,000.00." Upkeep compares each fact's sentence now with the link's `text`, so a run does only what is owed, at most 60 steps (the rest waits for the next run), one run per household at a time. Memories are never the source of a number: agents read numbers from figures. A memory Meko extracted stays linked as well while its fact holds |
 | What the household said, extracted by Meko | A **memory** Meko added on its own (`source` = `extract`; Meko Cloud runs this automatically) | Not written by Kako | A **candidate** for dreaming, never knowledge by itself (any memory without Kako's `kako_` metadata). Each ends linked to the facts and life events its claim wrote (`meko_link`), once a person has approved every proposal that showed its words, or deleted as the agent that wrote it: when the household turns any of them down, or when no new proposal shows it (V-14) |
 | A replaced fact | Kako's memory, **rewritten in the past tense**; a memory Meko extracted for it is deleted | `memory_update` and `memory_delete_by_id`, each as the agent that wrote the memory (`meko_link.agent_id`; Meko allows no other) | Meko keeps a memory's metadata on update but cannot change it, so the text carries the dates: "In the Villanueva household, from Mar 1, 2026 until Nov 30, 2026, Mara's salary (take-home pay a month) was ₱52,000.00." Meko's own words told of the old value as current; its dreaming run's entry becomes `deleted`, so V-14 still holds. A fact back in force (its replacement retracted) is rewritten in the present tense |

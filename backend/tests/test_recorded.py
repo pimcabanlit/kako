@@ -13,6 +13,7 @@ import pytest
 
 from kako.agents.chat import ChatReply, ChatRequest, Message, ToolSpec
 from kako.agents.model_manager import ModelManager
+from kako.agents.prompt_registry import SystemPrompt
 from kako.agents.recorded import (
     ChatBackend,
     RecordedCall,
@@ -60,7 +61,7 @@ async def a_turn(settings: Settings, backend: ChatBackend) -> tuple[AgentRun, Mo
             agent="debt",
             path="debt#1",
             tier="fast",
-            system="You are the debt specialist.",
+            system=SystemPrompt("You are the debt specialist."),
             user=arguments["question"],
             tools=[Tool(ToolSpec("get_figures", "Read figures.", OBJECT), get_figures)],
             max_output_tokens=800,
@@ -73,7 +74,7 @@ async def a_turn(settings: Settings, backend: ChatBackend) -> tuple[AgentRun, Mo
         agent="orchestrator",
         path="orchestrator",
         tier="strong",
-        system="You are the orchestrator.",
+        system=SystemPrompt("You are the orchestrator."),
         user="How hard should we pay down the card?",
         tools=[Tool(ToolSpec("ask_debt", "Ask the debt specialist.", OBJECT), ask_debt)],
         max_output_tokens=2_000,

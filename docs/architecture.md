@@ -166,7 +166,7 @@ flowchart LR
    on each recommendation. The turn goes to Meko with a `plan` (the steps taken: the brief, the
    specialists asked, the reconciliation, the options) and `reasoning` (the specialists' summaries and
    the resolution's reason), built by code from what the agents handed in, and metadata naming the
-   plan, run, recommendation, reconciliation and what-if run ids (and any numbers the check flagged), so the Meko trace and Kako's own
+   plan, run, recommendation, reconciliation and what-if run ids, the prompt versions the turn ran with (and any numbers the check flagged), so the Meko trace and Kako's own
    sources say the same thing. The session's Meko calls are its trace: spans in Meko Cloud's Observe
    hub, or local Meko's call log (`GET /api/v1/sessions/{id}/trace`). The plan is `proposed` until the
    household accepts one option; accepting writes its `plan.allocation` facts (Phase 4).
@@ -628,6 +628,22 @@ calculates, agents explain and propose, the household decides), a glossary of fi
 contract and one worked example. Stable parts come first so prompt caching applies. Conversation text,
 memories and documents are wrapped as data, never as instructions.
 
+### Prompt versions
+
+The eight prompts (`common`, `orchestrator`, `budget`, `debt`, `savings`, `goals`, `single` and
+`dreaming`) load through one module, `agents/prompt_registry.py`, which gives each its version: where
+it came from (`repo`) and the SHA-256 of its text as loaded. A system message is a `SystemPrompt`, its
+text and the versions it was built from (the shared rules and the role). The versions travel with the
+request but are never sent and stay out of its digest (the text already is), so every model call logs
+them in `llm_call.prompts` and every turn kept in Meko names the turn's prompts in its metadata
+(`kako_prompts`, by name). A recommendation can then be traced to its figures and facts, its Meko turn
+and the exact prompt texts behind it, and a tuning-log entry can name the versions it compared.
+
+The repo stays the record: a prompt change is a PR, and a recording replays only against the text it
+was made with, so `kako demo run` replays the same with no other service. Langfuse Prompt Management
+(versions and labels such as `production`, read live with a cache and the repo file as the fallback)
+is planned as a second step, opt-in by setting, with `source` then saying which one served the call.
+
 ## Where data lives
 
 | | Development and tests | Demo |
@@ -681,7 +697,7 @@ not queried. A kept scenario branch is a record, not a second database.
 | No numbers from a model | The engine computes; agents read figures; the number check (V-10) blocks the rest; dreaming copies quoted numbers only (V-09) |
 | No silent overwrite | Facts are insert-only apart from the status transitions in the data model; a database trigger rejects other updates and deletes |
 | A person decides | Every fact, event, decision, preference and promotion starts as a proposal, with its evidence; every number in it must be in its quotes (V-09). Only an adult of the household approves; an approval writes exactly what was proposed, once, and approving again changes nothing (`db/proposal_store.py`). A database trigger keeps a decided proposal from changing and refuses a decision or life event without its approved proposal (migration 0005). Promotion asks twice because it can't be undone |
-| Traceable advice | Every recommendation has a figure source and a non-figure source (V-11), and its Meko turn |
+| Traceable advice | Every recommendation has a figure source and a non-figure source (V-11), and its Meko turn, which names the prompt versions the turn ran with (`kako_prompts`; each call's are in `llm_call.prompts`) |
 | Prompt injection | Session text, memories and documents are passed as data; agents have read tools and `propose_*` tools only; nothing an agent says can write without approval |
 | Spend and quota | Token budget per turn (`KAKO_TURN_TOKEN_BUDGET`) and a daily cap (`KAKO_DAILY_SPEND_CAP_USD`), both checked in the model manager before each call, with at most `KAKO_MODEL_MAX_RETRIES` retries and every attempt in `llm_call`; an Azure budget with email alerts on Kako's own resource group; a Meko call counter with a ceiling per environment, so rehearsals can't use up the Free tier's lifetime allowances |
 | Meko's own extraction | Meko Cloud extracts memories from the household's words before anyone approves them. Dreaming treats them as candidates; each ends linked to an approved fact or deleted. A Phase 1 test checks whether extraction can be turned off on a Cloud datapack (local Meko allows it) |

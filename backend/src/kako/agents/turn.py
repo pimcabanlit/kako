@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal, Protocol
 
+from kako.agents.prompt_registry import PromptVersion
+
 StepAgent = Literal["orchestrator", "budget", "debt", "savings", "goals", "dreaming"]
 StepOutcome = Literal["ok", "rejected", "error"]
 SUMMARY_CHARS = 240  # agent_step summaries are for display, never a full prompt
@@ -65,6 +67,8 @@ class TurnContext:
     tokens_reserved: int = 0  # worst cases of calls in flight: parallel calls can't overspend
     # The steps that ran each what-if, by its ref: they name its run once the turn is kept.
     what_if_steps: dict[str, list[uuid.UUID]] = field(default_factory=dict)
+    # The prompts the turn's agents ran with, by name: the turn names them in its Meko trace.
+    prompts: dict[str, PromptVersion] = field(default_factory=dict)
     _seq: int = 0
 
     def next_seq(self) -> int:

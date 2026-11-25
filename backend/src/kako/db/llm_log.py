@@ -13,6 +13,7 @@ from typing import cast
 from sqlalchemy import Table, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from kako.agents.prompt_registry import versions_json
 from kako.agents.spend import LlmCallRecord
 from kako.db.models import LlmCall
 
@@ -41,6 +42,7 @@ class DbLlmLog:
                     cost_usd=record.cost_usd,
                     outcome=record.outcome,
                     recorded_replay=record.recorded_replay,
+                    prompts=versions_json(record.prompts),
                     created_at=record.created_at,
                 )
             )

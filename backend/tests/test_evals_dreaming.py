@@ -19,6 +19,7 @@ import pytest
 
 from kako.agents.model_manager import ModelManager
 from kako.agents.present import Refs
+from kako.agents.prompt_registry import load_prompt
 from kako.agents.spend import MemoryLlmLog
 from kako.agents.turn import MemoryStepLog
 from kako.demo.files import read_demo
@@ -189,6 +190,7 @@ async def test_extraction_is_one_structured_call_and_its_claims_are_checked(
     assert [t.name for t in request.tools] == ["submit_claims"]
     assert request.tool_choice == "required"
     assert "Copy, never calculate" in request.messages[0].content
+    assert request.prompts == (load_prompt("dreaming").version,)  # logged on llm_call
 
 
 async def test_a_wrong_shape_goes_back_once(house: Villanueva, make_settings: MakeSettings) -> None:
