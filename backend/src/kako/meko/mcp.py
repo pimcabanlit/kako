@@ -24,8 +24,10 @@ import httpx
 from kako.meko.adapter import (
     Band,
     Context,
+    DatapackMetrics,
     Document,
     DocumentState,
+    Holding,
     KnowledgeHit,
     LoggedSearch,
     Memory,
@@ -369,6 +371,20 @@ class McpMeko:
             agent=False,
         )
 
+    async def datapack_metrics(
+        self, conversation_id: str, *, agent_id: str, days: int = 0
+    ) -> DatapackMetrics:
+        if not 0 <= days <= 3650:
+            raise MekoError("metrics are measured over 0 to 3650 days")
+        # The tool takes no `agent_id`; the call is counted as the caller's.
+        answer = await self._call(
+            "datapack_metrics",
+            agent_id,
+            {"conversation_id": conversation_id, "days": days},
+            agent=False,
+        )
+        return _metrics(answer)
+
 
 @asynccontextmanager
 async def open_meko(
@@ -556,6 +572,68 @@ def _hit(item: Any) -> KnowledgeHit:
         document_id=str(document_id) if document_id else None,
         text=str(item.get("chunk_text") or ""),
         score=_score(item.get("rerank_score", item.get("score"))),
+    )
+
+
+def _whole(value: Any, what: str, *, required: bool = True) -> int | None:
+    if value is None and not required:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise MekoProtocolError(f"datapack_metrics answered without {what} as a count")
+    return value
+
+
+def _part(answer: dict[str, Any], key: str) -> dict[str, Any]:
+    part = answer.get(key)
+    return part if isinstance(part, dict) else {}
+
+
+def _holding(size: dict[str, Any], key: str) -> Holding:
+    part = _part(size, key)
+    return Holding(
+        count=_whole(part.get("count", 0), f"{key}' count") or 0,
+        tokens=_whole(part.get("tokens", 0), f"{key}' tokens") or 0,
+    )
+
+
+def _metrics(answer: Any) -> DatapackMetrics:
+    """`datapack_metrics` as local Meko answers it (Nov 25): `context_size` with `tokens` and
+    `knowledge`, `memories` and `conversations` (each `count` and `tokens`), `context_efficiency`
+    and `context_relevance`, `days` and `searches`. The size is needed; the rest may be missing on a
+    datapack nothing has searched yet."""
+    if not isinstance(answer, dict):
+        raise MekoProtocolError("datapack_metrics answered without its metrics")
+    error = answer.get("error")
+    if isinstance(error, str) and error:
+        raise MekoToolError(f"datapack_metrics failed: {error[:80]}")
+    size = answer.get("context_size")
+    if not isinstance(size, dict):
+        raise MekoProtocolError("datapack_metrics answered without the context size")
+    efficiency = _part(answer, "context_efficiency")
+    relevance = _part(answer, "context_relevance")
+
+    def pct(part: dict[str, Any], key: str) -> int | None:
+        value = _whole(part.get(key), key, required=False)
+        if value is not None and value > 100:
+            raise MekoProtocolError(f"datapack_metrics answered with {key} over 100")
+        return value
+
+    return DatapackMetrics(
+        datapack_id=_optional(answer.get("datapack_id")),
+        datapack_name=_optional(answer.get("datapack_name")),
+        days=_whole(answer.get("days", 0), "days") or 0,
+        searches=_whole(answer.get("searches", 0), "searches") or 0,
+        context_tokens=_whole(size.get("tokens"), "the context's tokens") or 0,
+        knowledge=_holding(size, "knowledge"),
+        memories=_holding(size, "memories"),
+        conversations=_holding(size, "conversations"),
+        tokens_sent=_whole(efficiency.get("tokens_sent"), "tokens sent", required=False),
+        tokens_saved=_whole(efficiency.get("tokens_saved"), "tokens saved", required=False),
+        saved_pct=pct(efficiency, "saved_pct"),
+        relevance_high=_whole(relevance.get("high"), "high results", required=False),
+        relevance_mid=_whole(relevance.get("mid"), "mid results", required=False),
+        relevance_low=_whole(relevance.get("low"), "low results", required=False),
+        relevant_pct=pct(relevance, "relevant_pct"),
     )
 
 
