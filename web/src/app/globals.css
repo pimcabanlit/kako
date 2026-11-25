@@ -37,6 +37,13 @@
   --halo-a: rgba(16, 185, 129, 0.16);
   --halo-b: rgba(249, 115, 22, 0.1);
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 20px 50px -24px rgba(0, 0, 0, 0.7);
+  /* The money screen's chart: four parts of the pay, a palette of their own (docs/look-and-feel.md,
+     "Charts"), checked for colour blindness against the panel. They mean a part, nothing else. */
+  --chart-needs: #338ced;
+  --chart-wants: #e76624;
+  --chart-debt: #00a888;
+  --chart-savings: #d28e05;
+  --chart-unplanned: #5d6e67;
   color-scheme: dark;
 }
 
@@ -68,6 +75,11 @@
   --halo-a: rgba(16, 185, 129, 0.1);
   --halo-b: rgba(249, 115, 22, 0.07);
   --shadow: 0 1px 2px rgba(13, 22, 19, 0.05), 0 18px 40px -26px rgba(13, 22, 19, 0.35);
+  --chart-needs: #257de0;
+  --chart-wants: #f47230;
+  --chart-debt: #00b894;
+  --chart-savings: #f2a600;
+  --chart-unplanned: #a7b5ae;
   color-scheme: light;
 }
 

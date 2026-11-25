@@ -326,6 +326,16 @@ new to learn about where things are:
   replan (what changed, old struck through, why, the decisions to revisit), how a conflict between
   specialists was resolved, the approval card, and "Show the working", closed by default like a chat
   app's "thinking".
+- **Before and after each option** (Phase 5a, item 5): each option's card says what it changes
+  against today's plan ("Before → after": each debt paid off, the interest on every debt and the
+  emergency fund at its target, today's value struck through, then the option's, with the change as
+  a chip: emerald when it is better for the household, rose with its words when worse, plain when
+  the same). Under the options, "Compare the options" sets today's plan and every option side by
+  side, and each card's "See month by month" opens that option's months: each debt's amortization
+  table with today's plan's balance beside every month and the month a paid-off debt's payment
+  rolls in marked, and the emergency fund climbing to its target. Every value and change is the
+  engine's (docs/data-model.md, "Before and after an option", C-1 to C-3), read from
+  `GET /plans/{id}/compare`; an older turn whose snapshot can't be taken again says so plainly.
 - **Approval cards inline.** A change the household stated waits on a gold card with the value it
   replaces struck through, who said it and their words. Approve or reject acts as the adult chosen
   in the composer; a child can't. Once decided it turns emerald ("Current") or rose ("Rejected").
@@ -360,7 +370,8 @@ different from before?" from the rows, never from a model:
   value struck through; the facts behind them, each labelled (replaced, corrected, new, ended, the
   plan's amount) with the day it took effect; and the decisions to revisit with the facts they
   rested on. With nothing earlier to compare, it says so.
-- **Each option**: its monthly amounts and specialists, then "Why", open on the recommended option.
+- **Each option**: its monthly amounts, the same "Before → after" as the session screen and its
+  specialists, then "Why", open on the recommended option.
   The figures it cites, each with its value, the option's what-if amounts and "How it's worked
   out": the formula in words with its id from [data-model.md](data-model.md#calculations), the
   figures it was built from (each openable the same way) and the facts it read. The facts it cites,
@@ -372,6 +383,7 @@ different from before?" from the rows, never from a model:
   each number in the option's texts and what it matched, or that it matched nothing and was
   flagged. The check proves each number is one the engine, a fact, the option's amount or the
   household's words produced, not that the sentence uses it rightly, and the screen says so.
+- **Compare the options and month by month**: under the options, as on the session screen.
 - **How Kako weighed the specialists**: a reconciliation's conflict, the splits tried and the
   option rejected.
 - **The turn that proposed it**: who asked and their words, the turn's Meko calls (tool, agent,
@@ -474,12 +486,39 @@ them. Six parts, top to bottom:
 The API is `GET /metrics` and `GET /metrics/meko`. Each part has its own empty state and a saved
 result that can't be read is reported in its place; the screen has loading and error states.
 
+## The money screen
+
+Where the household's money stands on its date, the first screen in the sidebar (`/money`), so a
+household that doesn't read plans and sessions can still see everything at once, like the tabs of
+a household's own budget spreadsheet (Phase 5a, item 4, approved Nov 25). Every number is worked
+out in code (docs/data-model.md, "The money screen", M-1 to M-6, beside the figures); the screen
+only lays it out. Five views as chips, the chosen one in the address (`?view=plan`):
+
+- **Overview:** four headline numbers (total salary, free after expenses, months of emergency
+  cover, net worth), where each peso of the pay goes as a donut with its legend (each part's amount
+  and share in words, so the colour never stands alone), the next milestones, and what is coming
+  up: 13th-month pay and the decisions in force with how many to revisit.
+- **Monthly plan:** the month line by line (line, a month, what is left after it, what changed),
+  ending with what is left unplanned; the plan before its last change beside it, one at a time.
+- **Debts:** each debt with its balance and statement date, its rate, what is paid a month (minimum
+  and extra), when it is paid off and the interest still to pay, then an amortization table:
+  month, payment, interest, principal and balance left, the month a paid-off debt's payment rolls
+  in marked with where it came from, a year shown until "Show all", and the totals.
+- **Big moments:** 13th-month pay, changes that take effect later, every milestone, and the
+  decisions in force, each linked to its book on the decisions shelf.
+- **Net worth:** today's net worth, what the household owns and owes line by line with each one's
+  date, and the milestones ahead. No projection yet.
+
+The API is `GET /money`, read-only, the household's rows only. On a phone the tables scroll
+sideways with their first column kept in place. Year-end projections, a one-off what-if (such as
+a bonus) and paydays are later items.
+
 ## Components
 
 | Component | Where | What it does |
 | --- | --- | --- |
-| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), the plan screen (task 2), the timeline and decisions screens (task 3), and the metrics screen (task 4), see their sections above |
-| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans and their why (built: `GET /plans`, newest version first, and `GET /plans/{id}`: the options, each one's why down to the facts with where each came from, the number check's matches, the turn's Meko calls and trace link, and what changed against the last plan or decision, with the decisions to revisit; read-only, the household's rows only), the timeline and decisions (built: `GET /timeline`, what happened newest first with who approved or decided each and each thing's values over time with their windows and states, and `GET /decisions`, every decision with its options, the facts it rests on (each with what it is about: its thing, kind and words) and what to revisit; read-only, the household's rows only), metrics (built: `GET /metrics`, every figure worked out in code from stored rows and saved results, a saved result that can't be read reported on its own; `GET /metrics/meko`, Meko's `datapack_metrics` with the brief against it; read-only, the household's rows only), what-ifs |
+| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), the plan screen (task 2), the timeline and decisions screens (task 3), the metrics screen (task 4) and the money screen (Phase 5a, item 4), see their sections above |
+| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans and their why (built: `GET /plans`, newest version first, and `GET /plans/{id}`: the options, each one's why down to the facts with where each came from, the number check's matches, the turn's Meko calls and trace link, and what changed against the last plan or decision, with the decisions to revisit; `GET /plans/{id}/compare`: each option beside today's plan, the turn's own snapshot taken again, with what each reaches, what it changes and its months one by one, 409 when that snapshot can't be taken again exactly; read-only, the household's rows only), the timeline and decisions (built: `GET /timeline`, what happened newest first with who approved or decided each and each thing's values over time with their windows and states, and `GET /decisions`, every decision with its options, the facts it rests on (each with what it is about: its thing, kind and words) and what to revisit; read-only, the household's rows only), metrics (built: `GET /metrics`, every figure worked out in code from stored rows and saved results, a saved result that can't be read reported on its own; `GET /metrics/meko`, Meko's `datapack_metrics` with the brief against it; read-only, the household's rows only), the money screen (built: `GET /money`, where the money stands on the household's date: M-1 to M-6 with the headline figures, 13th-month pay, changes ahead and the decisions in force; read-only, the household's rows only), what-ifs |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |

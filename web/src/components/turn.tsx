@@ -2,9 +2,11 @@
 
 import { ArrowRight, CircleAlert, CircleX, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import type { Loaded } from "@/components/app-shell";
 import { ApprovalCard } from "@/components/approval-card";
+import { BeforeAfter, ComparePanels, useCompare, useMonthsOpen } from "@/components/compare-view";
 import { LiveWorking, Working } from "@/components/working";
 import { blocks, optionParts, parseChange, splitLabel } from "@/lib/text";
 import type {
@@ -67,7 +69,7 @@ export function Text({ text, className = "" }: { text: string; className?: strin
   );
 }
 
-function OptionCard({ option }: { option: Option }) {
+function OptionCard({ option, compared }: { option: Option; compared?: ReactNode }) {
   const { letter, words } = optionParts(option.label);
   return (
     <article className="panel flex min-w-0 flex-col gap-3.5" aria-label={`Option ${option.label}`}>
@@ -100,6 +102,7 @@ function OptionCard({ option }: { option: Option }) {
           </tbody>
         </table>
       )}
+      {compared}
       {option.sources.length > 0 && (
         <div>
           <p className="eyebrow mb-1.5">Where it comes from</p>
@@ -256,6 +259,9 @@ export function KakoAnswer({
   proposals: Loaded<Proposal[]>;
   onDecided: () => void;
 }) {
+  // Each option beside today's plan, worked out by the engine for the plan this turn proposed.
+  const compared = useCompare(answer.options.length > 0 ? (answer.plan?.id ?? null) : null);
+  const months = useMonthsOpen();
   return (
     <div className="flex gap-3">
       <KakoMark />
@@ -280,10 +286,15 @@ export function KakoAnswer({
         {answer.options.length > 0 && (
           <div className={`grid gap-3 ${answer.options.length > 1 ? "lg:grid-cols-2" : ""}`}>
             {answer.options.map((o) => (
-              <OptionCard key={o.label} option={o} />
+              <OptionCard
+                key={o.label}
+                option={o}
+                compared={<BeforeAfter state={compared} label={o.label} months={months} />}
+              />
             ))}
           </div>
         )}
+        <ComparePanels state={compared} months={months} />
         {answer.plan && (
           <Link
             href={`/plans/${answer.plan.id}`}

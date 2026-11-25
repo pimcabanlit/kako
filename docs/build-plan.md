@@ -364,6 +364,54 @@ reads, never what Kako works out.
    "Then and now" totals (the household's take-home pay when it decided and now, worked out in
    code), and its "Keep the decision as it is" and "Talk it over in a new session" buttons on the
    "To revisit" bookmark.
+4. **Money tracker (Nov 25).** A screen where the household sees where its money stands at a
+   glance, after the tabs of Pim's own budget spreadsheet (its structure only, never its numbers):
+   the overview, the month's plan line by line, each debt's amortization, the big moments ahead and
+   net worth. First in the sidebar, as `/money` with the pattern of item 1 (the title and view
+   chips: Overview, Monthly plan, Debts, Big moments, Net worth).
+   Done when: Pim has approved a mockup, and the screen built from it shows every view from
+   `GET /money`, every number worked out in code (docs/data-model.md, "The money screen"), in both
+   themes, at phone width, by keyboard, and in its loading and error states.
+   Approved Nov 25, with Pim's six changes to the mockup: the tiles show only their label and value
+   (no line under them), named "Total salary" and "Free after expenses"; where each peso goes is a
+   donut, not a bar; the monthly plan has no kind column; no "before" split bar; and each debt is
+   an amortization table in the monthly plan's style (month, payment, interest, principal, balance
+   left), with no line chart, keeping the debt's facts (interest, paying a month, paid off, interest
+   still to pay).
+   Built Nov 25: `engine/money.py` (M-1 to M-6, pure; F-DEBT-2 also keeps each debt's scheduled
+   payment, no figure changes), `planning/money.py` (in words), `db/money_read.py` and
+   `GET /api/v1/money`; `components/money-view.tsx` with `lib/money.ts` (the view in the address,
+   `?view=debts`; the donut's arcs, checked in tests) and the chart palette (docs/look-and-feel.md,
+   "Charts"). The rollover month is marked in the car loan's table ("+₱12,550.00 from the Credit
+   card", Aug 2027); a schedule shows a year until "Show all". On a phone the tables scroll sideways
+   with their first column kept in place. Checked on the demo story through Dec 1, in both themes,
+   at desktop and phone width, by keyboard, and loading and error.
+   Later, not built: year-end projections of net worth, a one-off what-if such as a bonus, paydays
+   (which pay covers which bills), and a card's use against its limit.
+5. **Before and after each option (Nov 25).** When Kako answers with options, the household sees
+   what each one changes instead of only reading it ("Card paid off in 9 months" is abstract): each
+   option's card shows its before → after against today's plan, a table below the options sets
+   today's plan and every option side by side, and each option opens its months one by one in the
+   money screen's amortization style, so option B's full schedule is there to see.
+   Done when: Pim has approved a mockup, and the session and plan screens built from it show, for
+   every turn with options, each option against today's plan with every number and every change
+   worked out in code (docs/data-model.md, "Before and after an option"), in both themes, at phone
+   width, by keyboard, and in its loading and error states.
+   Approved Nov 25, with Pim's choices on the mockup: keep both the per-card "Before → after" and
+   the "Compare the options" table; a change that is worse for the household is rose with its
+   words, better is emerald, the same is plain; the same pieces on the plan screen.
+   Built Nov 25: `engine/compare.py` (C-1 to C-3, pure), `planning/compare.py` (in words, every
+   change written by code), `db/compare_read.py` and `GET /api/v1/plans/{id}/compare`. Today's plan
+   is the turn's own run: its snapshot taken again, checked against the stored hash, and each option
+   is that snapshot with its allocations as overrides, the what-if the agents ran; nothing is stored,
+   so every turn kept before this has its comparison too. `components/compare-view.tsx` with
+   `lib/compare.ts`, used by the session screen's answer and the plan screen. Agents see none of
+   it, so the recordings and the number check are unchanged. Checked on the demo story's sessions 2
+   and 4 (session 2 to the centavo against the worked example: option A pays the card off Jun 15,
+   2027, 38 months sooner, with ₱119,627.44 less interest on both debts, and its ₱11,600.00 rolls
+   into the car loan in Jul 2027; option B reaches the emergency fund's ₱210,000.00 on Sep 15,
+   2027), in both themes, at desktop and phone width, by keyboard, and loading and error.
+   Later, not built: a what-if the household sets itself beside the options (an amount of its own).
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 

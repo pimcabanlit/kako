@@ -10,6 +10,7 @@ import {
   Plus,
   RefreshCw,
   Signpost,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,8 +20,10 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { formatDay } from "@/lib/text";
 import { plural } from "@/lib/working";
 
-// The screens above the sessions: what the household plans, its story, and what it decided.
+// The screens above the sessions: where the money stands, what the household plans, its story,
+// and what it decided.
 const SCREENS: { href: string; label: string; note: string; icon: LucideIcon }[] = [
+  { href: "/money", label: "Money", note: "where it all stands", icon: Wallet },
   { href: "/plans", label: "Plan", note: "why and what changed", icon: ClipboardList },
   { href: "/timeline", label: "Timeline", note: "what happened when", icon: History },
   { href: "/decisions", label: "Decisions", note: "and what to revisit", icon: Signpost },

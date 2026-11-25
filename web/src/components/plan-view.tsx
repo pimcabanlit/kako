@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useId, useState } from "react";
 
 import type { Loaded } from "@/components/app-shell";
+import { BeforeAfter, ComparePanels, type MonthsOpen, useCompare, useMonthsOpen } from "@/components/compare-view";
 import { Disclaimer } from "@/components/composer";
 import { TopBar } from "@/components/top-bar";
 import { KakoMark, PersonMessage, Text } from "@/components/turn";
@@ -138,9 +139,7 @@ export function PlanView({ id }: { id: string }) {
             {plan.options.length === 0 && (
               <p className="text-muted">This plan holds no options.</p>
             )}
-            {plan.options.map((o) => (
-              <OptionPanel key={o.label} option={o} plan={plan} />
-            ))}
+            <PlanOptions plan={plan} />
           </section>
           {plan.reconciliations.length > 0 && (
             <Reconciliations items={plan.reconciliations} />
@@ -329,7 +328,31 @@ export function ChangedFactRow({ fact }: { fact: ChangedFact }) {
 
 // --- An option and its why ------------------------------------------------------------------
 
-function OptionPanel({ option, plan }: { option: PlanOption; plan: Plan }) {
+/** The plan's options, each set beside today's plan, then the comparison and the months. */
+function PlanOptions({ plan }: { plan: Plan }) {
+  const compared = useCompare(plan.options.length > 0 ? plan.plan.id : null);
+  const months = useMonthsOpen();
+  return (
+    <>
+      {plan.options.map((o) => (
+        <OptionPanel key={o.label} option={o} plan={plan} compared={compared} months={months} />
+      ))}
+      <ComparePanels state={compared} months={months} />
+    </>
+  );
+}
+
+function OptionPanel({
+  option,
+  plan,
+  compared,
+  months,
+}: {
+  option: PlanOption;
+  plan: Plan;
+  compared: ReturnType<typeof useCompare>;
+  months: MonthsOpen;
+}) {
   const { letter, words } = optionParts(option.label);
   const { why } = option;
   const facts = [...new Set([...why.facts, ...factsBehind(why.figures, plan.figures)])];
@@ -372,6 +395,7 @@ function OptionPanel({ option, plan }: { option: PlanOption; plan: Plan }) {
           </tbody>
         </table>
       )}
+      <BeforeAfter state={compared} label={option.label} months={months} />
       {option.specialists.length > 0 && (
         <p className="text-xs text-muted">
           From the {listOf(option.specialists)}{" "}

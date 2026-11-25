@@ -2,10 +2,12 @@
 // ApiError with a plain message the screen can show as it is.
 
 import type {
+  Comparison,
   DatapackMetrics,
   Decisions,
   Household,
   Metrics,
+  Money,
   Plan,
   PlanSummary,
   Proposal,
@@ -108,10 +110,13 @@ export const api = {
   plans: (signal?: AbortSignal) => call<PlanSummary[]>("/plans", { signal }),
   plan: (planId: string, signal?: AbortSignal) =>
     call<Plan>(`/plans/${encodeURIComponent(planId)}`, { signal }),
+  compare: (planId: string, signal?: AbortSignal) =>
+    call<Comparison>(`/plans/${encodeURIComponent(planId)}/compare`, { signal }),
   timeline: (signal?: AbortSignal) => call<Timeline>("/timeline", { signal }),
   decisions: (signal?: AbortSignal) =>
     call<Decisions>("/decisions", { signal }),
   metrics: (signal?: AbortSignal) => call<Metrics>("/metrics", { signal }),
+  money: (signal?: AbortSignal) => call<Money>("/money", { signal }),
   mekoMetrics: (signal?: AbortSignal) =>
     call<DatapackMetrics>("/metrics/meko", { signal }),
   proposals: (signal?: AbortSignal) =>

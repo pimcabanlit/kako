@@ -9,6 +9,10 @@
   that proposed it, its Meko calls and the trace link on Meko Cloud; and what changed against the
   household's last plan (or, for the first, the run it last decided on), with the decisions to
   revisit.
+- `GET /api/v1/plans/{id}/compare` sets each of the plan's options beside today's plan (the turn's
+  own snapshot): what each reaches and what each changes, and its months one by one
+  (`planning.compare`; docs/data-model.md, "Before and after an option"). 409 when the turn's
+  snapshot can't be taken again exactly.
 
 Read-only, and only the household's rows (`db.plan_read`). Every value is the engine's or a fact's,
 written out by code. Kako has no sign-in yet: the app answers only on loopback (see `api.app`).
@@ -24,6 +28,7 @@ from pydantic import BaseModel, ConfigDict
 
 from kako.agents.shown import LOCAL_PREFIX
 from kako.api.sessions import _household, _services
+from kako.db.compare_read import NotComparable, read_compare
 from kako.db.plan_read import list_plans, read_plan
 
 router = APIRouter(prefix="/api/v1/plans", tags=["plans"])
@@ -262,3 +267,105 @@ async def read_one_plan(
         figures={str(k): FigureWhyOut.model_validate(v) for k, v in view.figures.items()},
         facts={str(k): FactWhyOut.model_validate(v) for k, v in view.facts.items()},
     )
+
+
+# --- Before and after ----------------------------------------------------------------------------
+
+
+class CellOut(_Out):
+    value: str
+    note: str | None
+    change: str | None
+    direction: str  # better, worse, same, none
+
+
+class CompareRowOut(_Out):
+    key: str
+    kind: str  # debt_paid, debt_interest, interest_total, emergency_fund, goal_reached, unplanned
+    label: str
+    on_card: bool
+    before: CellOut
+    options: list[CellOut]
+
+
+class OptionHeadOut(_Out):
+    label: str
+    each_month: str
+
+
+class MonthRowOut(_Out):
+    month: int
+    on: date
+    payment: str
+    interest: str
+    principal: str
+    left: str
+    fill: float
+    before_left: str | None
+    before_fill: float | None
+    rolled_in: str | None
+    rolled_from: str | None
+
+
+class DebtMonthsOut(_Out):
+    name: str
+    paid_off: date | None
+    change: str | None
+    direction: str
+    rows: list[MonthRowOut]
+    paid_total: str
+    interest_total: str
+    principal_total: str
+    closing: str
+    before_closing: str | None
+
+
+class FundMonthOut(_Out):
+    month: int
+    on: date
+    added: str
+    balance: str
+    to_go: str | None
+    fill: float
+
+
+class FundOut(_Out):
+    name: str
+    target: str
+    reached_on: date
+    closing: str
+    before_closing: str
+    rows: list[FundMonthOut]
+
+
+class OptionMonthsOut(_Out):
+    label: str
+    debts: list[DebtMonthsOut]
+    fund: FundOut | None
+
+
+class CompareOut(_Out):
+    plan_id: uuid.UUID
+    as_of: date
+    baseline: str
+    each_month: str
+    options: list[OptionHeadOut]
+    rows: list[CompareRowOut]
+    months: list[OptionMonthsOut]
+
+
+@router.get("/{plan_id}/compare", response_model=CompareOut)
+async def compare_plan(
+    plan_id: uuid.UUID, request: Request, household_id: uuid.UUID | None = None
+) -> CompareOut:
+    """Each of the plan's options beside today's plan, every number the engine's."""
+    services = _services(request)
+    household, _ = await _household(services.engine, household_id)
+    async with services.engine.connect() as conn:
+        try:
+            found = await read_compare(conn, household, plan_id)
+        except NotComparable as exc:
+            raise HTTPException(409, f"These options can't be compared: {exc}.") from None
+    if found is None:
+        raise HTTPException(404, "no such plan")
+    return CompareOut.model_validate(found)
