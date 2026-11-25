@@ -27,6 +27,7 @@ from kako.agents.present import GLOSSARY, Refs, day, fact_value, figure_value
 from kako.engine.diff import Diff, FactChange, FigureChange
 from kako.engine.figures import Figure, Run
 from kako.facts.model import EntityRow, FactRow
+from kako.upkeep.sentences import subject
 
 # The figures a replan names, in this order; any other figure that moved is counted, not listed.
 HEADLINE: Final = (
@@ -135,9 +136,10 @@ def _fact_line(change: FactChange, name: str) -> str:
     return f"{name}: {fact_value(old)} ended {day(old.valid_to or old.valid_from)}"
 
 
-def _named(fact: FactRow, names: dict[uuid.UUID, str]) -> str:
-    who = names.get(fact.entity_id, "Household") if fact.entity_id else "Household"
-    return f"{who} {fact.attribute}"
+def _named(fact: FactRow, entities: dict[uuid.UUID, EntityRow]) -> str:
+    """A fact by name and in words, as the household reads it: "Mara's salary (take-home pay a
+    month)", never the attribute's key."""
+    return subject(fact, entities.get(fact.entity_id) if fact.entity_id else None)
 
 
 def brief_lines(replan: Replan, refs: Refs, decisions: dict[uuid.UUID, str]) -> list[str]:
@@ -177,7 +179,7 @@ def changes_lines(replan: Replan, entities: tuple[EntityRow, ...]) -> list[str]:
 
 def why_lines(replan: Replan, entities: tuple[EntityRow, ...]) -> list[str]:
     """The facts behind the change and the decisions to revisit, as the household reads them."""
-    names = {e.id: e.name for e in entities}
+    names = {e.id: e for e in entities}
     lines = ["Because:"]
     for fact in replan.diff.fact_changes:
         lines.append(f"- {_fact_line(fact, _named(_fact_of(fact), names))}")

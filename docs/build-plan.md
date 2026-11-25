@@ -231,6 +231,12 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
 
 1. **Session screen** with approval cards inline, and the **agents' steps** for each turn: every
    specialist's tool calls, the what-ifs it tried, and what was rejected and why.
+   Built Nov 25, laid out like ChatGPT, Claude and Gemini (sessions on the left, the conversation,
+   the composer at the bottom), in the look-and-feel tokens, dark and light: each turn kept as shown
+   (`session_turn`, migration 0007), `GET /household`, `GET /sessions`, `GET /sessions/{id}/turns`
+   with the running turn's steps, and the screen with its loading, empty and error states. Checked
+   on the demo household through session 4 (Mara's news, her approval, Jun's replan) in both themes
+   and at phone width.
 2. **Plan screen** with "why" on each recommendation (figures with their formula and facts, memories,
    decisions, documents, the Meko trace) and "what changed" against the last plan.
 3. **Timeline and decisions.** Facts over time with their windows, replaced and retracted values, life

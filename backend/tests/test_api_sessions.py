@@ -31,6 +31,10 @@ def test_no_database_no_sessions(make_settings: MakeSettings) -> None:
             assert turn.status_code == 422, body
         assert http.post("/api/v1/sessions", json={"title": ""}).status_code == 422
         assert http.get("/api/v1/sessions/not-a-uuid").status_code == 422
+        # The session screen's reads: refused the same way, never an empty list that looks real.
+        for path in ("/api/v1/sessions", f"/api/v1/sessions/{session}/turns", "/api/v1/household"):
+            assert http.get(path).status_code == 503, path
+        assert http.get("/api/v1/sessions/not-a-uuid/turns").status_code == 422
 
 
 def test_only_loopback_answers(make_settings: MakeSettings) -> None:

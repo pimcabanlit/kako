@@ -47,17 +47,17 @@ export function HealthPanel() {
   return (
     <section
       aria-labelledby="health-title"
-      className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900"
+      className="panel"
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id="health-title" className="text-lg font-semibold">
+        <h2 id="health-title" className="display text-[17px]">
           System check
         </h2>
         <button
           type="button"
           onClick={checkAgain}
           disabled={state.kind === "loading"}
-          className="inline-flex items-center gap-2 rounded-md border border-stone-300 px-3 py-1.5 text-sm font-medium hover:bg-stone-100 disabled:opacity-50 dark:border-stone-700 dark:hover:bg-stone-800"
+          className="btn px-3 py-1.5 text-sm"
         >
           <RefreshCw className="size-4" aria-hidden />
           Check again
@@ -66,13 +66,13 @@ export function HealthPanel() {
 
       <div className="mt-4" aria-live="polite">
         {state.kind === "loading" && (
-          <p className="flex items-center gap-2 text-stone-500">
-            <LoaderCircle className="size-4 animate-spin" aria-hidden />
+          <p className="flex items-center gap-2 text-muted">
+            <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
             Checking Postgres and Meko…
           </p>
         )}
         {state.kind === "error" && (
-          <p className="flex items-center gap-2 text-red-700 dark:text-red-400">
+          <p className="flex items-center gap-2 text-rose">
             <CircleX className="size-4" aria-hidden />
             {state.message}
           </p>
@@ -98,12 +98,12 @@ function ServiceRow({ name, status }: { name: string; status: ServiceStatus }) {
   return (
     <li className="flex items-start gap-3">
       <Icon
-        className={`mt-0.5 size-5 shrink-0 ${status.ok ? "text-emerald-600" : "text-red-600"}`}
+        className={`mt-0.5 size-5 shrink-0 ${status.ok ? "text-emerald" : "text-rose"}`}
         aria-label={status.ok ? "ok" : "unreachable"}
       />
       <div>
         <p className="font-medium">{name}</p>
-        <p className="text-sm text-stone-600 dark:text-stone-400">
+        <p className="text-sm text-muted">
           {status.detail}
           {status.latency_ms !== null && ` · ${status.latency_ms} ms`}
         </p>

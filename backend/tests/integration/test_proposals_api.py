@@ -78,6 +78,16 @@ async def test_list_approve_twice_and_reject(
         assert shown["evidence"] == [
             {"kind": "turn", "ref": "conv-4:s4:t1", "quote": JOB, "said_by": "Mara"}
         ]
+        # The same in parts, for the approval card: the old value struck through, then the new.
+        assert shown["change"] == {
+            "subject": "Mara's salary",
+            "attribute": "income.monthly_net",
+            "before": "₱52,000.00",
+            "after": "₱68,000.00",
+            "from_day": "Dec 1, 2026",
+        }
+        constraint = next(p for p in pending if p["id"] == str(note))["change"]
+        assert (constraint["subject"], constraint["before"]) == ("Household", None)
 
         body = {"proposal_ids": [str(salary)], "person_id": str(h.mara)}
         first = await api.post("/api/v1/proposals/approve", json=body)

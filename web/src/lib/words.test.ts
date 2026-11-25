@@ -1,0 +1,54 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import type { Proposal } from "./types.ts";
+import { attributeWords, initials, lifeEvent, proposalTitle, sourceKind } from "./words.ts";
+
+function proposal(kind: string, extra: Partial<Proposal> = {}): Proposal {
+  return {
+    id: "p1",
+    kind,
+    status: "pending",
+    shown: "",
+    change: null,
+    explanation: "",
+    payload: {},
+    from_dreaming: false,
+    created_at: "2026-11-20T00:00:00Z",
+    decided_by: null,
+    decided_at: null,
+    evidence: [],
+    written: [],
+    ...extra,
+  };
+}
+
+test("attributes and sources in plain words; violet only for Meko", () => {
+  assert.equal(attributeWords("income.monthly_net"), "take-home pay a month");
+  assert.equal(attributeWords("new.attribute"), "new.attribute");
+  assert.equal(sourceKind({ kind: "memory", ref: "M1", shown: "" }).tone, "meko");
+  assert.equal(sourceKind({ kind: "knowledge", ref: "K1", shown: "" }).tone, "meko");
+  for (const kind of ["figure", "fact", "decision", "conversation", "other"])
+    assert.notEqual(sourceKind({ kind, ref: "", shown: "" }).tone, "meko", kind);
+});
+
+test("proposal titles and life events", () => {
+  const salary = proposal("replace_fact", {
+    change: {
+      subject: "Mara's salary",
+      attribute: "income.monthly_net",
+      before: "₱52,000.00",
+      after: "₱68,000.00",
+      from_day: "Dec 1, 2026",
+    },
+  });
+  assert.equal(proposalTitle(salary), "Mara's salary: take-home pay a month");
+  const job = proposal("life_event", {
+    payload: { kind: "new_job", occurs_on: "2026-12-01", description: "Mara got a new job" },
+  });
+  assert.equal(proposalTitle(job), "Life event: new job");
+  assert.deepEqual(lifeEvent(job), { description: "Mara got a new job", on: "2026-12-01" });
+  assert.equal(lifeEvent(salary), null);
+  assert.equal(initials("Mara"), "M");
+  assert.equal(initials("Ana Reyes"), "AR");
+});

@@ -306,11 +306,12 @@ async def test_session_4_proposes_the_new_job_then_replans_in_three_parts(
     assert "House fund" not in changed  # its goal has no facts yet: nothing moved
     assert why.startswith("Mara's salary goes from ₱52,000 to ₱68,000 on Dec 1")
     assert (
-        "- Mara's salary income.monthly_net: ₱52,000.00 → ₱68,000.00 from Dec 1, 2026 (replaced)"
+        "- Mara's salary (take-home pay a month): ₱52,000.00 → ₱68,000.00 from Dec 1, 2026 "
+        "(replaced)"
     ) in why
     assert (
         "- To revisit: “How hard should we pay down the credit card?” (Session 2, Sep 15, 2026: "
-        "chose B: split) rested on Mara's salary income.monthly_net"
+        "chose B: split) rested on Mara's salary (take-home pay a month)"
     ) in why
 
     # The run it was compared with is stored (Oct 18, as Kako knew it at the decision), and every
@@ -422,7 +423,7 @@ async def test_session_4_through_the_api(
     )
     assert replan["why"].startswith("Mara's salary goes from ₱52,000 to ₱68,000")
     assert (
-        "Mara's salary income.monthly_net: ₱52,000.00 → ₱68,000.00 from Dec 1, 2026 (replaced)"
+        "Mara's salary (take-home pay a month): ₱52,000.00 → ₱68,000.00 from Dec 1, 2026 (replaced)"
         in replan["because"]
     )
     assert replan["because"][-1].startswith("To revisit: “Should the bonus go to the card")

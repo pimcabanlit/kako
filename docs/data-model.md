@@ -1,4 +1,4 @@
-# Kako data model v0.14
+# Kako data model v0.15
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -45,7 +45,9 @@ in the same change once agreed.
   of Sessions 1 and 3 (a decision in `decisions.toml` may have no `after`), the preference pattern
   from Oct 18 (`changes.csv` row 6), `learning.toml` (what dreaming learns in the story between
   sessions), and session 4's replan against the latest decision with all three to revisit; no
-  schema change.
+  schema change. v0.15 (Nov 25) is the session screen (Phase 5, task 1): `session_turn` keeps each
+  turn as the household saw it, so a past session reopens like a chat, and its writer joins
+  `session_participant` (migration 0007).
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -85,7 +87,7 @@ How the tables are used at run time is in [architecture.md](architecture.md); th
 | --- | --- | --- |
 | Household | `household`, `person`, `entity` | Seed import; approved proposals |
 | Facts | `fact`, `life_event` | Seed import; approved proposals |
-| Sessions | `session`, `session_participant` | The API when a planning session starts and ends |
+| Sessions | `session`, `session_participant`, `session_turn` | The API when a planning session starts and ends; a turn once it is kept (`agents/ask.py`, `db/turn_store.py`) |
 | Engine | `calc_run`, `calc_input`, `figure` | The engine only |
 | Planning | `plan`, `recommendation`, `recommendation_source`, `reconciliation`, `scenario`, `scenario_override`, `agent_step` | The orchestrator, through the backend; `agent_step` by the agents' tool loop (`agents/tool_loop.py`) |
 | Decisions | `decision`, `decision_option`, `decision_assumption` | Approved proposals |
@@ -291,12 +293,34 @@ A planning session is one Meko conversation.
 Who took part in a session. Each household turn sent to Meko carries the speaker's `person_id` in its
 metadata (`kako_said_by`, with the turn's seed in `kako_turn` and the session in `kako_session_id`), so
 a quote can be attributed ("Mara: I got the job"), and dreaming names them on what it proposes. The demo has both adults taking part
-across the four sessions.
+across the four sessions. A person joins when a turn they wrote is kept (`session_turn.said_by`).
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `session_id` | UUID PK, FK | |
 | `person_id` | UUID PK, FK | |
+
+### `session_turn`
+
+One turn of a session as the household saw it: the session screen reads it to reopen a past session.
+`shown` is the session API's turn answer (`agents/shown.py`, `TurnOut`), built by code once the turn
+is kept: the reply and every text as number-checked, the options with their allocations and sources,
+how a conflict ended, the numbers the check flagged, the changes waiting for a yes (their proposal
+ids; their status is read from `proposal`), a replan's other two parts, the plan's ids and what the
+turn cost. Every figure in it came from the engine; the ids in it point to the rows behind it. A turn
+that fails leaves no row (its `agent_step` and `llm_call` rows stay). Written once, never updated.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `session_id` | UUID FK | |
+| `meko_turn_seed` | TEXT | The turn's seed in the session, as on `agent_step` and `llm_call` |
+| `said_by` | UUID FK, null | The person who wrote the message (`person.id`); null when no one was named |
+| `message` | TEXT | The household's words |
+| `shown` | JSONB | The answer as shown (see above) |
+| `created_at` | TIMESTAMPTZ | When the turn was kept |
+
+Unique on (`session_id`, `meko_turn_seed`).
 
 ## Engine
 
