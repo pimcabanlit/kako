@@ -24,7 +24,7 @@ from kako.agents.model_manager import ModelManager
 from kako.agents.orchestrator import answer_turn
 from kako.agents.prompt_registry import load_prompt
 from kako.agents.recorded import RecordingBackend, ReplayBackend
-from kako.agents.specialists import shared_rules, system_prompt
+from kako.agents.specialists import role_prompt, shared_rules, system_prompt
 from kako.agents.spend import MemoryLlmLog
 from kako.agents.tools import TurnState
 from kako.agents.turn import MemoryStepLog
@@ -286,12 +286,23 @@ async def test_what_each_agent_was_sent(house: Villanueva, make_settings: MakeSe
         "savings#1": "kako-fast",
     }
 
-    # The shared rules and the brief come first in every system prompt (one cached prefix).
+    # A specialist's system prompt: the shared rules and the brief first (one cached prefix for
+    # every specialist of the turn), then its role.
     prefix = f"{shared_rules()}\n\n{state.brief.text}\n\n"
-    for key in (f"{SEED}/orchestrator/1", f"{SEED}/debt#1/1", f"{SEED}/savings#1/1"):
+    for key in (f"{SEED}/debt#1/1", f"{SEED}/savings#1/1"):
         system = _request(backend, key).messages[0].content or ""
         assert system.startswith(prefix)
     assert "Your role: the debt specialist" in system_prompt("debt", state.brief).text
+    # The orchestrator's: the shared rules and its role only, the same every turn; the brief comes
+    # in the turn's own message, after the conversation (none on a first turn).
+    orchestrator = _request(backend, f"{SEED}/orchestrator/1").messages
+    assert orchestrator[0].content == role_prompt("orchestrator").text
+    assert state.brief.text not in (orchestrator[0].content or "")
+    assert [m.role for m in orchestrator] == ["system", "user"]
+    assert (orchestrator[1].content or "").startswith(state.brief.text)
+    assert '## The new message (turn 1)\nThe household writes: <data source="household">Mara' in (
+        orchestrator[1].content or ""
+    )
 
     # Each request names the prompts its system message was built from; the turn keeps them all.
     for key, role in ((f"{SEED}/orchestrator/1", "orchestrator"), (f"{SEED}/debt#1/1", "debt")):
@@ -333,6 +344,7 @@ async def test_what_each_agent_was_sent(house: Villanueva, make_settings: MakeSe
         "get_figures",
         "get_facts",
         "get_decisions",
+        "read_turns",
         "run_what_if",
         "ask_budget",
         "ask_debt",

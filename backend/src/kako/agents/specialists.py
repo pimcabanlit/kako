@@ -7,9 +7,12 @@ as specs and code resolves them. Code checks the proposal before the orchestrato
 what-if is the specialist's own, not over the surplus, moves money in the specialist's area, and is
 cited with at least one of its figures and one other source (V-11).
 
-Every agent's system prompt starts the same way (the shared rules, then the turn's brief) so the
-model provider's prompt cache serves the long common part to every agent of a turn; the role comes
-last. The household's message and the orchestrator's question are wrapped as data.
+A specialist's system prompt starts the same way as every other specialist's (the shared rules, then
+the turn's brief, with the session's state) so the model provider's prompt cache serves the long
+common part to each of them; the role comes last. A specialist doesn't read the conversation: the
+orchestrator's question carries what it needs (who asked, what they asked, the what-if being
+explored), and the brief's session state the rest. The household's message and the orchestrator's
+question are wrapped as data.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from functools import cache
 from typing import Any, Final
 
 from kako.agents.answers import Specialist, SpecialistProposal
-from kako.agents.brief import Brief, data
+from kako.agents.brief import Brief, data, plain
 from kako.agents.chat import ToolSpec
 from kako.agents.checks import record
 from kako.agents.model_manager import ModelManager
@@ -40,6 +43,8 @@ from kako.planning.reconcile import SCOPE
 
 MAX_TOOL_CALLS: Final = 4
 MAX_SUMMARY: Final = 1_500
+# The orchestrator's question: self-contained, since a specialist doesn't read the conversation.
+MAX_QUESTION: Final = 1_200
 
 
 @cache
@@ -56,6 +61,14 @@ def system_prompt(role: PromptName, brief: Brief) -> SystemPrompt:
     return SystemPrompt(
         f"{shared_rules()}\n\n{brief.text}\n\n{own.text}", (common.version, own.version)
     )
+
+
+def role_prompt(role: PromptName) -> SystemPrompt:
+    """The shared rules, then the role, with no brief: the orchestrator's system prompt, which stays
+    the same from turn to turn. Its brief comes after the conversation, in the turn's own message
+    (`agents.orchestrator`)."""
+    common, own = load_prompt("common"), load_prompt(role)
+    return SystemPrompt(f"{shared_rules()}\n\n{own.text}", (common.version, own.version))
 
 
 def proposal_tool(state: TurnState, specialist: Specialist, path: str, prefix: str) -> Tool:
@@ -148,10 +161,11 @@ async def run_specialist(
         what_if_tool(state, path),
         proposal_tool(state, specialist, path, prefix),
     ]
+    writer = state.inputs.writer
     user = (
         "The orchestrator asks: "
-        + data(question, source="orchestrator")
-        + "\n\nThe household's message: "
+        + data(question, limit=MAX_QUESTION, source="orchestrator")
+        + f"\n\nThe household's message ({plain(writer[0]) if writer else 'unsigned'}): "
         + data(state.message, limit=MESSAGE_CHARS, source="household")
         + f"\n\nYour what-ifs are named {prefix}-W1, {prefix}-W2 and so on."
     )

@@ -363,30 +363,53 @@ async def test_each_turn_knows_its_writer_and_the_session_so_far(
     migrated: AsyncEngine, make_settings: MakeSettings
 ) -> None:
     """Pim's sandbox, Nov 25: "Writing as Jun" was met with "Jun's or Mara's?", and a turn
-    answering Kako's question with a greeting. Each turn's brief now names who wrote the message,
-    and from the second turn on carries the session so far, from Postgres (no Meko here)."""
+    answering Kako's question with a greeting. Each turn's brief names who wrote the message; from
+    the second turn on, the orchestrator reads the conversation so far as chat messages, from
+    Postgres (no Meko here), and every agent reads the session's state in the brief. What each
+    turn was given is kept in `turn_context`."""
     script = {**turn_1(), **turn_2()}
     backend = ScriptedBackend(script)
-    _, told, _ = await _session_4(migrated, make_settings, script, backend)
+    session, told, _ = await _session_4(migrated, make_settings, script, backend)
 
-    def brief(key: str) -> str:
-        request = next(r for k, _, r in backend.requests if k == key)
-        return request.messages[0].content or ""
+    def sent(key: str) -> list[Any]:
+        return list(next(r for k, _, r in backend.requests if k == key).messages)
 
-    first, second = brief(f"{T1}/orchestrator/1"), brief(f"{T2}/orchestrator/1")
-    assert "## Who is writing\nMara (adult) wrote this turn's message." in first
-    assert "## This session so far" not in first  # the session's first turn
-    assert "## Who is writing\nJun (adult) wrote this turn's message." in second
-    so_far = second[second.index("## This session so far") : second.index("## From Meko")]
-    assert f'- Mara wrote: <data source="household">{NEWS}</data>' in so_far
-    assert '  Kako replied: <data source="kako">' + told.answer.reply[:40] in so_far
-    assert '  Filed for a yes: <data source="kako">Life event (new_job) on Dec 1, 2026' in so_far
-    # Every agent of the turn, the specialists too, starts from the same brief.
-    assert all(
-        "## This session so far" in (r.messages[0].content or "")
-        for k, _, r in backend.requests
-        if k.startswith(f"{T2}/")
-    )
+    first, second = sent(f"{T1}/orchestrator/1"), sent(f"{T2}/orchestrator/1")
+    assert [m.role for m in first] == ["system", "user"]  # the session's first turn
+    assert "Mara (adult) wrote this turn's message." in (first[-1].content or "")
+    assert [m.role for m in second] == ["system", "user", "assistant", "user"]
+    assert second[0].content == first[0].content  # the same start, turn after turn
+    assert second[1].content == f'Mara wrote (turn 1): <data source="household">{NEWS}</data>'
+    reply = second[2].content or ""
+    assert reply.startswith(told.answer.reply[:40])
+    assert "Filed for a yes: Life event (new_job) on Dec 1, 2026" in reply
+    brief = second[-1].content or ""
+    assert "## This session (kept by code)\nSession 4: this message is turn 2." in brief
+    assert "Jun (adult) wrote this turn's message." in brief
+    assert "- turn 1: Life event (new_job) on Dec 1, 2026" in brief
+    assert "(approved)" in brief  # Mara said yes before Jun wrote
+    assert "## The new message (turn 2)\nJun writes:" in brief
+    # Every specialist of the turn reads the same session state, but not the conversation.
+    for key, _, request in backend.requests:
+        if key.startswith(f"{T2}/") and "orchestrator" not in key:
+            system = request.messages[0].content or ""
+            assert "## This session (kept by code)" in system
+            assert NEWS not in "\n".join(m.content or "" for m in request.messages)
+    async with migrated.connect() as conn:
+        kept = list(
+            await conn.execute(
+                text(
+                    "SELECT meko_turn_seed, history, brief_tokens > 0 AS sized, search_query "
+                    "FROM turn_context WHERE session_id = :s ORDER BY created_at"
+                ),
+                {"s": session.session_id},
+            )
+        )
+    assert [(r.meko_turn_seed, r.history["verbatim"], r.sized) for r in kept] == [
+        (T1, [], True),
+        (T2, [1], True),
+    ]
+    assert all(r.search_query is None for r in kept)  # no Meko, no search
 
 
 async def test_session_4_through_the_api(

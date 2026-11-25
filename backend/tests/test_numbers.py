@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 
-from kako.agents.brief import EarlierTurn
+from kako.agents.kept import KeptTurn
 from kako.agents.numbers import check_text, check_texts, mismatch, names_of, pool_of
 from kako.agents.tools import MESSAGE_CHARS, TurnState
 from tests.support.villanueva import Villanueva, build
@@ -231,13 +231,13 @@ def test_the_households_earlier_words_in_the_session_match(house: Villanueva) ->
     """Pim's sandbox, Nov 25: "what if my salary goes to 200000 per month", then "Jun". The
     reply to "Jun" may quote the amount back: the household said it, in this session."""
     s = _state(house, message="Jun")
-    earlier = (EarlierTurn("Jun", "what if my salary goes to 200000 per month", "Whose?"),)
+    earlier = (KeptTurn(1, "t1", "Jun", "what if my salary goes to 200000 per month", "Whose?"),)
     s.inputs = replace(s.inputs, earlier=earlier)
     text = "Jun's salary at ₱200,000.00 a month is a change Kako can't test yet."
     assert _matches(s, text) == [("₱200,000.00", "money", "said")]
     # Kako's own earlier replies are not the household's words: their numbers match nothing.
     s.inputs = replace(
-        s.inputs, earlier=(EarlierTurn("Jun", "Jun", "It lasts ₱123,456.00 longer."),)
+        s.inputs, earlier=(KeptTurn(1, "t1", "Jun", "Jun", "It lasts ₱123,456.00 longer."),)
     )
     assert _matches(s, "₱123,456.00")[0][2] is None
 

@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     daily_spend_cap_usd: Decimal = Field(default=Decimal(3), ge=0, le=50)
     # The brief every agent starts a turn from (docs/architecture.md, step 3), in estimated tokens.
     brief_token_budget: int = Field(default=3_000, ge=500, le=20_000)
+    # The session's earlier turns the orchestrator reads word for word, in estimated tokens; older
+    # turns are shortened by code to a line each (docs/architecture.md, "The conversation").
+    history_token_budget: int = Field(default=12_000, ge=2_000, le=60_000)
     # Results the brief's one context_search asks Meko for.
     brief_search_limit: int = Field(default=5, ge=0, le=10)
     # The most a model may write in one call, reasoning included: a specialist (fast deployment)

@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Date, DateTime, ForeignKey, Text, UniqueConstraint, Uuid
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text, UniqueConstraint, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -43,4 +43,27 @@ class SessionTurn(Base):
     said_by: Mapped[uuid.UUID | None] = fk("person.id", nullable=True)
     message: Mapped[str] = mapped_column(Text)
     shown: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class TurnContext(Base):
+    """What the agents of one turn were given, and what the orchestrator noted for the next turn.
+
+    Written once with the turn's `session_turn` row: the brief as sent, the conversation's window
+    (which earlier turns went word for word, as one line, or were left out), the brief's Meko
+    search, and the orchestrator's `topic` and `asks`, which the next turn's session state reads.
+    """
+
+    __tablename__ = "turn_context"
+    __table_args__ = (UniqueConstraint("session_id", "meko_turn_seed"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    session_id: Mapped[uuid.UUID] = fk("session.id")
+    meko_turn_seed: Mapped[str] = mapped_column(Text)
+    brief: Mapped[str] = mapped_column(Text)
+    brief_tokens: Mapped[int] = mapped_column(Integer)
+    history: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    search_query: Mapped[str | None] = mapped_column(Text, nullable=True)
+    topic: Mapped[str | None] = mapped_column(Text, nullable=True)
+    asks: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

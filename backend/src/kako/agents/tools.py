@@ -27,6 +27,7 @@ from kako.agents.answers import Allocation, Citation
 from kako.agents.brief import FREE_TEXT, Brief, BriefInputs, data, decision_lines
 from kako.agents.chat import ToolSpec
 from kako.agents.checks import CheckLog, MemoryCheckLog
+from kako.agents.conversation import History, full_text
 from kako.agents.present import KIND_ORDER, Refs, fact_value, figure_value, money
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult
 from kako.agents.turn import short
@@ -44,6 +45,7 @@ ALLOCATABLE: Final = ("debt", "account", "goal")  # plan.allocation's entity kin
 MAX_ALLOCATIONS: Final = 8
 MAX_REFS: Final = 40
 MESSAGE_CHARS: Final = 2_000  # the most of the household's message an agent is shown
+MAX_READ_TURNS: Final = 5  # the most turns one read_turns call returns
 ORCHESTRATOR: Final = "orchestrator"  # the orchestrator's agent path
 MIN_SAID: Final = 10_000  # ₱100: a smaller number in the message is a count, not an amount
 # Peso amounts in the household's words: ₱4,000, P4000, 4,000.50, 4000 pesos. Not a number that
@@ -123,6 +125,8 @@ class TurnState:
     # as pending proposals with the turn.
     proposed: list[HeldChange] = field(default_factory=list)  # propose_change, pending
     said_on: date | None = None  # the household's date when it spoke (the session's date)
+    # The session's earlier turns as the orchestrator reads them (`agents.conversation`).
+    history: History | None = None
 
     @property
     def refs(self) -> Refs:
@@ -143,6 +147,26 @@ class TurnState:
     @property
     def message(self) -> str:
         return self.inputs.message
+
+    @property
+    def said_shown(self) -> str:
+        """The household's words a `said` citation stands for: this turn's message, after any
+        earlier message of the session that names an amount (a `said:` spec may use it)."""
+        earlier = [
+            f"{t.said_by or 'The household'} (turn {t.number}): {t.message[:MESSAGE_CHARS]}"
+            for t in self.inputs.earlier
+            if said_amounts(t.message[:MESSAGE_CHARS])
+        ]
+        return "\n".join([*earlier, self.message]) if earlier else self.message
+
+    @property
+    def said_words(self) -> tuple[str, ...]:
+        """The household's words in this session, as the agents were shown them: this turn's
+        message, then each earlier one. A `said:` amount is one of theirs."""
+        return tuple(
+            words[:MESSAGE_CHARS]
+            for words in (self.message, *(t.message for t in self.inputs.earlier))
+        )
 
     # -- reading refs ------------------------------------------------------------------------
 
@@ -217,10 +241,10 @@ class TurnState:
             if match is None:
                 raise ToolInputError(f"{short(spec, 60)!r}: write one amount, such as said:4000")
             centavos = _centavos(*match.groups(default=""))
-            if centavos not in said_amounts(self.message):
+            if not any(centavos in said_amounts(words) for words in self.said_words):
                 raise ToolInputError(
-                    f"{money(centavos)} isn't an amount in the household's message; use rest, "
-                    "none, figure:<ref> or fact:<ref> instead"
+                    f"{money(centavos)} isn't an amount the household wrote in this session; use "
+                    "rest, none, figure:<ref> or fact:<ref> instead"
                 )
             return centavos, said_spec(centavos)
         else:
@@ -322,7 +346,7 @@ class TurnState:
             if found is not None and found.kind == ("memory" if kind == "memory" else "knowledge"):
                 return found
         if ref.strip() == "said":
-            return Citation("conversation", "said", self.turn_seed, self.message)
+            return Citation("conversation", "said", self.turn_seed, self.said_shown)
         raise ToolInputError(
             f"can't cite {ref!r}: use figure:<ref>, figure:<what-if>:<ref>, fact:<ref>, "
             "memory:<ref>, doc:<ref>, decision:<ref> or said"
@@ -612,4 +636,61 @@ def decisions_tool(state: TurnState) -> Tool:
             object_schema({}),
         ),
         get_decisions,
+    )
+
+
+def turns_tool(state: TurnState) -> Tool:
+    """`read_turns`: earlier turns in full, from this session or one of the household's earlier
+    sessions the brief recaps (`S1`, …), at most `MAX_READ_TURNS` a call. Reads only what the brief
+    was built from: no database, no Meko."""
+
+    async def read_turns(arguments: dict[str, Any]) -> ToolResult:
+        ref = arguments.get("session")
+        if not isinstance(ref, str):
+            raise ToolInputError('session must be "" for this session, or a ref such as S1')
+        ref = ref.strip()
+        if ref in ("", "this"):
+            turns, where = state.inputs.earlier, "This session"
+        else:
+            past = next((p for p in state.inputs.past_sessions if p.ref == ref), None)
+            if past is None:
+                raise ToolInputError(
+                    f'no session {short(ref, 20)!r}: use "" for this session, or a ref from the '
+                    "brief's earlier sessions"
+                )
+            turns, where = past.turns, f"{ref} ({past.title})"
+        first, last = arguments.get("from"), arguments.get("to")
+        if not isinstance(first, int) or isinstance(first, bool):
+            raise ToolInputError("from must be a turn number")
+        if not isinstance(last, int) or isinstance(last, bool):
+            raise ToolInputError("to must be a turn number")
+        if not turns:
+            raise ToolInputError(f"{where} has no earlier turns")
+        if last < first or last - first + 1 > MAX_READ_TURNS:
+            raise ToolInputError(f"read 1 to {MAX_READ_TURNS} turns at a time, from <= to")
+        chosen = [t for t in turns if first <= t.number <= last]
+        if not chosen:
+            raise ToolInputError(f"{where} has turns {turns[0].number} to {turns[-1].number}")
+        span = f"turn {first}" if first == last else f"turns {first} to {last}"
+        head = f"{where}, {span}. Figures in them were right then: cite today's from the tools."
+        return ToolResult(
+            "\n\n".join([head, *(full_text(t) for t in chosen)]),
+            short(f"{where}: {span}"),
+        )
+
+    return Tool(
+        ToolSpec(
+            "read_turns",
+            "Read earlier turns in full: the household's words and Kako's reply, with its options "
+            'and what it filed. session: "" for this session, or an earlier session\'s ref from '
+            f"the brief (S1, …). from and to: turn numbers, at most {MAX_READ_TURNS} turns.",
+            object_schema(
+                {
+                    "session": {"type": "string"},
+                    "from": {"type": "integer"},
+                    "to": {"type": "integer"},
+                }
+            ),
+        ),
+        read_turns,
     )

@@ -668,6 +668,7 @@ async def _demo_run(*, test_set: bool, strict: bool, without_learning: bool = Fa
             f"\nMeko upkeep: {kept.added} memories added, {kept.rewritten} rewritten, "
             f"{kept.deleted} deleted"
             + (f", {kept.shared} shared" if kept.shared else "")
+            + (f", {kept.recapped} session recaps added" if kept.recapped else "")
             + (f", {kept.waiting} left for `kako meko sync`." if kept.waiting else ".")
         )
         for problem in kept.problems:
@@ -861,8 +862,8 @@ async def _upkeep(household_id: uuid.UUID, at: datetime) -> int:
         return 0
     print(
         f"Meko upkeep: {report.added} added, {report.rewritten} rewritten, "
-        f"{report.deleted} deleted, {report.shared} shared, {report.waiting} left for the next "
-        "run."
+        f"{report.deleted} deleted, {report.shared} shared, {report.recapped} session recaps "
+        f"added, {report.waiting} left for the next run."
     )
     for problem in report.problems:
         print(f"- {problem}", file=sys.stderr)
@@ -1185,7 +1186,8 @@ async def _ask(
 
 async def _demo_record(name: str) -> int:
     """One scripted session on Foundry, recorded: on an empty database, the story loaded without
-    the rows the session writes, each turn and approval as demo mode plays them."""
+    the rows the sessions write, the sessions before it replayed from their recordings, then each
+    of its turns and approvals as demo mode plays them."""
     from kako.agents.ask import render_answer
     from kako.agents.brief_store import BriefStoreError
     from kako.agents.chat import ModelError
@@ -1194,7 +1196,7 @@ async def _demo_record(name: str) -> int:
     from kako.db.engine import make_engine
     from kako.demo.files import DemoDataError, read_demo
     from kako.demo.load import DemoLoadError
-    from kako.demo.mode import DemoModeError, learn, prepare, replay_session
+    from kako.demo.mode import DemoModeError, learn, prepare, replay_session, written_by_sessions
     from kako.demo.sessions import DemoSessionError, check_writes, read_learning, read_sessions
     from kako.meko.client import MekoError
 
@@ -1218,16 +1220,28 @@ async def _demo_record(name: str) -> int:
     database_url = settings.database_url
     if database_url is None:
         return 1
+    # The sessions before it are replayed from their recordings first, as demo mode plays them,
+    # so its briefs hold what demo mode's will: their recaps and the rows they write.
+    before = [s for s in sessions[: sessions.index(session)] if s.recording.exists()]
     engine = make_engine(database_url)
     try:
-        skip = {*session.writes, *([learning.writes] if learning else [])}
+        skip = {*written_by_sessions(before), *session.writes}
+        if learning is not None:
+            skip.add(learning.writes)
         prepared = await prepare(engine, settings, demo, skip=skip)
         if not prepared.loaded:
             print("Record on an empty database: this one holds the household.", file=sys.stderr)
             return 1
-        if learning is not None and learning.at <= session.known_at:
-            step = await learn(engine, settings, demo, learning, prepared.household_id)
-            print(_learned(learning.session, step) + "\n")
+        learned = False
+        for earlier in [*before, session]:
+            if not learned and learning is not None and learning.at <= earlier.known_at:
+                step = await learn(engine, settings, demo, learning, prepared.household_id)
+                print(_learned(learning.session, step) + "\n")
+                learned = True
+            if earlier is session:
+                break
+            replayed = await replay_session(engine, settings, demo, earlier, prepared.household_id)
+            print(_drift(f"{earlier.title} (replayed first)", replayed.calls, replayed.drifted))
         recording = settings.model_copy(update={"recorded_responses": path})
 
         def show(asked: Any) -> None:

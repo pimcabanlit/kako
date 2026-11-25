@@ -14,6 +14,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Final, Literal
 
+from kako.agents.kept import TEST_SET_TITLE
 from kako.facts.reading import scan
 
 TEST_SET: Final = Path(__file__).resolve().parents[4] / "data" / "test-set" / "questions.toml"
@@ -22,7 +23,7 @@ ENTITY_REF: Final = re.compile(r"^(income|expense|debt|account|goal):[a-z0-9-]+$
 SOURCE: Final = re.compile(r"^(said|memory|doc|(fact|decision):\S+)$")
 # Each question is asked in a session of its own, titled so the metrics can tell it apart from the
 # household's own sessions (and the architecture that answered it).
-SESSION_TITLE: Final = "Agent test set"
+SESSION_TITLE: Final = TEST_SET_TITLE
 _SESSION_TITLE: Final = re.compile(r"^Agent test set q\d{2} \((specialists|single)\)$")
 EXPECT_KEYS: Final = frozenset(
     {

@@ -56,7 +56,11 @@ and after an option (Phase 5a, item 5): formulas C-1 to C-3 under "Before and af
 each option worked out again from its turn's own snapshot and set beside today's plan; no schema
 change, nothing stored. v0.19 (Nov 25) is prompt versions: each model call logs the prompts its system
 message was built from (`llm_call.prompts`, migration 0008), and each Meko turn names them
-(`kako_prompts`).
+(`kako_prompts`). v0.20 (Nov 25) is the conversation (Phase 5a, item 8): `turn_context` keeps what each turn's
+agents were given (the brief as sent, which earlier turns went word for word, as one line or were
+left out, the brief's Meko search) and the orchestrator's two notes for the next turn, `topic` and
+`asks`; `meko_link.kako_table` gains `session`, for the recap of an ended session Meko upkeep keeps
+as one of Kako's own memories (migration 0009).
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -96,7 +100,7 @@ How the tables are used at run time is in [architecture.md](architecture.md); th
 | --- | --- | --- |
 | Household | `household`, `person`, `entity` | Seed import; approved proposals |
 | Facts | `fact`, `life_event` | Seed import; approved proposals |
-| Sessions | `session`, `session_participant`, `session_turn` | The API when a planning session starts and ends; a turn once it is kept (`agents/ask.py`, `db/turn_store.py`) |
+| Sessions | `session`, `session_participant`, `session_turn`, `turn_context` | The API when a planning session starts and ends; a turn and its context once it is kept (`agents/ask.py`, `db/turn_store.py`) |
 | Engine | `calc_run`, `calc_input`, `figure` | The engine only |
 | Planning | `plan`, `recommendation`, `recommendation_source`, `reconciliation`, `scenario`, `scenario_override`, `agent_step` | The orchestrator, through the backend; `agent_step` by the agents' tool loop (`agents/tool_loop.py`) |
 | Decisions | `decision`, `decision_option`, `decision_assumption` | Approved proposals |
@@ -328,6 +332,31 @@ that fails leaves no row (its `agent_step` and `llm_call` rows stay). Written on
 | `said_by` | UUID FK, null | The person who wrote the message (`person.id`); null when no one was named |
 | `message` | TEXT | The household's words |
 | `shown` | JSONB | The answer as shown (see above) |
+| `created_at` | TIMESTAMPTZ | When the turn was kept |
+
+Unique on (`session_id`, `meko_turn_seed`).
+
+### `turn_context`
+
+What one turn's agents were given, and what the orchestrator noted for the next turn
+(docs/architecture.md, "The conversation"). Written once, in the same transaction as the turn's
+`session_turn` row; a turn that fails leaves neither. With `session_turn` it answers "what did the
+model see?" for any answer: the brief exactly as sent, and the window of earlier turns, which code
+rebuilds from their `session_turn` rows the same way every time. The next turn's session state reads
+`topic` and `asks`. A turn kept before Nov 25 has no row: its session state shows no topic and no
+question.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `session_id` | UUID FK | |
+| `meko_turn_seed` | TEXT | The turn's seed, as on `session_turn` |
+| `brief` | TEXT | The brief every agent of the turn was sent, as rendered (`agents/brief.py`) |
+| `brief_tokens` | INT | Its size, estimated high |
+| `history` | JSONB | The conversation's window: `verbatim`, `digest` and `left_out` (earlier turn numbers word for word, as one line each, or left out), `tokens` (estimated) and `budget` (`KAKO_HISTORY_TOKEN_BUDGET` then) |
+| `search_query` | TEXT, null | What the brief's one `context_search` looked for (the topic and, for a short message, the message before it, then the message); null when no search was made |
+| `topic` | TEXT, null | The orchestrator's note: what the conversation is about now, number-checked |
+| `asks` | TEXT, null | The orchestrator's note: the question its reply asks the household, number-checked |
 | `created_at` | TIMESTAMPTZ | When the turn was kept |
 
 Unique on (`session_id`, `meko_turn_seed`).
@@ -677,7 +706,7 @@ Ties a Kako row to what Meko holds about it.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `kako_table` | TEXT PK | `fact`, `decision`, `plan`, `life_event`, `proposal`, `context_gap` |
+| `kako_table` | TEXT PK | `fact`, `decision`, `plan`, `life_event`, `proposal`, `context_gap`, `session` |
 | `kako_id` | UUID PK | The row in `kako_table` (checked by the validation suite, as it can point at several tables) |
 | `meko_kind` | TEXT PK | `memory`, `promoted_memory`, `document`, `artifact`, `conversation` |
 | `meko_id` | TEXT PK | Memory id (a promoted memory keeps its id), a document's upload key, artifact content hash, or conversation id |

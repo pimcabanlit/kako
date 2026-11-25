@@ -1,12 +1,15 @@
 """The orchestrator: one turn's answer (docs/architecture.md, steps 4 and 5).
 
-The orchestrator runs on the strong deployment. It reads the brief, asks the specialists it needs
-(each one a tool, `ask_debt` and so on; asks in one reply run at the same time), may run its own
-what-ifs, and finishes with `submit_answer`: the reply and up to 4 options. Code checks each option
-before it reaches the household: it is one what-if of this turn that fits the surplus, cited with at
-least one of that what-if's figures and one other source (V-11), drawing only on specialists that
-were asked. The options' allocations are the what-if's, which the engine ran: no number in an
-option comes from the model.
+The orchestrator runs on the strong deployment. It reads the session's conversation so far (chat
+messages, compacted by code: `agents.conversation`), then the turn's own message: the brief, fresh
+this turn, and what the household wrote. It asks the specialists it needs (each one a tool,
+`ask_debt` and so on; asks in one reply run at the same time), may run its own what-ifs, may read
+earlier turns in full (`read_turns`), and finishes with `submit_answer`: the reply, up to 4 options,
+and two notes for the next turn (what the conversation is about, and the question the reply asks,
+if any). Code checks each option before it reaches the household: it is one what-if of this turn
+that fits the surplus, cited with at least one of that what-if's figures and one other source
+(V-11), drawing only on specialists that were asked. The options' allocations are the what-if's,
+which the engine ran: no number in an option comes from the model.
 
 Once two or more specialists propose a move, code reconciles their proposals together and tells
 the orchestrator what the rules found (`agents.reconciling`); while a conflict is open its
@@ -35,12 +38,13 @@ from kako.agents.answers import (
 from kako.agents.brief import data
 from kako.agents.chat import ToolSpec
 from kako.agents.checks import Subject, record
+from kako.agents.conversation import ASKS_CHARS, TOPIC_CHARS, new_message
 from kako.agents.model_manager import ModelManager
 from kako.agents.numbers import check_texts, mismatch
 from kako.agents.present import day, money
 from kako.agents.proposing import proposal_tool
 from kako.agents.reconciling import RESOLUTION_SCHEMA, Reconciler
-from kako.agents.specialists import run_specialist, system_prompt
+from kako.agents.specialists import MAX_QUESTION, role_prompt, run_specialist
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult, run_agent
 from kako.agents.tools import (
     MESSAGE_CHARS,
@@ -49,6 +53,7 @@ from kako.agents.tools import (
     decisions_tool,
     object_schema,
     read_tools,
+    turns_tool,
     what_if_tool,
 )
 from kako.agents.turn import TurnContext, short
@@ -57,7 +62,6 @@ PATH: Final = ORCHESTRATOR
 MAX_SPECIALIST_CALLS: Final = 4
 MAX_TOOL_CALLS: Final = 8
 MAX_OPTIONS: Final = 4
-MAX_QUESTION: Final = 600
 MAX_REPLY: Final = 4_000
 MAX_OPTION_SUMMARY: Final = 1_000
 MAX_LABEL: Final = 80
@@ -158,8 +162,10 @@ def _ask_tool(
     return Tool(
         ToolSpec(
             f"ask_{specialist}",
-            f"Ask the {specialist} specialist. It reads the brief, tries what-ifs and hands back "
-            "a cited proposal. question: what to look at, in one or two sentences.",
+            f"Ask the {specialist} specialist. It reads the brief (with the session's state) but "
+            "not the conversation, tries what-ifs and hands back a cited proposal. question: "
+            "self-contained: who is asking, what they asked (with what came before, if it "
+            "matters) and what to look at.",
             object_schema({"question": {"type": "string"}}),
         ),
         ask,
@@ -192,6 +198,28 @@ def _option(state: TurnState, raw: Any, asked: AskedSpecialists) -> Option:
     return Option(label, summary, ref, what_if.allocations, citations, tuple(specialists))
 
 
+def _note(arguments: dict[str, Any], name: str, limit: int) -> str:
+    """One of the orchestrator's notes for the next turn: a string, maybe empty."""
+    value = arguments.get(name, "")
+    if not isinstance(value, str) or len(value) > limit:
+        raise ToolInputError(f"{name} must be a string of at most {limit} characters")
+    return " ".join(value.split())
+
+
+def turn_message(state: TurnState, *notes: str) -> str:
+    """The turn's own message to the orchestrator (or the single agent): the brief, fresh this
+    turn, then the household's message with who wrote it, then code's notes. The conversation so
+    far comes before it, as chat messages (`state.history`)."""
+    writer = state.inputs.writer
+    number = len(state.inputs.earlier) + 1
+    return (
+        state.brief.text
+        + "\n"
+        + new_message(writer[0] if writer else None, state.message, number, MESSAGE_CHARS)
+        + "".join(notes)
+    )
+
+
 def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconciler) -> Tool:
     async def submit_answer(arguments: dict[str, Any]) -> ToolResult:
         reply = _text(arguments, "reply", MAX_REPLY)
@@ -221,9 +249,15 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
                 "this turn is a replan: say why the new plan is what it is in why, naming the "
                 "changes, preferences and decisions it rests on"
             )
+        topic = _note(arguments, "topic", TOPIC_CHARS)
+        asks = _note(arguments, "asks", ASKS_CHARS)
         texts: list[tuple[Subject, str, str]] = [("reply", "the reply", reply)]
         if why:
             texts.append(("reply", "the why", why))
+        if topic:
+            texts.append(("reply", "the topic", topic))
+        if asks:
+            texts.append(("reply", "the question asked", asks))
         for o in options:
             texts.append(("recommendation", f"option {o.label!r}'s label", o.label))
             texts.append(("recommendation", f"option {o.label!r}'s summary", o.summary))
@@ -238,6 +272,8 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
             resolution,
             checks,
             why or None,
+            topic or None,
+            asks or None,
         )
         failed = [c for c in checks if not c.ok]
         if failed and PATH not in state.regenerated:
@@ -283,6 +319,16 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
                         "type": "string",
                         "description": 'In a replan, why the new plan is what it is; else ""',
                     },
+                    "topic": {
+                        "type": "string",
+                        "description": "What the conversation is about now, in a few words "
+                        '(for the next turn); "" for a greeting',
+                    },
+                    "asks": {
+                        "type": "string",
+                        "description": "The question your reply asks the household and waits "
+                        'on, word for word; "" if none',
+                    },
                 }
             ),
         ),
@@ -299,16 +345,14 @@ async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState
     tools = [
         *read_tools(state),
         decisions_tool(state),
+        turns_tool(state),
         reconciler.split_tool(what_if_tool(state, PATH)),
         *(_ask_tool(manager, turn, state, s, asked) for s in SPECIALISTS),
         proposal_tool(state),
         answer_tool(state, asked, reconciler),
     ]
-    user = (
-        "The household's message: "
-        + data(state.message, limit=MESSAGE_CHARS, source="household")
-        + "\n\nYour own what-ifs are named orch-W1, orch-W2 and so on."
-        + replan_note(state)
+    user = turn_message(
+        state, "\n\nYour own what-ifs are named orch-W1, orch-W2 and so on.", replan_note(state)
     )
     run = await run_agent(
         manager,
@@ -316,9 +360,10 @@ async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState
         agent="orchestrator",
         path=PATH,
         tier="strong",
-        system=system_prompt("orchestrator", state.brief),
+        system=role_prompt("orchestrator"),
         user=user,
         tools=tools,
+        history=state.history.messages if state.history is not None else (),
         max_output_tokens=manager.settings.orchestrator_max_output_tokens,
         max_tool_calls=MAX_TOOL_CALLS,
         between_rounds=reconciler.after_round,

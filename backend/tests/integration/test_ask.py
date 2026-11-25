@@ -97,7 +97,15 @@ async def test_ask_records_and_the_command_replays(
         ("reconciliation", "pass", True),
     ]
 
-    # The command answers the same turn from the recording, with no model and no Meko.
+    # The command answers the same turn from the recording, with no model and no Meko. On this
+    # database the recorded session would now be an earlier session, recapped in the new one's
+    # brief, so it is set aside first: the command then starts from what the recording saw.
+    async with migrated.begin() as conn:
+        for table in ("turn_context", "session_turn"):
+            await conn.execute(
+                text(f"DELETE FROM {table} WHERE session_id = :s"),  # noqa: S608 (a constant)
+                {"s": asked.session_id},
+            )
     monkeypatch.setenv("KAKO_DATABASE_URL", test_database_url)
     monkeypatch.setenv("KAKO_MODEL_MODE", "replay")
     monkeypatch.setenv("KAKO_RECORDED_RESPONSES", str(path))

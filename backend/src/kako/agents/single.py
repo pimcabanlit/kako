@@ -2,9 +2,10 @@
 
 Kako answers with an orchestrator and four specialists (`agents.orchestrator`). To show whether that
 earns its cost, the agent test set also runs against this baseline: one agent on the strong
-deployment, with the same brief, the same read tools, one Meko search, `run_what_if` and the same
-`submit_answer`, so its options pass the same checks in code (one what-if each, within the surplus,
-cited with a figure of it and another source) and every text goes through the same number check.
+deployment, with the same conversation and brief, the same read tools (`read_turns` too), one Meko
+search, `run_what_if` and the same `submit_answer`, so its options pass the same checks in code (one
+what-if each, within the surplus, cited with a figure of it and another source) and every text goes
+through the same number check.
 What it lacks is the split of work: no specialist roles, no proposals and so no reconciliation.
 
 It is not used in a household's session; `kako test-set --architecture single` runs it.
@@ -15,7 +16,6 @@ from __future__ import annotations
 from typing import Final
 
 from kako.agents.answers import TurnAnswer
-from kako.agents.brief import data
 from kako.agents.model_manager import ModelManager
 from kako.agents.numbers import check_texts
 from kako.agents.orchestrator import (
@@ -23,18 +23,19 @@ from kako.agents.orchestrator import (
     OrchestratorError,
     answer_tool,
     replan_note,
+    turn_message,
 )
 from kako.agents.proposing import proposal_tool
 from kako.agents.reconciling import Reconciler
-from kako.agents.specialists import system_prompt
+from kako.agents.specialists import role_prompt
 from kako.agents.tool_loop import run_agent
 from kako.agents.tools import (
-    MESSAGE_CHARS,
     ORCHESTRATOR,
     TurnState,
     decisions_tool,
     read_tools,
     search_tool,
+    turns_tool,
     what_if_tool,
 )
 from kako.agents.turn import TurnContext
@@ -53,25 +54,23 @@ async def answer_alone(manager: ModelManager, turn: TurnContext, state: TurnStat
     tools = [
         *read_tools(state, PATH),
         decisions_tool(state),
+        turns_tool(state),
         search_tool(state, PATH, "kako:orchestrator"),
         what_if_tool(state, PATH),
         proposal_tool(state),
         answer_tool(state, asked, reconciler),
     ]
-    user = (
-        "The household's message: "
-        + data(state.message, limit=MESSAGE_CHARS, source="household")
-        + replan_note(state)
-    )
+    user = turn_message(state, replan_note(state))
     run = await run_agent(
         manager,
         turn,
         agent="orchestrator",
         path=PATH,
         tier="strong",
-        system=system_prompt("single", state.brief),
+        system=role_prompt("single"),
         user=user,
         tools=tools,
+        history=state.history.messages if state.history is not None else (),
         max_output_tokens=manager.settings.orchestrator_max_output_tokens,
         max_tool_calls=MAX_TOOL_CALLS,
     )

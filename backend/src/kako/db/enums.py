@@ -84,6 +84,7 @@ ENUMS: Final[dict[tuple[str, str], tuple[str, ...]]] = {
         "life_event",
         "proposal",
         "context_gap",
+        "session",
     ),
     ("meko_link", "meko_kind"): (
         "memory",
