@@ -46,7 +46,7 @@ from kako.evals.results import (
 )
 from kako.health import safe_error
 from kako.meko.adapter import DatapackMetrics
-from kako.meko.client import MekoError
+from kako.meko.client import MekoError, MekoUnreachable
 from kako.metrics.turns import Spread, TurnFigures, dollars, seconds, share, spread, whole
 
 router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
@@ -483,6 +483,12 @@ async def read_meko_metrics(request: Request, household_id: uuid.UUID | None = N
                 )
                 services.conversations[key] = conversation_id
             found: DatapackMetrics = await meko.datapack_metrics(conversation_id, agent_id=AGENT)
+    except MekoUnreachable:
+        # Not an error in Meko: nothing runs at its address (as on a laptop without Meko).
+        services.conversations.pop(key, None)
+        raise HTTPException(
+            503, "Meko isn't running here, so its own figures can't be shown"
+        ) from None
     except MekoError as exc:
         services.conversations.pop(key, None)  # made again next time, in case it is gone
         raise HTTPException(502, f"Meko: {safe_error(exc)}") from None

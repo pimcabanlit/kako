@@ -48,6 +48,7 @@ class EventOut(_Out):
     changes: list[ChangeOut]
     ref: uuid.UUID | None
     revisit: bool
+    by: str | None  # who approved it, or for a decision who decided
 
 
 class ValueOut(_Out):
@@ -91,6 +92,9 @@ class OptionOut(_Out):
 
 class RestsOnOut(_Out):
     title: str
+    thing: str
+    kind: str
+    words: str
     value: str
     valid_from: date
     moved: bool

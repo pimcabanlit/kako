@@ -49,6 +49,7 @@ from kako.planning.timeline import (
     things_of,
 )
 from kako.planning.why import ChangedFact, changed_fact, fact_title
+from kako.upkeep.sentences import PHRASES
 
 HOUSEHOLD = cast(Table, Household.__table__)
 LIFE_EVENT = cast(Table, LifeEvent.__table__)
@@ -73,7 +74,10 @@ class OptionView:
 
 @dataclass(frozen=True)
 class RestsOn:
-    title: str
+    title: str  # "Mara's salary (take-home pay a month)"
+    thing: str  # what it is about: "Mara's salary", or "The household" for its own rules
+    kind: str  # income, expense, debt, account, goal, household
+    words: str  # what the value is: "take-home pay a month"
     value: str
     valid_from: date
     moved: bool  # replaced or corrected since
@@ -233,10 +237,9 @@ async def read_decisions(conn: AsyncConnection, household_id: uuid.UUID) -> Deci
                     for o in sorted(mine, key=lambda o: (o["id"] != chosen_id, str(o["label"])))
                 ),
                 rests_on=tuple(
-                    RestsOn(
-                        title=fact_title(f, by_entity.get(f.entity_id) if f.entity_id else None),
-                        value=fact_value(f),
-                        valid_from=f.valid_from,
+                    _rests_on(
+                        f,
+                        by_entity.get(f.entity_id) if f.entity_id else None,
                         moved=f.id in changed_ids,
                     )
                     for f in rests
@@ -247,13 +250,25 @@ async def read_decisions(conn: AsyncConnection, household_id: uuid.UUID) -> Deci
     return Decisions(as_of, tuple(out))
 
 
+def _rests_on(fact: FactRow, entity: EntityRow | None, *, moved: bool) -> RestsOn:
+    return RestsOn(
+        title=fact_title(fact, entity),
+        thing=entity.name if entity is not None else "The household",
+        kind=entity.kind if entity is not None else "household",
+        words=PHRASES.get(fact.attribute, fact.attribute),
+        value=fact_value(fact),
+        valid_from=fact.valid_from,
+        moved=moved,
+    )
+
+
 async def read_timeline(conn: AsyncConnection, household_id: uuid.UUID) -> Timeline:
     """The household's story: what happened, newest first, and each thing's values over time."""
     as_of, zone = await _household(conn, household_id)
     entities: list[EntityRow] = await load_entities(conn, household_id)
     facts: list[FactRow] = await load_facts(conn, household_id)
     found = await provenance(conn, facts)
-    sources = {k: Source(v.source, v.shared_on) for k, v in found.items()}
+    sources = {k: Source(v.source, v.shared_on, v.approved_by) for k, v in found.items()}
 
     life_rows = list(
         (
@@ -291,7 +306,12 @@ async def read_timeline(conn: AsyncConnection, household_id: uuid.UUID) -> Timel
             said += f", approved by {who.approved_by} on {_day(who.approved_at, zone)}"
         life_events.append(
             LifeEventIn(
-                r["id"], r["kind"], r["description"], r["occurs_on"], told.get(r["id"], said)
+                r["id"],
+                r["kind"],
+                r["description"],
+                r["occurs_on"],
+                told.get(r["id"], said),
+                who.approved_by if who else None,
             )
         )
 

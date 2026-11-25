@@ -5,11 +5,16 @@ import type { ReactNode } from "react";
 
 import { useShell } from "@/components/app-shell";
 
-/** The bar above the conversation: on a phone, the button that opens the sessions. */
-export function TopBar({ children }: { children?: ReactNode }) {
+/** The bar above the conversation: on a phone, the button that opens the sessions. A screen with
+ * its own page heading keeps the bar for phones only (`phoneOnly`). */
+export function TopBar({ children, phoneOnly = false }: { children?: ReactNode; phoneOnly?: boolean }) {
   const { openDrawer } = useShell();
   return (
-    <header className="flex min-h-14 items-center gap-2 border-b border-line/70 px-3 md:px-6">
+    <header
+      className={`flex min-h-14 items-center gap-2 border-b border-line/70 px-3 md:px-6 ${
+        phoneOnly ? "md:hidden" : ""
+      }`}
+    >
       <button
         type="button"
         onClick={openDrawer}

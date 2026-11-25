@@ -76,7 +76,12 @@ def test_each_thing_over_time(house: Villanueva) -> None:
 def _events(house: Villanueva, as_of: date, **more: object) -> list:  # type: ignore[type-arg]
     job = next(f.life_event_id for f in house.facts if f.life_event_id is not None)
     assert job is not None
-    sources = {f.id: Source(f"source of {f.source_kind}") for f in house.facts}
+    sources = {
+        f.id: Source(
+            f"source of {f.source_kind}", approved_by=None if f.source_kind == "seed" else "Jun"
+        )
+        for f in house.facts
+    }
     return list(
         events_of(
             as_of=as_of,
@@ -86,7 +91,7 @@ def _events(house: Villanueva, as_of: date, **more: object) -> list:  # type: ig
             sources=sources,
             life_events=[
                 LifeEventIn(
-                    job, "new_job", "Mara got a new job", DEC_1, "Said by Mara in Session 4"
+                    job, "new_job", "Mara got a new job", DEC_1, "Said by Mara in Session 4", "Mara"
                 )
             ],
             **more,  # type: ignore[arg-type]
@@ -99,7 +104,12 @@ def test_what_happened_newest_first_with_the_life_event_and_its_facts(house: Vil
     days = [e.on for e in events]
     assert days == sorted(days, reverse=True)
     job = next(e for e in events if e.kind == "life_event")
-    assert (job.title, job.detail, job.on) == ("Mara got a new job", "New job", DEC_1)
+    assert (job.title, job.detail, job.on, job.by) == (
+        "Mara got a new job",
+        "New job",
+        DEC_1,
+        "Mara",
+    )
     assert [(c.label, c.title, c.before, c.after, c.from_day) for c in job.changes] == [
         (
             "replaced",
@@ -126,6 +136,7 @@ def test_what_happened_newest_first_with_the_life_event_and_its_facts(house: Vil
         "Emergency fund (balance)",
     ]
     assert {c.label for c in nov[0].changes} == {"replaced"}
+    assert nov[0].by == "Jun"  # who approved the batch, from its facts' source
     allocations = [e for e in events if e.title == "The plan's amounts a month"]
     assert allocations
     assert all(c.label == "the plan's amount" for e in allocations for c in e.changes)
@@ -133,6 +144,7 @@ def test_what_happened_newest_first_with_the_life_event_and_its_facts(house: Vil
     assert start.kind == "start"
     assert start.on == date(2026, 8, 1)  # the seed, recorded on the household's first day
     assert start.detail == "25 facts, the earliest true from Mar 1, 2026"
+    assert start.by is None
     assert not any(e.ahead for e in events)
 
 

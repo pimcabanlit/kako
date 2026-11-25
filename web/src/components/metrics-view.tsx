@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, MessageSquare } from "lucide-react";
+import { Gauge, Info, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 
@@ -9,7 +9,7 @@ import { Disclaimer } from "@/components/composer";
 import { Failed, failure } from "@/components/plan-view";
 import { HistorySkeleton } from "@/components/timeline-view";
 import { TopBar } from "@/components/top-bar";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import {
   GROUP_WORDS,
   allowanceWords,
@@ -29,7 +29,7 @@ import { plural } from "@/lib/working";
  * number check, the test set against one agent, what dreaming learned, and the Meko calls left. */
 export function MetricsView() {
   const [view, setView] = useState<Loaded<Metrics>>({ kind: "loading" });
-  const [meko, setMeko] = useState<Loaded<DatapackMetrics>>({ kind: "loading" });
+  const [meko, setMeko] = useState<MekoLoaded>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -45,7 +45,10 @@ export function MetricsView() {
       (value) => setMeko({ kind: "ready", value }),
       (error: unknown) => {
         if (controller.signal.aborted) return;
-        setMeko({ kind: "error", message: failure(error, "Meko's metrics") });
+        // 503: Meko isn't running here or isn't set up. A note, not an error.
+        if (error instanceof ApiError && error.status === 503)
+          setMeko({ kind: "absent", message: error.message });
+        else setMeko({ kind: "error", message: failure(error, "Meko's metrics") });
       },
     );
     return () => controller.abort();
@@ -261,7 +264,10 @@ function Turns({ groups }: { groups: TurnGroup[] }) {
   );
 }
 
-function Brief({ metrics, meko }: { metrics: Metrics; meko: Loaded<DatapackMetrics> }) {
+/** Meko's own metrics: read, being read, not there to ask, or failed. */
+type MekoLoaded = Loaded<DatapackMetrics> | { kind: "absent"; message: string };
+
+function Brief({ metrics, meko }: { metrics: Metrics; meko: MekoLoaded }) {
   const household = metrics.turns.find((g) => g.group === "household");
   const brief = household?.brief_tokens ?? null;
   return (
@@ -289,6 +295,15 @@ function Brief({ metrics, meko }: { metrics: Metrics; meko: Loaded<DatapackMetri
         )}
         {meko.kind === "loading" && (
           <div className="skeleton h-[92px] sm:col-span-2" aria-label="Asking Meko for its metrics" />
+        )}
+        {meko.kind === "absent" && (
+          <div className="panel text-[13.5px] sm:col-span-2">
+            <p className="flex items-start gap-2">
+              <Info className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+              <span>{meko.message}.</span>
+            </p>
+            <p className="mt-1 pl-6 text-muted">The rest of this page comes from Kako&rsquo;s own rows.</p>
+          </div>
         )}
         {meko.kind === "error" && (
           <div role="alert" className="panel edge edge-rose text-[13.5px] sm:col-span-2">

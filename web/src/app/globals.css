@@ -316,6 +316,159 @@ body {
     color: var(--muted);
   }
 
+  /* A details sheet (a native <dialog>, opened modal): from the right on a wide screen, from the
+     bottom on a phone. */
+  .sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: 88dvh;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 22px 22px 0 0;
+    background: var(--surface);
+    color: var(--fg);
+    box-shadow: var(--shadow);
+  }
+  .sheet::backdrop {
+    background: rgba(4, 8, 6, 0.55);
+    backdrop-filter: blur(2px);
+  }
+  @media (min-width: 768px) {
+    .sheet {
+      inset: 0 0 0 auto;
+      width: min(520px, 100vw);
+      height: 100dvh;
+      max-height: none;
+      border-bottom: 1px solid var(--line);
+      border-right: 0;
+      border-radius: 22px 0 0 22px;
+    }
+  }
+
+  /* The decisions shelf: each decision a book. A cover is a coloured object, the same in both
+     themes; its colour and pattern stand for the session it was made in and mean nothing else. */
+  .book-cover {
+    position: relative;
+    color: #f2f6f3;
+    --cover-spine: linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.38) 0 12px,
+      rgba(255, 255, 255, 0.06) 12px 14px,
+      transparent 14px
+    );
+    box-shadow:
+      0 24px 40px -18px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  .cover-0 {
+    --cover-ink: #ccfbf1;
+    --cover-icon: #99f6e4;
+    background:
+      var(--cover-spine),
+      radial-gradient(rgba(255, 255, 255, 0.08) 1.3px, transparent 1.8px) 0 0 / 14px 14px,
+      #0f4c47;
+  }
+  .cover-1 {
+    --cover-ink: #d1fae5;
+    --cover-icon: #a7f3d0;
+    background:
+      var(--cover-spine),
+      repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 6px, transparent 6px 14px),
+      #173f2c;
+  }
+  .cover-2 {
+    --cover-ink: #fef3c7;
+    --cover-icon: #fde68a;
+    background:
+      var(--cover-spine),
+      linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px) 0 0 / 18px 18px,
+      linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px) 0 0 / 18px 18px,
+      #3b2a15;
+  }
+  /* The gold ribbon on a book to revisit. Bright gold in both themes: it sits on the cover. */
+  .cover-ribbon {
+    position: absolute;
+    top: -8px;
+    right: 22px;
+    width: 20px;
+    height: 50px;
+    background: #fcd34d;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  }
+  .shelf-plank {
+    height: 14px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, var(--line-strong), var(--raised));
+    box-shadow:
+      0 18px 30px -14px rgba(0, 0, 0, 0.6),
+      0 -1px 0 color-mix(in srgb, var(--emerald) 40%, transparent);
+  }
+  /* An open book's right-hand page: a faint fold along the spine on a wide screen. */
+  .book-page {
+    background: var(--surface);
+  }
+  @media (min-width: 768px) {
+    .book-page {
+      background:
+        linear-gradient(90deg, color-mix(in srgb, #000 22%, transparent), transparent 36px),
+        var(--surface);
+    }
+  }
+  /* An open book's bookmarks: ribbons that hang from the top of its page, on one row. */
+  .ribbon {
+    display: flex;
+    flex: none;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 7px;
+    height: 54px;
+    padding: 14px 16px 0;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--line);
+    color: var(--fg);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%);
+  }
+  .ribbon:hover {
+    filter: brightness(1.12);
+  }
+  .ribbon:focus-visible {
+    outline: none;
+    filter: brightness(1.2);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  .ribbon[aria-selected="true"] {
+    height: 70px;
+    color: var(--on-accent);
+  }
+  .ribbon-decision[aria-selected="true"] {
+    background: var(--emerald);
+  }
+  .ribbon-revisit[aria-selected="true"] {
+    background: var(--gold);
+  }
+  .ribbon-facts[aria-selected="true"] {
+    background: var(--teal);
+  }
+  @media (min-width: 640px) {
+    .cover-ribbon {
+      width: 22px;
+      height: 64px;
+    }
+    .ribbon {
+      min-width: 150px;
+      padding: 16px 22px 0;
+      font-size: 13.5px;
+    }
+  }
+
   .skeleton {
     border-radius: 10px;
     background: linear-gradient(90deg, var(--raised), var(--line), var(--raised));
@@ -349,6 +502,33 @@ body {
   }
   .pulse-dot {
     animation: pulse 1.2s ease-in-out infinite;
+  }
+  .book-lift {
+    transition: transform 160ms ease;
+  }
+  .book-lift:hover,
+  .book-lift:focus-visible {
+    transform: translateY(-8px);
+  }
+  .sheet[open] {
+    animation: sheet-up 0.22s ease-out;
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+  @keyframes sheet-in {
+    from {
+      transform: translateX(32px);
+      opacity: 0;
+    }
+  }
+  @media (min-width: 768px) {
+    .sheet[open] {
+      animation-name: sheet-in;
+    }
   }
   @keyframes pulse {
     50% {
