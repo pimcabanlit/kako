@@ -7,12 +7,13 @@ promoted preference (until Phase 4, the approved preference from the fact store;
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from kako.agents.brief_store import BriefStoreError, gather_brief
 from kako.db.meko_log import DbCallLog
@@ -232,3 +233,107 @@ async def test_the_search_stays_in_the_household(
                 search_limit=50,
             )
     assert meko.calls == []
+
+
+async def _session_with_turns(
+    conn: AsyncConnection,
+    household_id: uuid.UUID,
+    turns: list[tuple[uuid.UUID | None, str, str]],
+) -> uuid.UUID:
+    """A session of the household with its turns kept as shown: (writer, message, reply)."""
+    session_id = uuid.uuid4()
+    await conn.execute(
+        text(
+            "INSERT INTO session (id, household_id, meko_conversation_id, title, household_date, "
+            "started_at) VALUES (:id, :h, :c, 'Trying', :d, :t)"
+        ),
+        {
+            "id": session_id,
+            "h": household_id,
+            "c": uuid.uuid4().hex,
+            "d": DEC_1,
+            "t": datetime(2026, 12, 1, 3, tzinfo=UTC),
+        },
+    )
+    for n, (writer, message, reply) in enumerate(turns):
+        await conn.execute(
+            text(
+                "INSERT INTO session_turn (id, session_id, meko_turn_seed, said_by, message, "
+                "shown, created_at) VALUES (:id, :s, :seed, :by, :m, CAST(:shown AS jsonb), :t)"
+            ),
+            {
+                "id": uuid.uuid4(),
+                "s": session_id,
+                "seed": f"t{n + 1}",
+                "by": writer,
+                "m": message,
+                "shown": json.dumps({"reply": reply, "options": [], "changes": []}),
+                "t": datetime(2026, 12, 1, 4 + n, tzinfo=UTC),
+            },
+        )
+    return session_id
+
+
+async def test_the_writer_and_the_session_so_far_stay_in_the_household(
+    migrated: AsyncEngine,
+) -> None:
+    """Pim's sandbox, Nov 25. Who wrote the message must be a person of this household, and a
+    session's earlier turns are read from Postgres (Meko on or off), only from this household."""
+    household_id = await _demo(migrated)
+    async with migrated.begin() as conn:
+        jun = (
+            await conn.execute(
+                text("SELECT id FROM person WHERE household_id = :h AND display_name = 'Jun'"),
+                {"h": household_id},
+            )
+        ).scalar_one()
+        ours = await _session_with_turns(
+            conn,
+            household_id,
+            [
+                (jun, "what if i lose my job", "Do you mean Jun's salary or Mara's?"),
+                (jun, "Jun", "Hi Jun."),
+            ],
+        )
+        other = uuid.uuid4()
+        await conn.execute(
+            text(
+                "INSERT INTO household (id, name, currency, timezone, as_of_date, created_at) "
+                "VALUES (:id, 'Another household', 'PHP', 'Asia/Manila', :d, now())"
+            ),
+            {"id": other, "d": DEC_1},
+        )
+        stranger = uuid.uuid4()
+        await conn.execute(
+            text(
+                "INSERT INTO person (id, household_id, display_name, role) "
+                "VALUES (:id, :h, 'Ana', 'adult')"
+            ),
+            {"id": stranger, "h": other},
+        )
+        theirs = await _session_with_turns(conn, other, [(stranger, "their words", "ok")])
+
+    async def brief(**extra: object) -> str:
+        async with migrated.connect() as conn:
+            made, _ = await gather_brief(
+                conn,
+                None,
+                household_id=household_id,
+                on=DEC_1,
+                known_at=None,
+                message="just give me the simulation",
+                conversation_id=None,
+                budget=3_000,
+                **extra,  # type: ignore[arg-type]
+            )
+        return made.text
+
+    made = await brief(session_id=ours, speaker=jun)
+    assert "## Who is writing\nJun (adult) wrote this turn's message." in made
+    first = made.index('- Jun wrote: <data source="household">what if i lose my job</data>')
+    assert first < made.index('- Jun wrote: <data source="household">Jun</data>')
+    assert "  Kako replied: <data source=\"kako\">Do you mean Jun's salary or Mara's?" in made
+    assert "## Who is writing" not in await brief()
+    assert "their words" not in await brief(session_id=theirs)
+    with pytest.raises(BriefStoreError, match="isn't a person of this household"):
+        await brief(speaker=stranger)

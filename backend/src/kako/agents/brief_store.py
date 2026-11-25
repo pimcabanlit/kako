@@ -8,13 +8,17 @@ memory found by the search is marked approved only when `meko_link` ties it to o
 household's facts or decisions; Meko's own metadata can be written by any client of the datapack,
 so it never decides that. The search runs only in a conversation of this household's sessions, on
 the household's datapack. Figures never come from Meko.
+
+Who wrote the message and the session's earlier turns come from Postgres (`person`, and
+`session_turn` as the household saw each turn), so a turn follows its conversation with Meko on or
+off, and a recorded session replays the same way on any database.
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import cast
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Table, Text, and_, or_, select
@@ -25,6 +29,7 @@ from kako.agents.brief import (
     Brief,
     BriefInputs,
     DecisionView,
+    EarlierTurn,
     LifeEventView,
     OptionView,
     ProposalView,
@@ -43,6 +48,7 @@ from kako.db.models import (
     Person,
     Proposal,
     Session,
+    SessionTurn,
 )
 from kako.engine import Run, compute
 from kako.meko.adapter import Context, Meko
@@ -53,6 +59,7 @@ PROPOSAL = cast(Table, Proposal.__table__)
 DECISION = cast(Table, Decision.__table__)
 OPTION = cast(Table, DecisionOption.__table__)
 SESSION = cast(Table, Session.__table__)
+SESSION_TURN = cast(Table, SessionTurn.__table__)
 MEKO_LINK = cast(Table, MekoLink.__table__)
 LIFE_EVENT = cast(Table, LifeEvent.__table__)
 MAX_LIFE_EVENTS = 5  # the most recent ones the brief shows
@@ -60,10 +67,45 @@ FACT = cast(Table, Fact.__table__)
 BUDGET_RANGE = range(500, 20_001)  # KAKO_BRIEF_TOKEN_BUDGET's bounds
 SEARCH_LIMIT_RANGE = range(0, 11)  # KAKO_BRIEF_SEARCH_LIMIT's bounds
 SEARCH_AGENT = "kako:orchestrator"  # the brief's search is the orchestrator's, once per turn
+EARLIER_LIMIT = 20  # the newest earlier turns read; the brief shows at most EARLIER_TURNS of them
 
 
 class BriefStoreError(Exception):
     """The household to brief on doesn't exist."""
+
+
+def _shown_texts(shown: dict[str, Any]) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    """A kept turn's reply, its options and the changes it filed, as the household saw them."""
+    reply = shown.get("reply")
+    options = tuple(
+        f"{o.get('label', '')}: {o.get('summary', '')}"
+        for o in shown.get("options") or ()
+        if isinstance(o, dict)
+    )
+    changes = tuple(
+        str(c.get("shown", "")) for c in shown.get("changes") or () if isinstance(c, dict)
+    )
+    return (reply if isinstance(reply, str) else ""), options, changes
+
+
+async def _earlier_turns(
+    conn: AsyncConnection, household_id: uuid.UUID, session_id: uuid.UUID
+) -> tuple[EarlierTurn, ...]:
+    """This session's kept turns, oldest first: the ones before the turn being answered, which
+    is kept only once it is answered. Only a session of this household."""
+    rows = await conn.execute(
+        select(SESSION_TURN.c.message, SESSION_TURN.c.shown, PERSON.c.display_name)
+        .join(SESSION, SESSION.c.id == SESSION_TURN.c.session_id)
+        .outerjoin(PERSON, PERSON.c.id == SESSION_TURN.c.said_by)
+        .where(SESSION_TURN.c.session_id == session_id, SESSION.c.household_id == household_id)
+        .order_by(SESSION_TURN.c.created_at.desc(), SESSION_TURN.c.meko_turn_seed.desc())
+        .limit(EARLIER_LIMIT)
+    )
+    turns = []
+    for row in rows:
+        reply, options, changes = _shown_texts(row.shown if isinstance(row.shown, dict) else {})
+        turns.append(EarlierTurn(row.display_name, row.message, reply, options, changes))
+    return tuple(reversed(turns))
 
 
 async def _approvals(
@@ -306,12 +348,16 @@ async def gather_brief(
     run: Run | None = None,
     changes: SessionChanges | None = None,
     session_on: date | None = None,
+    session_id: uuid.UUID | None = None,
+    speaker: uuid.UUID | None = None,
 ) -> tuple[Brief, BriefInputs]:
     """The brief for one turn, and what it was rendered from (the snapshot, the engine run it
     describes, the decisions), which the agents' tools read. At most one Meko call: a
     `context_search` on the household's message (none when there is no message, no Meko, or a
     search limit of 0). With `changes` approved in the session (dated `session_on`), the brief
-    says what they changed against the plan the household last decided on (`agents.replan`)."""
+    says what they changed against the plan the household last decided on (`agents.replan`).
+    With `session_id`, the brief shows the session's earlier turns; with `speaker` (a person of
+    this household), who wrote the message."""
     if budget not in BUDGET_RANGE or search_limit not in SEARCH_LIMIT_RANGE:
         raise ValueError("the brief's budget or search limit is out of its settings' bounds")
     household = (
@@ -323,14 +369,18 @@ async def gather_brief(
     ).one_or_none()
     if household is None:
         raise BriefStoreError(f"household {household_id} doesn't exist")
-    people = tuple(
-        (r.display_name, r.role)
+    members = [
+        r
         for r in await conn.execute(
-            select(PERSON.c.display_name, PERSON.c.role)
+            select(PERSON.c.id, PERSON.c.display_name, PERSON.c.role)
             .where(PERSON.c.household_id == household_id)
             .order_by(PERSON.c.role, PERSON.c.display_name)
         )
-    )
+    ]
+    people = tuple((r.display_name, r.role) for r in members)
+    writer = next(((r.display_name, r.role) for r in members if r.id == speaker), None)
+    if speaker is not None and writer is None:
+        raise BriefStoreError("the message's writer isn't a person of this household")
     entities = await load_entities(conn, household_id)
     snap = await snapshot(conn, household_id, on, known_at)
     if run is None:
@@ -380,6 +430,10 @@ async def gather_brief(
         life_events=await _life_events(conn, household_id, known_at),
         replan=replan,
         message=message,
+        writer=writer,
+        earlier=(
+            await _earlier_turns(conn, household_id, session_id) if session_id is not None else ()
+        ),
         context=context,
         approved_memories=approved,
     )

@@ -192,7 +192,10 @@ async def _people(engine: AsyncEngine, household_id: uuid.UUID) -> dict[str, uui
 
 
 async def _session_4(
-    migrated: AsyncEngine, make_settings: MakeSettings, script: dict[str, Any]
+    migrated: AsyncEngine,
+    make_settings: MakeSettings,
+    script: dict[str, Any],
+    backend: ScriptedBackend | None = None,
 ) -> tuple[Started, Asked, Asked]:
     async with migrated.connect() as conn:
         household_id = await load_demo(
@@ -201,7 +204,7 @@ async def _session_4(
         await conn.commit()
     people = await _people(migrated, household_id)
     settings = make_settings(model_strong="kako-strong", model_fast="kako-fast")
-    backend = ScriptedBackend(script)
+    backend = backend or ScriptedBackend(script)
     session = await start_session(
         migrated, None, household_id=household_id, on=NOV_20, title="Session 4"
     )
@@ -354,6 +357,36 @@ async def test_session_4_proposes_the_new_job_then_replans_in_three_parts(
         str(r.decision_id) for r in replan.revisit
     ]
     assert kept.metadata["kako_replan_since_decision_id"] == str(replan.since_decision)
+
+
+async def test_each_turn_knows_its_writer_and_the_session_so_far(
+    migrated: AsyncEngine, make_settings: MakeSettings
+) -> None:
+    """Pim's sandbox, Nov 25: "Writing as Jun" was met with "Jun's or Mara's?", and a turn
+    answering Kako's question with a greeting. Each turn's brief now names who wrote the message,
+    and from the second turn on carries the session so far, from Postgres (no Meko here)."""
+    script = {**turn_1(), **turn_2()}
+    backend = ScriptedBackend(script)
+    _, told, _ = await _session_4(migrated, make_settings, script, backend)
+
+    def brief(key: str) -> str:
+        request = next(r for k, _, r in backend.requests if k == key)
+        return request.messages[0].content or ""
+
+    first, second = brief(f"{T1}/orchestrator/1"), brief(f"{T2}/orchestrator/1")
+    assert "## Who is writing\nMara (adult) wrote this turn's message." in first
+    assert "## This session so far" not in first  # the session's first turn
+    assert "## Who is writing\nJun (adult) wrote this turn's message." in second
+    so_far = second[second.index("## This session so far") : second.index("## From Meko")]
+    assert f'- Mara wrote: <data source="household">{NEWS}</data>' in so_far
+    assert '  Kako replied: <data source="kako">' + told.answer.reply[:40] in so_far
+    assert '  Filed for a yes: <data source="kako">Life event (new_job) on Dec 1, 2026' in so_far
+    # Every agent of the turn, the specialists too, starts from the same brief.
+    assert all(
+        "## This session so far" in (r.messages[0].content or "")
+        for k, _, r in backend.requests
+        if k.startswith(f"{T2}/")
+    )
 
 
 async def test_session_4_through_the_api(

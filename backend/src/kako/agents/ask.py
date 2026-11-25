@@ -213,6 +213,8 @@ async def run_turn(
             search_limit=settings.brief_search_limit,
             changes=changes,
             session_on=session.on,
+            session_id=session.session_id,
+            speaker=speaker,
         )
     before_run_id = None
     async with engine.connect() as conn:

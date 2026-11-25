@@ -4,7 +4,10 @@ Code builds it, within a token budget (`KAKO_BRIEF_TOKEN_BUDGET`, about 3,000): 
 entities with their refs, the engine's key figures, the approved preferences and constraints, the
 other facts in the snapshot, the active decisions with their reasons, the pending proposals, and
 the results of **one** Meko `context_search` on the household's message. Specialists start from it
-instead of searching on their own.
+instead of searching on their own. Two parts follow the conversation itself, read from Postgres so
+they hold with Meko on or off: who wrote this turn's message (so "I" and "my" have an owner), and
+this session so far, its last turns as the household saw them (so "Jun" or "no, just the
+simulation" answers what was asked before). Each is there only when there is something to show.
 
 Two kinds of text, kept apart:
 
@@ -24,7 +27,8 @@ Two kinds of text, kept apart:
 
 When the brief is over budget, code drops what agents can fetch again, in this order: Meko results
 (lowest ranked first), the rejected options of decisions, pending proposals past the first three,
-then the facts list (agents read facts with `get_facts`). The figures, preferences and decisions
+the session's earlier turns (the oldest first, down to the last one), then the facts list (agents
+read facts with `get_facts`). The figures, preferences and decisions
 are never dropped; if they alone are over budget, building the brief fails.
 
 `render_brief` is pure; `gather_brief` (in `kako.agents.brief_store`) reads Postgres and Meko.
@@ -57,6 +61,9 @@ QUOTE_CHARS = 400  # the most of one memory, excerpt or reason the brief keeps
 NAME_CHARS = 80  # the most of one name or label
 QUESTION_CHARS = 200
 KEPT_PROPOSALS = 3
+EARLIER_TURNS = 4  # the most of this session's earlier turns the brief shows, the newest
+EARLIER_MESSAGE_CHARS = 400  # the most of an earlier message the brief keeps
+EARLIER_REPLY_CHARS = 700  # the most of an earlier reply the brief keeps
 
 
 class BriefError(Exception):
@@ -107,6 +114,17 @@ class ProposalView:
 
 
 @dataclass(frozen=True)
+class EarlierTurn:
+    """One of this session's earlier turns, as the household saw it (`session_turn`)."""
+
+    said_by: str | None  # who wrote the message, by display name
+    message: str  # the household's words: data
+    reply: str  # Kako's reply as shown then: data
+    options: tuple[str, ...] = ()  # each option's label and summary, as shown
+    changes: tuple[str, ...] = ()  # changes it filed for a yes, in words
+
+
+@dataclass(frozen=True)
 class BriefInputs:
     household_name: str
     people: tuple[tuple[str, str], ...]  # (display name, role)
@@ -119,6 +137,8 @@ class BriefInputs:
     life_events: tuple[LifeEventView, ...] = ()  # approved, as known then, oldest first
     replan: Replan | None = None  # after a change approved in this session (`agents.replan`)
     message: str = ""
+    writer: tuple[str, str] | None = None  # who wrote the message: (display name, role)
+    earlier: tuple[EarlierTurn, ...] = ()  # this session's turns before this one, oldest first
     context: Context | None = None
     # Meko memory ids that meko_link ties to this household's facts or decisions.
     approved_memories: frozenset[str] = frozenset()
@@ -170,6 +190,7 @@ class _Parts:
     knowledge: tuple[int, ...]
     rejected_options: bool = True
     proposals: int = 1_000
+    earlier: int = EARLIER_TURNS  # how many of the newest earlier turns to show
     facts: bool = True
 
 
@@ -220,8 +241,16 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
         ", ".join(f"{plain(name)} ({plain(role)})" for name, role in inputs.people)
         or "None recorded.",
         "",
-        "## Entities (ref: name)",
     ]
+    if inputs.writer is not None:
+        name, role = plain(inputs.writer[0]), plain(inputs.writer[1])
+        lines += [
+            "## Who is writing",
+            f'{name} ({role}) wrote this turn\'s message. "I", "me" and "my" in it mean '
+            f"{name}; don't ask whose.",
+            "",
+        ]
+    lines += ["## Entities (ref: name)"]
     for entity in sorted(inputs.entities, key=lambda e: refs.by_id[e.id]):
         is_open = (entity.opened_on is None or entity.opened_on <= snap.on) and (
             entity.closed_on is None or snap.on < entity.closed_on
@@ -300,6 +329,32 @@ def _render(inputs: BriefInputs, refs: Refs, parts: _Parts) -> _Rendered:
     if len(kept) < len(inputs.proposals):
         lines.append(f"- and {len(inputs.proposals) - len(kept)} more")
 
+    shown = inputs.earlier[-parts.earlier :] if parts.earlier else ()
+    if shown:
+        lines += [
+            "",
+            "## This session so far (oldest first, as the household saw it)",
+            "The new message continues this conversation: read it as a reply to the last turn "
+            "(an answer to a question Kako asked, or more on the same topic) unless it plainly "
+            "starts something new. Figures in these replies were right then; cite today's "
+            "figures from the tools and this brief.",
+        ]
+        if len(shown) < len(inputs.earlier):
+            lines.append(f"- ({len(inputs.earlier) - len(shown)} earlier turns left out)")
+        for turn in shown:
+            who = plain(turn.said_by) if turn.said_by else "The household"
+            lines.append(
+                f"- {who} wrote: "
+                + data(turn.message, limit=EARLIER_MESSAGE_CHARS, source="household")
+            )
+            lines.append(
+                "  Kako replied: " + data(turn.reply, limit=EARLIER_REPLY_CHARS, source="kako")
+            )
+            for option in turn.options:
+                lines.append("  Option offered: " + data(option, source="kako"))
+            for change in turn.changes:
+                lines.append("  Filed for a yes: " + data(change, source="kako"))
+
     lines += ["", "## From Meko, for the household's message (cite as memory:<ref>, doc:<ref>)"]
     context = inputs.context
     memories: dict[str, str] = {}
@@ -364,8 +419,21 @@ def render_brief(inputs: BriefInputs, budget: int) -> Brief:
     steps: Sequence[tuple[_Parts, str]] = (
         (replace(parts, rejected_options=False), "the rejected options of decisions"),
         (replace(parts, rejected_options=False, proposals=KEPT_PROPOSALS), "older proposals"),
+        *(
+            (
+                replace(parts, rejected_options=False, proposals=KEPT_PROPOSALS, earlier=n),
+                "an earlier turn of the session",
+            )
+            for n in range(min(len(inputs.earlier), EARLIER_TURNS) - 1, 0, -1)
+        ),
         (
-            replace(parts, rejected_options=False, proposals=KEPT_PROPOSALS, facts=False),
+            replace(
+                parts,
+                rejected_options=False,
+                proposals=KEPT_PROPOSALS,
+                earlier=min(1, len(inputs.earlier)),
+                facts=False,
+            ),
             "the facts list (agents read facts with get_facts)",
         ),
     )
