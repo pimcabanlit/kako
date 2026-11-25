@@ -346,6 +346,7 @@ export type TimelineEvent = {
   changes: ChangedFact[];
   ref: string | null; // the decision, plan or session it opens
   revisit: boolean; // a decision whose facts have moved since
+  by: string | null; // who approved it, or for a decision who decided
 };
 
 export type ValueState = "current" | "coming" | "past" | "corrected";

@@ -48,6 +48,7 @@ class EventOut(_Out):
     changes: list[ChangeOut]
     ref: uuid.UUID | None
     revisit: bool
+    by: str | None  # who approved it, or for a decision who decided
 
 
 class ValueOut(_Out):

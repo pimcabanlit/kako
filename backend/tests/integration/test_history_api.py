@@ -96,10 +96,11 @@ async def test_the_new_job_ahead_and_the_decisions_to_revisit(
         }
     ]
     assert "approved by Mara on Nov 20, 2026" in job["source"]
+    assert job["by"] == "Mara"  # who said yes, for the line under its headline
     assert all(not e["ahead"] for e in events[1:] if e["on"] <= "2026-11-20")
     statement = next(e for e in events if e["kind"] == "change" and e["on"] == "2026-11-15")
     assert statement["title"] == "New statements"
-    assert statement["source"].startswith("From a statement, approved by ")
+    assert statement["source"].startswith(f"From a statement, approved by {statement['by']} ")
     assert {c["title"] for c in statement["changes"]} == {
         "Car loan (balance)",
         "Credit card (balance)",
@@ -108,12 +109,13 @@ async def test_the_new_job_ahead_and_the_decisions_to_revisit(
     learned = next(e for e in events if e["title"] == "Learned by dreaming")
     assert learned["on"] == "2026-10-18"
     choices = [e for e in events if e["kind"] == "decision"]
-    assert [(e["source"], e["revisit"]) for e in choices] == [
-        ("Decided by Jun in Session 3", True),
-        ("Decided by Mara in Session 2", True),
-        ("Decided by Jun in Session 1", True),
+    assert [(e["source"], e["revisit"], e["by"]) for e in choices] == [
+        ("Decided by Jun in Session 3", True, "Jun"),
+        ("Decided by Mara in Session 2", True, "Mara"),
+        ("Decided by Jun in Session 1", True, "Jun"),
     ]
     assert events[-1]["kind"] == "start"
+    assert events[-1]["by"] is None  # the starting figures: nobody approved them one by one
     assert events[-1]["on"] == "2026-08-01"
 
     # Each thing over time: her salary now, and the one coming.

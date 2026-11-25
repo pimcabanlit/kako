@@ -253,7 +253,7 @@ async def read_timeline(conn: AsyncConnection, household_id: uuid.UUID) -> Timel
     entities: list[EntityRow] = await load_entities(conn, household_id)
     facts: list[FactRow] = await load_facts(conn, household_id)
     found = await provenance(conn, facts)
-    sources = {k: Source(v.source, v.shared_on) for k, v in found.items()}
+    sources = {k: Source(v.source, v.shared_on, v.approved_by) for k, v in found.items()}
 
     life_rows = list(
         (
@@ -291,7 +291,12 @@ async def read_timeline(conn: AsyncConnection, household_id: uuid.UUID) -> Timel
             said += f", approved by {who.approved_by} on {_day(who.approved_at, zone)}"
         life_events.append(
             LifeEventIn(
-                r["id"], r["kind"], r["description"], r["occurs_on"], told.get(r["id"], said)
+                r["id"],
+                r["kind"],
+                r["description"],
+                r["occurs_on"],
+                told.get(r["id"], said),
+                who.approved_by if who else None,
             )
         )
 

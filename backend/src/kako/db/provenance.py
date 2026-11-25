@@ -41,6 +41,7 @@ class Decided:
 class Provenance:
     source: str  # "From a statement, approved by Jun on Nov 16, 2026"
     shared_on: date | None  # when it was shared with every agent in Meko
+    approved_by: str | None = None  # who said yes to it (None for a seed fact)
 
 
 def source_words(
@@ -143,6 +144,9 @@ async def provenance(conn: AsyncConnection, rows: Sequence[FactRow]) -> dict[uui
                 decided.get(fact.proposal_id, nobody) if fact.proposal_id else nobody,
             ),
             shared_on=shared[fact.id].date() if fact.id in shared else None,
+            approved_by=(
+                decided.get(fact.proposal_id, nobody).approved_by if fact.proposal_id else None
+            ),
         )
         for fact in rows
     }

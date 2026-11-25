@@ -69,6 +69,7 @@ class Source:
 
     words: str
     shared_on: date | None = None
+    approved_by: str | None = None  # who said yes to it
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ class LifeEventIn:
     description: str
     occurs_on: date
     source: str  # who told it and who approved it, in words
+    approved_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -118,6 +120,7 @@ class Event:
     changes: tuple[ChangedFact, ...] = ()
     ref: uuid.UUID | None = None  # the decision, plan or session it opens
     revisit: bool = False  # a decision whose facts have moved since
+    by: str | None = None  # who approved it, or for a decision who decided
 
 
 @dataclass(frozen=True)
@@ -226,6 +229,7 @@ def _fact_events(
                 _shared(rows, sources),
                 source or None,
                 tuple(changed_fact(_change(f, by_id), by_entity) for f in rows),
+                by=sources.get(rows[0].id, Source("")).approved_by,
             )
         )
     for fact in facts:
@@ -251,6 +255,7 @@ def _fact_events(
                         from_day=None,
                     ),
                 ),
+                by=sources.get(fact.id, Source("")).approved_by,
             )
         )
     return events
@@ -292,6 +297,7 @@ def events_of(
                 LIFE_EVENTS.get(event.kind, event.kind.replace("_", " ")),
                 event.source,
                 tuple(changed_fact(_change(f, by_id), by_entity) for f in caused),
+                by=event.approved_by,
             )
         )
     for d in decisions:
@@ -306,6 +312,7 @@ def events_of(
                 by,
                 ref=d.id,
                 revisit=d.id in to_revisit,
+                by=d.decided_by,
             )
         )
     for p in plans:
