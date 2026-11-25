@@ -186,7 +186,7 @@ uv run pytest                             # unit tests; integration tests skip u
 KAKO_TEST_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/kako_test \
 KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against local Postgres and local Meko (never Meko Cloud)
 uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
-uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback only: no sign-in yet); /api/v1/health, /api/v1/sessions (turns, trace), /api/v1/plans (each with its why), /api/v1/timeline, /api/v1/decisions, /api/v1/metrics (and /metrics/meko), docs at /api/v1/docs
+uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback only: no sign-in yet); /api/v1/health, /api/v1/sessions (turns, trace), /api/v1/plans (each with its why), /api/v1/timeline, /api/v1/decisions, /api/v1/metrics (and /metrics/meko), /api/v1/money, docs at /api/v1/docs
 uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
@@ -267,7 +267,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   each citing what it read; `debts.py` the payoff with the rollover; `arith.py` centavos, half-up
   rounding and ratios; `dates.py` calendar months and the 100-year horizon; `inputs.py` what it
   reads; `figures.py` the figure and the run; `diff.py` F-DIFF-1, what changed between two runs and
-  why, and the decisions to revisit); `decisions/`, pure too (`tags.py` the fixed option tags, V-15;
+  why, and the decisions to revisit; `money.py` the money screen's M-1 to M-6 from a snapshot and
+  its run: the plan line by line, the split, each debt's schedule, owns and owes, the milestones, the
+  plan before its last change); `decisions/`, pure too (`tags.py` the fixed option tags, V-15;
   `assumptions.py` the facts a decision rests on: not balances, savings or allocations; `revisit.py`
   what has moved under a decision since, by everything Kako knows now). `db/calc_store.py` stores a run with the facts it read and its
   figures, and reads it back; `db/plan_store.py` keeps a turn's what-ifs (a scenario, its overrides,
@@ -282,7 +284,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   and what changed (F-DIFF-1 as rows, the headline figures first); `planning/timeline.py` the
   timeline in words: what happened (life events with their facts, batches of new or replaced facts,
   corrections, decisions, plans, sessions, those after the household's date ahead) and each thing's
-  values over time with their state (current, coming, past, corrected). `metrics/turns.py` works out each turn's figures (model time as the turn ran it, average and
+  values over time with their state (current, coming, past, corrected); `planning/money.py` the money
+  screen in words (the tiles, the split's shares, each version of the plan with what changed, each
+  debt's facts and schedule rows with the rollover's source, the moments ahead). `metrics/turns.py` works out each turn's figures (model time as the turn ran it, average and
   worst case) and how they are written. `facts/`, `engine/`, `planning/` and `metrics/` use no database,
   clock or randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
@@ -343,7 +347,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   without the one that names it). `db/metrics_read.py` reads the metrics page's rows (each turn's
   calls by group, the last number check of each text, dreaming runs, gaps, the call counter), only
   the household's; `api/metrics.py` is `/api/v1/metrics` and `/api/v1/metrics/meko` (Meko's
-  `datapack_metrics`, in a conversation made once per process). `dreaming/` the background job after a
+  `datapack_metrics`, in a conversation made once per process). `db/money_read.py` reads the money
+  screen (the household's facts and entities on its date, then the decisions in force), only the
+  household's; `api/money.py` is `/api/v1/money`. `dreaming/` the background job after a
   session: `claims.py` (pure: the claims `submit_claims` hands in, checked for shape), `classify.py`
   (pure: each claim against what Kako holds, the quote in its turn, V-09, new, replace, retract,
   correction, same, conflict, refused or deferred, and the proposals it makes), `candidates.py`
@@ -431,6 +437,11 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   rollover, goals, what-ifs and what each figure cites, and `test_engine_properties.py` seeded
   property tests (payments equal balance plus interest, order independence, identities), and
   `test_engine_diff.py` the worked example's diff from plan v2 to v3 and each label;
+  `test_money.py` the money screen on the demo household (the plan's lines on Dec 1, the split, each
+  debt's schedule to the centavo with the rollover, standing, milestones, the plan before Dec 1,
+  missing facts, a debt that never pays off, another household's facts never read, and seeded
+  properties: each schedule adds up to F-DEBT-2) and `tests/integration/test_money_api.py` reads it
+  through the API on the demo household loaded through Dec 1;
   `test_demo_files.py` the demo files and each mistake they can hold (the three decisions of
   Sessions 1 to 3 among them);
   `tests/integration/test_demo_load.py` the demo loaded into Postgres: every rule passes, its figures
@@ -513,7 +524,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   and the shared classes: panel, edge, chip, btn), `layout.tsx` (the fonts, the theme set before the
   first paint, the app shell), `page.tsx` (a new session), `sessions/[id]/page.tsx` (a session),
   `plans/page.tsx` (the newest plan), `plans/[id]/page.tsx` (one version), `timeline/page.tsx`,
-  `decisions/page.tsx`, `metrics/page.tsx` and `system/page.tsx` (the system check). `src/components/`: `app-shell.tsx` (the frame, and what every
+  `decisions/page.tsx`, `metrics/page.tsx`, `money/page.tsx` and `system/page.tsx` (the system check). `src/components/`: `app-shell.tsx` (the frame, and what every
   screen shares: the household, who is writing, the sessions, the one turn that can run),
   `sidebar.tsx`, `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as", the
   "synthetic data, not financial advice" line every screen keeps), `new-session.tsx`,
@@ -528,15 +539,19 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   as books on a shelf, each opened at three bookmarks: the decision, what to revisit, the facts it
   rests on; the open book in the address, `?book=<id>&mark=`; docs/architecture.md, "The timeline
   and decisions screens"),
-  `metrics-view.tsx` (what Kako measured; docs/architecture.md, "The metrics screen") and
+  `metrics-view.tsx` (what Kako measured; docs/architecture.md, "The metrics screen"),
+  `money-view.tsx` (where the money stands: overview with the donut, the monthly plan, each debt's
+  amortization table, big moments, net worth; the view in the address, `?view=`;
+  docs/architecture.md, "The money screen") and
   `health-panel.tsx`. `src/lib/`: `api.ts` (every call, and `ApiError`), `types.ts`
   (the API's shapes, kept in step with `api/sessions.py`, `api/proposals.py`, `api/household.py`,
-  `api/plans.py`, `api/history.py` and `api/metrics.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
+  `api/plans.py`, `api/history.py`, `api/metrics.py` and `api/money.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
   that ran them), `plan.ts` (a plan's status, the facts behind its figures, the number check's
   tally), `history.ts` (events by month and the line under each, a thing's card, a value's state and window,
   a decision's standing, an older `#decision-<id>` link), `shelf.ts` (the decisions shelf: its chips,
   each book's cover and picture, the pattern across the shelf, the bookmarks, the facts by kind),
-  `metrics.ts` (the metrics screen's words and formats), `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
+  `metrics.ts` (the metrics screen's words and formats), `money.ts` (the money screen's views, signed
+  amounts, months and the donut's arcs), `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.
 - Ruff bans model SDK imports (`openai`, `azure.identity`, `azure.ai`) everywhere except

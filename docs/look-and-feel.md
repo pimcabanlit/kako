@@ -67,6 +67,25 @@ Gold dust (tiny 1 to 1.4px radial dots) uses `dust` = `rgba(252,211,77,.55)` dar
 
 Orange and rose are kept apart on purpose, so a pay raise never looks like a warning.
 
+## Charts
+
+The money screen's donut (where each peso of the pay goes) has a palette of its own, so a part of the
+pay never borrows a state colour above. Each colour means one part, nothing else, always in this
+order clockwise from twelve o'clock. Checked with a colour-vision-deficiency validator against each
+theme's panel: dark passes every check; light passes with a contrast warning, so the legend beside
+the ring always carries each part's name, amount and share in words.
+
+| Token | Part | Dark | Light |
+| --- | --- | --- | --- |
+| `chart-needs` | Needs | `#338CED` | `#257DE0` |
+| `chart-wants` | Wants | `#E76624` | `#F47230` |
+| `chart-debt` | Debt | `#00A888` | `#00B894` |
+| `chart-savings` | Savings | `#D28E05` | `#F2A600` |
+| `chart-unplanned` | Not planned yet (neutral) | `#5D6E67` | `#A7B5AE` |
+
+Segments are separated by a 2px gap in the panel's colour. Hovering a segment or its legend row
+names it in the middle of the ring; text stays in the text colours, never the part's colour.
+
 ## Type
 
 | Role | Family | Weights | Where |

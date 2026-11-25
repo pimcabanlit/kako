@@ -1,4 +1,4 @@
-# Kako data model v0.16
+# Kako data model v0.17
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -48,7 +48,10 @@ in the same change once agreed.
   schema change. v0.15 (Nov 25) is the session screen (Phase 5, task 1): `session_turn` keeps each
   turn as the household saw it, so a past session reopens like a chat, and its writer joins
   `session_participant` (migration 0007). v0.16 (Nov 25) is the metrics page (task 4): a kept turn's
-  cost also names its brief's size and budget; no schema change.
+  cost also names its brief's size and budget; no schema change. v0.17 (Nov 25) is the money screen
+(Phase 5a, item 4): formulas M-1 to M-6 under "The money screen", worked out from a run and its
+snapshot without changing any figure; F-DEBT-2's months also keep each debt's scheduled payment, so
+a schedule can show the month a freed payment rolls in; no schema change.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -823,6 +826,29 @@ The rules every formula follows:
 | `F-GOAL-3` | `goal.on_track` | 1 when the projected date ≤ the target date, else 0 (unit `count`). A goal with no allocation is 0, flagged `no_allocation` |
 | `F-ALLOC-1` | `plan.unallocated` | surplus − sum of allocations to open debts, accounts and goals. Must be ≥ 0 (a reconciliation rule); a negative result is flagged `negative` |
 | `F-DIFF-1` | (diff) | Two runs compared figure by figure: each changed figure (value or flag, or in one run only), its old and new value, and the facts behind the change: the facts it was built from, directly or through other figures, that differ between the runs. Each is labelled `replaced` (life changed: a newer fact in the chain took its place), `retracted` (a mistake was fixed; the fact it had replaced is back), `allocation` (the household chose differently: `plan.allocation`, replaced or new), `new` (it started, or Kako learned it, after the old run) or `ended` (its window closed with nothing in its place). A fact already true and known at the old run is not a change, even when only the new run reads it. A decision whose assumption (`decision_assumption`) has been replaced or retracted by the new run's date is listed **to revisit** |
+
+### The money screen
+
+`GET /api/v1/money` lays out where the household's money stands on its date
+(`kako/engine/money.py`, pure, then `kako/planning/money.py` writes it in words). These are not
+figures: nothing is stored, no figure's value changes and no agent sees them. Each is worked out
+from the same snapshot and run as the figures, with the same rules (no guessing, open entities,
+half up to the centavo). A value the snapshot doesn't have stays unknown, and so does every number
+built from it.
+
+| Id | What | Definition |
+| --- | --- | --- |
+| `M-1` | The month's plan, line by line | Take-home pay first (each `income.monthly_net`, by name), then each expense (essential first, largest first), each debt's minimum in strategy order, each extra `plan.allocation` to a debt in the same order, then the allocations to accounts and to goals (only those above ₱0). Each line keeps what is left after it: the pay so far less every line so far. What is left after the last line is F-ALLOC-1, `plan.unallocated` |
+| `M-2` | Where each peso goes | The lines of M-1 in four parts: needs (essential expenses), wants (the other expenses), debt (minimums and extras), savings (allocations to accounts and goals), and what isn't planned yet (`plan.unallocated` when above zero). A plan that goes over the pay has no unplanned part and says by how much. Each part's share of the pay is rounded half up to a whole percent |
+| `M-3` | Each debt's schedule | F-DEBT-2's months for each open debt, one row each: the month (as-of + *k* months), what was owed, the interest, the payment, the principal (payment − interest) and what is left. The month a paid-off debt's payment rolls in shows the amount rolled in (the payment less its own scheduled payment) and the debt it came from. The totals are the payments, the interest (F-DEBT-2's `debt.total_interest`) and the principal. A debt that never pays off keeps its first 12 months, to show why |
+| `M-4` | Where the household stands | What it owns: each open account's `account.balance` and each open goal's `goal.saved_amount`. What it owes: each open debt's `debt.balance`. Net worth is owned − owed, each with the date its fact took effect |
+| `M-5` | The milestones ahead | The emergency fund at its target (F-SAV-3), each debt paid off (F-DEBT-2) and each goal reached (F-GOAL-1, with F-GOAL-3's on track), each with its date and the months until then, soonest first. One already reached, or with no date, is left out |
+| `M-6` | The plan before its last change | The latest `valid_from` among the facts M-1 reads (pay, expenses, minimums, allocations) on or before the as-of date. When any such fact took effect before it, M-1 is also worked out the day before, and each line of today's plan says what it was then (`was ₱52,000.00`) or that it is `new` |
+
+The screen also shows the household's four headline numbers (F-INC-1, F-CF-1, F-SAV-1 and M-4's net
+worth), 13th-month pay (`income.thirteenth_month`, in December of the as-of year), the facts that
+take effect after the as-of date, and the decisions in force with how many of their assumptions are
+to revisit.
 
 ## Validation rules
 
