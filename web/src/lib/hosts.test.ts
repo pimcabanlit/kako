@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
 import { test } from "node:test";
 
-import { hostName, isLoopbackHost, isPublicPicture } from "./hosts.ts";
+import { hostName, isLoopbackHost, isPublicPicture, PUBLIC_PICTURES } from "./hosts.ts";
 
 test("a loopback Host is allowed, with or without its port", () => {
   for (const host of ["localhost", "localhost:3000", "127.0.0.1:3000", "[::1]:3000", "LOCALHOST:3000"]) {
@@ -21,22 +22,37 @@ test("the name is read without its port", () => {
   assert.equal(hostName(" Example.com:80 "), "example.com");
 });
 
-test("a picture in public/ needs no Host check: the image optimizer asks for it with none", () => {
-  for (const path of ["/swirl.jpg", "/kako-mark.png", "/brand/kako-mark.png", "/favicon.ico", "/a.b-c_d.webp", "/apiary.png", "/api.png"]) {
+test("the pictures in public/ need no Host check: the image optimizer asks for them with none", () => {
+  for (const path of ["/swirl.jpg", "/kako-mark.png"]) {
     assert.equal(isPublicPicture(path), true, path);
   }
 });
 
-test("pages, /api and anything odd keep the Host check", () => {
+test("the list is exactly the pictures in public/", () => {
+  const folder = new URL("../../public/", import.meta.url);
+  const pictures = readdirSync(folder)
+    .filter((name) => /\.(?:png|jpe?g|webp|avif|gif|svg|ico)$/i.test(name))
+    .map((name) => `/${name}`)
+    .sort();
+  assert.deepEqual([...PUBLIC_PICTURES].sort(), pictures);
+});
+
+test("pages, routes, /api and anything else keep the Host check", () => {
   for (const path of [
     "/",
     "/sessions/abc",
+    "/sessions/abc.png",
+    "/plans/1.png",
+    "/docs/rule.svg",
     "/api/v1/household",
     "/api/v1/x.png",
-    "/api/x.jpg",
+    "/API/v1/sessions/x.png",
+    "/Api/v1/swirl.jpg",
+    "/api/v1/swirl.jpg",
     "/_next/image",
+    "/SWIRL.JPG",
     "/swirl.jpg/",
-    "/swirl.jpg?x=1",
+    "/brand/kako-mark.png",
     "/../api/v1/x.png",
     "/%2e%2e/api/v1/x.png",
     "/swirl.jpg.html",

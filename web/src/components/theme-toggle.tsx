@@ -2,7 +2,7 @@
 
 import { Moon, Sun } from "lucide-react";
 
-const KEY = "kako-theme";
+import { THEME_KEY } from "@/lib/theme";
 
 /** Dark first, light just as finished. The choice is kept on this device; the layout's script
  * applies it before the first paint. Reads the theme from the page, so it never disagrees. */
@@ -12,7 +12,7 @@ export function ThemeToggle() {
     const next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
     root.setAttribute("data-theme", next);
     try {
-      localStorage.setItem(KEY, next);
+      localStorage.setItem(THEME_KEY, next);
     } catch {
       // storage blocked: the theme holds for this visit only
     }

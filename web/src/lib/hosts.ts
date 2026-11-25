@@ -21,14 +21,14 @@ export function isLoopbackHost(host: string | null): boolean {
   return host !== null && LOOPBACK.has(hostName(host));
 }
 
-// A picture in public/ (the swirl art, the logo), by its plain path: never under /api, never with
-// "..", "%" or a query. Next.js's image optimizer reads these with a request of its own that carries
-// no Host at all, so the Host check would refuse them and every picture would show broken. They are
-// the same files the public repo holds, so serving them on any Host gives nothing away; pages and
-// /api/v1 keep the Host check.
-const PUBLIC_PICTURE = /^\/(?!api(?:\/|$))(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:png|jpe?g|webp|avif|gif|svg|ico)$/;
+// The pictures in public/, by their exact paths (hosts.test.ts holds this list to the folder).
+// Next.js's image optimizer reads each with a request of its own that carries no Host at all, so
+// the Host check would refuse them and every picture would show broken. They are the same files
+// the public repo holds, so serving them on any Host gives nothing away. A list, not a pattern:
+// a page, a route or an /api path that merely ends in ".png" keeps the Host check.
+export const PUBLIC_PICTURES: ReadonlySet<string> = new Set(["/kako-mark.png", "/swirl.jpg"]);
 
-/** Whether a request's path names a picture in public/, which needs no Host check. */
+/** Whether a request's path is one of the pictures in public/, which need no Host check. */
 export function isPublicPicture(pathname: string): boolean {
-  return PUBLIC_PICTURE.test(pathname);
+  return PUBLIC_PICTURES.has(pathname);
 }

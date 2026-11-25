@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans, Unbounded } from "next/font/google";
 
 import { AppShell } from "@/components/app-shell";
+import { SIDEBAR_KEY } from "@/lib/sidebar";
+import { THEME_KEY } from "@/lib/theme";
 
 import "./globals.css";
 
@@ -29,7 +31,7 @@ export const metadata: Metadata = {
 
 // The saved theme and sidebar, before the first paint (dark and open when none is saved). Only the
 // known values are applied: "light" or "dark" (theme-toggle.tsx), "collapsed" (src/lib/sidebar.ts).
-const THEME_SCRIPT = `(function(){try{var d=document.documentElement,t=localStorage.getItem("kako-theme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t);if(localStorage.getItem("kako-sidebar")==="collapsed")d.setAttribute("data-sidebar","collapsed")}catch(e){}})()`;
+const THEME_SCRIPT = `(function(){try{var d=document.documentElement,t=localStorage.getItem(${JSON.stringify(THEME_KEY)});if(t==="light"||t==="dark")d.setAttribute("data-theme",t);if(localStorage.getItem(${JSON.stringify(SIDEBAR_KEY)})==="collapsed")d.setAttribute("data-sidebar","collapsed")}catch(e){}})()`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

@@ -158,7 +158,8 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
 
 /** The sidebar collapsed, as ChatGPT's does: a rail of icons, each named on hover and to a screen
  * reader. The mark at the top opens the sidebar again; "New session" and the screens stay a click
- * away, and the theme switch sits at the foot. The sessions wait in the open sidebar. */
+ * away, and the foot keeps the household menu's System check and Documentation and the theme switch.
+ * The sessions and the household wait in the open sidebar. */
 export function SidebarRail() {
   const pathname = usePathname();
   const item = (here: boolean) =>
@@ -196,9 +197,27 @@ export function SidebarRail() {
           );
         })}
       </ul>
-      <div className="mt-auto">
-        <ThemeToggle />
-      </div>
+      <ul className="mt-auto flex flex-col items-center gap-1">
+        {MENU.map(({ href, label, note, icon: Icon }) => {
+          const here = isHere(pathname, href);
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                aria-label={label}
+                title={`${label}: ${note}`}
+                aria-current={here ? "page" : undefined}
+                className={item(here)}
+              >
+                <Icon className="size-[18px]" aria-hidden />
+              </Link>
+            </li>
+          );
+        })}
+        <li>
+          <ThemeToggle />
+        </li>
+      </ul>
     </nav>
   );
 }
