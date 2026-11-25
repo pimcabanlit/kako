@@ -53,6 +53,7 @@ class Payoff:
     total_interest: int | None
     payments: tuple[int, ...]  # month by month, from month 1
     interest: tuple[int, ...]
+    due: tuple[int, ...]  # its payment that month, before the last month caps it at what's owed
 
     @property
     def never(self) -> bool:
@@ -75,6 +76,7 @@ def simulate(ordered: list[Debt]) -> dict[uuid.UUID, Payoff]:
     payment = {d.entity_id: d.minimum + d.extra for d in ordered}
     paid: dict[uuid.UUID, list[int]] = {d.entity_id: [] for d in ordered}
     charged: dict[uuid.UUID, list[int]] = {d.entity_id: [] for d in ordered}
+    scheduled: dict[uuid.UUID, list[int]] = {d.entity_id: [] for d in ordered}
     months: dict[uuid.UUID, int] = {}
     open_ids = [d.entity_id for d in ordered]
     rate = {d.entity_id: d.monthly_rate for d in ordered}
@@ -91,6 +93,7 @@ def simulate(ordered: list[Debt]) -> dict[uuid.UUID, Payoff]:
             balance[debt_id] = owed - pay
             charged[debt_id].append(charge)
             paid[debt_id].append(pay)
+            scheduled[debt_id].append(payment[debt_id])
             if balance[debt_id] < before:
                 progressed = True
             if balance[debt_id] == 0:
@@ -108,6 +111,7 @@ def simulate(ordered: list[Debt]) -> dict[uuid.UUID, Payoff]:
             total_interest=sum(charged[d.entity_id]) if d.entity_id in months else None,
             payments=tuple(paid[d.entity_id]),
             interest=tuple(charged[d.entity_id]),
+            due=tuple(scheduled[d.entity_id]),
         )
         for d in ordered
     }
