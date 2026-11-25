@@ -92,6 +92,9 @@ class OptionOut(_Out):
 
 class RestsOnOut(_Out):
     title: str
+    thing: str
+    kind: str
+    words: str
     value: str
     valid_from: date
     moved: bool

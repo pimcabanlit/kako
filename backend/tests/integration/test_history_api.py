@@ -163,8 +163,18 @@ async def test_the_new_job_ahead_and_the_decisions_to_revisit(
                 "from_day": "Dec 1, 2026",
             }
         ]
-        moved = [r["title"] for r in d["rests_on"] if r["moved"]]
-        assert moved == [SALARY]
+        moved = [r for r in d["rests_on"] if r["moved"]]
+        assert [r["title"] for r in moved] == [SALARY]
+        # What each fact is about, so the screen can group them by thing.
+        assert {k: moved[0][k] for k in ("thing", "kind", "words", "value")} == {
+            "thing": "Mara's salary",
+            "kind": "income",
+            "words": "take-home pay a month",
+            "value": "₱52,000.00",
+        }
+        rules = [r for r in d["rests_on"] if r["kind"] == "household"]
+        assert rules
+        assert all(r["thing"] == "The household" for r in rules)
         # Balances move as the plan works, so a decision doesn't rest on them.
         assert not any(r["title"].endswith("(balance)") for r in d["rests_on"])
 
