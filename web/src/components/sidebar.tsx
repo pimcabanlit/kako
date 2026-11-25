@@ -3,6 +3,7 @@
 import {
   Activity,
   ClipboardList,
+  Gauge,
   History,
   type LucideIcon,
   MessageSquare,
@@ -23,6 +24,7 @@ const SCREENS: { href: string; label: string; note: string; icon: LucideIcon }[]
   { href: "/plans", label: "Plan", note: "why and what changed", icon: ClipboardList },
   { href: "/timeline", label: "Timeline", note: "what happened when", icon: History },
   { href: "/decisions", label: "Decisions", note: "and what to revisit", icon: Signpost },
+  { href: "/metrics", label: "Metrics", note: "what Kako measured", icon: Gauge },
 ];
 
 /** The sessions down the left, newest first, with "New session" and the screens at the top. */
