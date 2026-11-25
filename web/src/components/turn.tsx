@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleAlert, CircleX, RefreshCw } from "lucide-react";
+import { ArrowRight, CircleAlert, CircleX, RefreshCw } from "lucide-react";
+import Link from "next/link";
 
 import type { Loaded } from "@/components/app-shell";
 import { ApprovalCard } from "@/components/approval-card";
@@ -36,7 +37,7 @@ export function PersonMessage({ name, text }: { name: string | null; text: strin
   );
 }
 
-function KakoMark() {
+export function KakoMark() {
   return (
     <span
       className="wordmark grid size-7 shrink-0 place-items-center rounded-full text-[13px] text-on-accent"
@@ -48,7 +49,7 @@ function KakoMark() {
   );
 }
 
-function Text({ text, className = "" }: { text: string; className?: string }) {
+export function Text({ text, className = "" }: { text: string; className?: string }) {
   return (
     <div className={`space-y-3 ${className}`}>
       {blocks(text).map((b, i) =>
@@ -282,6 +283,15 @@ export function KakoAnswer({
               <OptionCard key={o.label} option={o} />
             ))}
           </div>
+        )}
+        {answer.plan && (
+          <Link
+            href={`/plans/${answer.plan.id}`}
+            className="group inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-teal hover:underline"
+          >
+            Plan v{answer.plan.version}: why, down to the facts, and the number check
+            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </Link>
         )}
         {answer.replan && <ReplanPanel replan={answer.replan} />}
         {answer.resolution && <ResolutionPanel resolution={answer.resolution} />}

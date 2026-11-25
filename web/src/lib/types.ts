@@ -165,3 +165,159 @@ export type Proposal = {
   evidence: { kind: string; ref: string; quote: string; said_by: string | null }[];
   written: { table: string; id: string }[];
 };
+
+// The plan screen (backend/src/kako/api/plans.py).
+
+export type PlanSummary = {
+  id: string;
+  version: number;
+  status: "proposed" | "accepted" | "replaced" | string;
+  session_id: string;
+  session_title: string;
+  created_at: string;
+  as_of: string; // YYYY-MM-DD: the household's date the plan is for
+  recommended_option: string | null;
+  options: number;
+};
+
+export type FigureWhy = {
+  id: string;
+  title: string;
+  value: string;
+  flag: string | null;
+  formula: string; // F-DEBT-2
+  formula_words: string;
+  what_if: string | null; // the option's amounts, when the figure comes from its what-if
+  facts: string[];
+  inputs: string[]; // the figures it was built from
+};
+
+export type FactWhy = {
+  id: string;
+  title: string;
+  value: string;
+  valid_from: string;
+  valid_to: string | null;
+  status: string;
+  source: string; // where it came from and who approved it, in words
+  shared: string | null; // when it was shared with every agent in Meko
+  replaced: string | null; // the value it replaced
+};
+
+export type DecisionWhy = {
+  id: string;
+  question: string;
+  chosen: string;
+  reasoning: string;
+  session_title: string;
+  on: string;
+  status: string;
+  rejected: { label: string; reason: string }[];
+};
+
+export type MemoryWhy = {
+  kind: "memory" | "knowledge" | string;
+  source_id: string;
+  quote: string | null;
+  fact_id: string | null; // the fact the memory is kept for, if any
+};
+
+export type Words = { quote: string; said_by: string | null };
+
+export type PlanAllocation = {
+  recommendation_id: string;
+  entity_id: string | null;
+  name: string;
+  area: string;
+  specialist: string;
+  centavos: number | null;
+  shown: string;
+};
+
+export type CheckedNumber = { text: string; matched: string | null };
+
+export type Check = {
+  text: string;
+  result: "pass" | "fail" | string; // fail: a number matched nothing, and it was flagged
+  numbers: CheckedNumber[];
+};
+
+export type PlanOption = {
+  label: string;
+  recommended: boolean;
+  summary: string;
+  specialists: string[];
+  allocations: PlanAllocation[];
+  why: {
+    figures: string[];
+    facts: string[];
+    decisions: DecisionWhy[];
+    memories: MemoryWhy[];
+    words: Words[];
+  };
+  checks: Check[];
+};
+
+export type Reconciliation = {
+  kind: string;
+  specialists: string[];
+  resolution: string;
+  rejected: string | null;
+  attempts: number;
+};
+
+export type MekoCall = {
+  tool: string;
+  agent_id: string;
+  ms: number | null;
+  results: number | null;
+  outcome: string;
+  at: string;
+};
+
+export type PlanTurn = {
+  session_id: string;
+  seed: string | null;
+  message: string | null;
+  said_by: string | null;
+  kept_at: string | null;
+  in_meko: boolean;
+  trace_url: string | null;
+  meko_calls: MekoCall[];
+};
+
+export type ChangedFact = {
+  label: string; // replaced, corrected, the plan's amount, new, ended
+  title: string;
+  before: string | null;
+  after: string | null;
+  from_day: string | null;
+};
+
+export type Revisit = {
+  decision_id: string;
+  question: string;
+  chosen: string;
+  session_title: string;
+  decided_on: string;
+  because: ChangedFact[];
+};
+
+export type PlanChanged = {
+  since: string;
+  since_plan: string | null;
+  figures: { title: string; before: string; after: string; headline: boolean }[];
+  facts: ChangedFact[];
+  revisit: Revisit[];
+};
+
+export type Plan = {
+  plan: PlanSummary;
+  summary: string;
+  options: PlanOption[];
+  reconciliations: Reconciliation[];
+  turn: PlanTurn;
+  changed: PlanChanged | null;
+  figures: Record<string, FigureWhy>;
+  facts: Record<string, FactWhy>;
+};
