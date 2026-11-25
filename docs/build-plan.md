@@ -249,8 +249,24 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    known then, with the decisions to revisit. Checked on the demo story (plan v1 from Session 2,
    v2 from Session 4) in both themes, at phone width, and in its loading, empty, error and missing
    states.
+   Follow-up, noted Nov 25 (its own PR, High tier since it touches the number check): the check
+   keeps the first source a number matches, and it looks at the snapshot's facts before the
+   what-ifs' allocations, so in session 4's option A "₱10,000" is recorded as matching the "School
+   and transport" fact rather than the option's ₱10,000 for the card. Pass and fail don't change;
+   the plan screen shows the match as recorded. Fix: in `pool_of` (`agents/numbers.py`), add the
+   what-ifs' allocations before the facts, with a test that option A's ₱10,000 matches
+   `allocation:<what-if>:debt:credit-card`.
 3. **Timeline and decisions.** Facts over time with their windows, replaced and retracted values, life
    events; decisions with rejected options and "to revisit".
+   Built Nov 25: `GET /timeline` and `GET /decisions` (`db/history_read.py`; the words in
+   `planning/timeline.py` and `decisions/revisit.py`, both pure; each fact's source in
+   `db/provenance.py`, now shared with the plan screen), and the screens at `/timeline` (what
+   happened, newest first, with what is ahead of the household's date apart; each thing's values
+   over time with their windows and states) and `/decisions` (each decision's chosen option, the
+   options not chosen and why, the facts it rests on, and what to revisit), linked from the sidebar.
+   Checked on the demo story through Dec 1 and on a household loaded through Nov 20 (the new job
+   ahead, her ₱52,000 current and ₱68,000 coming, the three decisions already to revisit), in both
+   themes, at phone width, and in loading, empty and error states.
 4. **Metrics page.** Meko `datapack_metrics`, tokens, cost and seconds per turn (average and worst
    case), brief size against the whole context, number-check pass rate, dreaming score, agent test-set
    score against the single-agent baseline, the session-4 answer scored with and without the promoted
