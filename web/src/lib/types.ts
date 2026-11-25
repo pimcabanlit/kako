@@ -391,7 +391,10 @@ export type DecisionOption = {
 };
 
 export type RestsOn = {
-  title: string;
+  title: string; // "Mara's salary (take-home pay a month)"
+  thing: string; // "Mara's salary", or "The household" for its own rules
+  kind: string; // income, expense, debt, account, goal, household
+  words: string; // what the value is: "take-home pay a month"
   value: string;
   valid_from: string;
   moved: boolean; // replaced or corrected since

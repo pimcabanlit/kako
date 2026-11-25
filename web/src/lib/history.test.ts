@@ -2,14 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  anchoredDecision,
   byKind,
   byMonth,
-  decidedLine,
   decisionStatus,
   eventHref,
   eventLine,
   monthWords,
-  quoteOf,
   thingCard,
   valueState,
   windowWords,
@@ -67,28 +66,20 @@ test("when a value holds", () => {
 test("where an event opens", () => {
   assert.equal(eventHref(event("2026-09-15", "plan", false, "p1")), "/plans/p1");
   assert.equal(eventHref(event("2026-09-15", "session", false, "s1")), "/sessions/s1");
-  assert.equal(eventHref(event("2026-09-15", "decision", false, "d1")), "/decisions#decision-d1");
+  assert.equal(eventHref(event("2026-09-15", "decision", false, "d1")), "/decisions?book=d1");
   assert.equal(eventHref(event("2026-09-15", "change", false, "x")), null);
   assert.equal(eventHref(event("2026-09-15", "plan")), null);
 });
 
-test("a decision's standing, its words and who chose", () => {
+test("a decision's standing, and the decision an older #decision- link names", () => {
   assert.deepEqual(decisionStatus("active"), { label: "In force", tone: "emerald" });
   assert.deepEqual(decisionStatus("revised"), { label: "Revised", tone: "plain" });
   assert.deepEqual(decisionStatus("reversed"), { label: "Reversed", tone: "rose" });
-  const reasoning = "Lia starts school and we want cash on hand.";
-  assert.equal(quoteOf({ quote: null, reasoning }), null);
-  assert.equal(quoteOf({ quote: " Lia starts school and  we want cash on hand. ", reasoning }), null);
-  const said = "Let's split it. Lia starts school and we want cash on hand.";
-  assert.equal(quoteOf({ quote: said, reasoning }), said);
-  assert.equal(
-    decidedLine({ decided_by: "Mara", session_title: "Session 2", on: "2026-09-15" }),
-    "Decided by Mara in Session 2, Sep 15, 2026",
-  );
-  assert.equal(
-    decidedLine({ decided_by: null, session_title: "Session 2", on: "2026-09-15" }),
-    "Decided in Session 2, Sep 15, 2026",
-  );
+  assert.equal(anchoredDecision("#decision-d1"), "d1");
+  assert.equal(anchoredDecision("decision-d%201"), "d 1");
+  assert.equal(anchoredDecision("#plan-p1"), null);
+  assert.equal(anchoredDecision(""), null);
+  assert.equal(anchoredDecision("#decision-%E0"), null);
 });
 
 test("events by month, newest first, in the order given", () => {
