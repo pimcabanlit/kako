@@ -239,7 +239,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
 ## Code layout
 
 - `backend/`: the FastAPI backend (uv project `kako`, Python 3.12). `src/kako/settings.py` holds every
-  setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`); `cli.py` is the `kako` command;
+  setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`; `KAKO_MEKO_OFF=true` runs the API with no
+  Meko, as on a Windows laptop: docs/architecture.md, "Meko off"); `cli.py` is the `kako` command;
   `health.py` the health report and `safe_error` (no secret reaches a response or a log);
   `api/app.py` the app and `/api/v1/health` (it answers only to a loopback Host); `api/sessions.py` the session API (the sessions list, start a session, a
   turn in it, one at a time, its kept turns with their steps and the running turn's steps so far, and its trace);
@@ -456,6 +457,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `tests/integration/test_compare_api.py` reads it through the API for session 4's plan (the
   options in order, each month in words, read twice the same, 404s, and 409 once the stored run's
   snapshot hash no longer matches);
+  `tests/integration/test_meko_off.py` runs session 4 through the API with `KAKO_MEKO_OFF` (a session
+  kept in Kako only, the turn, the approval with no upkeep, the comparison, Meko's screens' 503s, a
+  session kept in Meko refused, and no `meko_call` row); `test_api_health.py` the probe saying off;
   `test_demo_files.py` the demo files and each mistake they can hold (the three decisions of
   Sessions 1 to 3 among them);
   `tests/integration/test_demo_load.py` the demo loaded into Postgres: every rule passes, its figures
@@ -532,7 +536,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_demo_mode.py` also loads the household without what dreaming learned and refuses
   `--without-preference` on one that learned it.
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons, laid out like ChatGPT,
-  Claude and Gemini (docs/architecture.md, "The session screen" and "The plan screen"). `next.config.ts` passes `/api/v1/*`
+  Claude and Gemini (docs/architecture.md, "The session screen" and "The plan screen"). `next.config.ts` passes `/api/v1/*` (waiting up to 5 minutes for a turn)
   to the backend; `src/proxy.ts` refuses any Host but loopback (`src/lib/hosts.ts`), as the backend
   does, and `dev` and `start` listen on 127.0.0.1 only. `src/app/`: `globals.css` (the tokens of `docs/look-and-feel.md`, dark and light,
   and the shared classes: panel, edge, chip, btn), `layout.tsx` (the fonts, the theme set before the
@@ -567,7 +571,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   a decision's standing, an older `#decision-<id>` link), `shelf.ts` (the decisions shelf: its chips,
   each book's cover and picture, the pattern across the shelf, the bookmarks, the facts by kind),
   `metrics.ts` (the metrics screen's words and formats), `money.ts` (the money screen's views, signed
-  amounts, months and the donut's arcs), `compare.ts` (a change's chip, an option's card rows),
+  amounts, months and the donut's arcs), `compare.ts` (a change's chip, an option's card rows), `turns.ts` (whether a turn whose request ended with no answer was kept after all),
   `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.

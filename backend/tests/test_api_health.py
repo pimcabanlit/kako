@@ -70,6 +70,22 @@ def test_real_probes_report_what_is_missing(make_settings: MakeSettings) -> None
     assert "mk_should_not_show" not in response.text
 
 
+def test_meko_off_is_reported_as_off_without_reaching_for_it(make_settings: MakeSettings) -> None:
+    """KAKO_MEKO_OFF: the probe says Meko is off and calls nothing, even with Meko on a closed
+    port; only the missing database makes the report degraded."""
+    settings = make_settings(meko_mcp_url="http://127.0.0.1:9/mcp", meko_off=True)
+    with TestClient(create_app(settings), base_url=LOCAL) as http:
+        body = http.get("/api/v1/health").json()
+    assert body["meko"] == {
+        "ok": True,
+        "detail": "off here (KAKO_MEKO_OFF): sessions are kept in Kako only",
+        "latency_ms": None,
+        "version": None,
+        "target": "local",
+    }
+    assert body["status"] == "degraded"  # no database here
+
+
 def test_docs_live_under_the_api_prefix(make_settings: MakeSettings) -> None:
     app = create_app(make_settings(), probes=fake_probes(postgres_ok=True, meko_ok=True))
     with TestClient(app, base_url=LOCAL) as http:

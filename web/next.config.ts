@@ -8,6 +8,9 @@ const apiUrl = (process.env.KAKO_API_URL ?? "http://127.0.0.1:8000").replace(
 );
 
 const nextConfig: NextConfig = {
+  // A planning turn on live models can take a minute or more; the pass-through to the backend
+  // gives up after 30 seconds by default, which the screen would show as HTTP 500.
+  experimental: { proxyTimeout: 300_000 },
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

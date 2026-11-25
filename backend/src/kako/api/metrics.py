@@ -470,7 +470,9 @@ async def read_meko_metrics(request: Request, household_id: uuid.UUID | None = N
     try:
         async with services.open_meko(DbCallLog(services.engine), MEKO_CALLS) as meko:
             if meko is None:
-                raise HTTPException(503, "Meko isn't configured")
+                raise HTTPException(
+                    503, "Meko is off here (KAKO_MEKO_OFF), so its own figures can't be shown"
+                )
             if row.meko_datapack_id is not None and meko.datapack_id != row.meko_datapack_id:
                 raise HTTPException(409, "Meko isn't on this household's datapack")
             key = f"{meko.datapack_id or 'default'}:{session_key(household)}"

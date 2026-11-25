@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     meko_datapack_id: str | None = Field(
         default=None, description="The datapack every Meko call names; unset uses the default one"
     )
+    # Off: the API runs without Meko, as on a laptop with no Meko to reach (Windows has no local
+    # Meko). A session is then kept in Kako only, a turn has no Meko search, an approval no Meko
+    # upkeep, and Meko's own screens say Meko is off. Nothing else changes; the CLI has --no-meko.
+    meko_off: bool = False
     # Meko Cloud's Free tier caps some tools for the account's lifetime (docs/architecture.md, Cost
     # plan). This environment may make at most this many calls to each capped tool on Meko Cloud,
     # counted in `meko_call`; 0 refuses them all. Local Meko has no allowances and no ceiling.

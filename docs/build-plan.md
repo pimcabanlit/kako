@@ -412,6 +412,45 @@ reads, never what Kako works out.
    into the car loan in Jul 2027; option B reaches the emergency fund's ₱210,000.00 on Sep 15,
    2027), in both themes, at desktop and phone width, by keyboard, and loading and error.
    Later, not built: a what-if the household sets itself beside the options (an amount of its own).
+6. **Kako with Meko off, to try it on the laptop (Nov 25).** Pim wants to try Kako in the app with
+   their own questions, to feel how it answers, without touching the demo. Local Meko doesn't run
+   on Windows and Meko Cloud is kept for the demo datapack, so the app gets a switch to run without
+   Meko (`KAKO_MEKO_OFF=true`), chosen by Pim over a terminal-only try.
+   Done when: with Meko off, the API makes no Meko call, a new session is kept in Kako only, a turn
+   runs (no Meko search) and its plan and comparison show, an approval writes with no Meko upkeep,
+   the health check says Meko is off, Meko's own screens say so as a note, and a session kept in
+   Meko is refused a turn with a plain reason.
+   Built Nov 25: the setting (`settings.py`), the real services opening no Meko when it is set
+   (`api/sessions.py`), the Meko probe (`meko/health.py`) and the 503s of `GET /metrics/meko` and
+   `POST /gaps/sync`. Every route already went on without Meko (tests run that way); this only lets
+   a real run choose it. `tests/integration/test_meko_off.py` runs session 4 through the API with
+   it, with Meko's address a closed port and not one row in `meko_call`.
+   The try itself, on the laptop: a database of its own (`kako_sandbox`) with the demo household
+   loaded through Dec 1, the backend on port 8001 with Meko off and live Foundry models (about
+   US$0.03 a question, under the US$3 daily cap), and the web app on port 3001. The demo's database,
+   its recordings and Meko Cloud are untouched; live mode never writes a recording.
+   The first question on the laptop (Nov 25) ran 49 seconds on live models (6 calls, US$0.06) and
+   was kept, but the screen said HTTP 500: Next.js's pass-through gives up after 30 seconds. The web
+   app now waits up to 5 minutes, and a request that ends with no answer reads the session again
+   before calling the turn failed (docs/architecture.md, "The session screen").
+   What looked off while trying it (Nov 25), to fix or decide on:
+   - Plan v3 (Dec 1: ₱10,000 on the card, ₱10,000 to the emergency fund, ₱5,050 to a new house
+     fund) has no session or decision behind it: it is loaded as approved facts labelled
+     `session-5:plan-v3`, so the step from Mara's new job to the new split is invisible, and a
+     plan's "What changed" compares against the Oct 18 decision instead. Either session 4's replan
+     proposes plan v3 and Jun accepts it on Dec 1, or plan v3 gets its own decision in
+     `decisions.toml`.
+   - Two cited figures read oddly to a household: the house fund's "on track" shown as "0 (nothing
+     allocated to it)" and the emergency fund's months to target as "none". They should read as
+     words ("not on track", "no money going in").
+   - The sidebar's turn count stayed at 0 after the long turn's error (it is read again once the
+     turn ends, which the fix above now reaches).
+   - In Session 2's recording the orchestrator corrected two slips of its own (citing the wrong
+     what-if, guessing a figure's name), each costing an extra call; a sharper tool message would
+     avoid them.
+   - A what-if can't yet try a one-off amount (the ₱48,000 13th-month pay), a spending change or an
+     income change.
+   - Dreaming runs only when someone runs it, and a session nobody ends stays open.
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 

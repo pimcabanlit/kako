@@ -359,7 +359,10 @@ async def take_turn(session_id: uuid.UUID, body: NewTurn, request: Request) -> T
                 DbCallLog(services.engine, session_id), MEKO_CALLS
             ) as meko:
                 if meko is None and session.in_meko:
-                    raise HTTPException(409, "this session has a Meko conversation; Meko is off")
+                    raise HTTPException(
+                        409,
+                        "this session is kept in Meko, and Meko is off here: start a new session",
+                    )
                 asked = await run_turn(
                     services.engine,
                     meko,
@@ -513,6 +516,9 @@ def services_from(settings: Settings, engine: AsyncEngine, http: httpx.AsyncClie
 
     @asynccontextmanager
     async def meko(log: DbCallLog, max_calls: int) -> AsyncIterator[Meko | None]:
+        if settings.meko_off:
+            yield None  # KAKO_MEKO_OFF: every route goes on without Meko, and says so
+            return
         async with open_meko(settings, log, max_calls=max_calls) as adapter:
             yield adapter
 
