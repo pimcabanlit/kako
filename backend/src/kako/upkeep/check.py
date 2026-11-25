@@ -5,8 +5,8 @@ one Meko holds.
 for upkeep's conversation, and changes nothing. A promoted memory is looked for among those Meko
 lists (its newest 20): one beyond them can't be checked, and isn't reported. It also reports the
 upkeep still owed (a fact with no memory yet, a sentence not yet rewritten in the past tense, a
-memory not yet deleted, an approved promotion not yet shared), so after `kako meko sync` it is
-empty. `kako meko check` runs it and exits 1 on any problem.
+memory not yet deleted, an approved promotion not yet shared, an ended session's recap not yet
+added), so after `kako meko sync` it is empty. `kako meko check` runs it and exits 1 on any problem.
 """
 
 from __future__ import annotations
@@ -17,19 +17,26 @@ from typing import Any, Final, cast
 from sqlalchemy import Table, and_, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from kako.db.models import Decision, Fact, Household, LifeEvent, MekoLink
+from kako.db.models import Decision, Fact, Household, LifeEvent, MekoLink, Session
 from kako.meko.adapter import Meko, Promoted
 from kako.meko.client import MekoToolError, is_not_found
 from kako.upkeep.promote import shares_owed
+from kako.upkeep.recaps import recaps_owed
 from kako.upkeep.sync import AGENT, plan_for, session_key
 
 HOUSEHOLD = cast(Table, Household.__table__)
 FACT = cast(Table, Fact.__table__)
 LIFE_EVENT = cast(Table, LifeEvent.__table__)
 DECISION = cast(Table, Decision.__table__)
+SESSION = cast(Table, Session.__table__)
 MEKO_LINK = cast(Table, MekoLink.__table__)
 # The household's rows a link can tie to what Meko holds.
-LINKED: Final = {"fact": FACT, "life_event": LIFE_EVENT, "decision": DECISION}
+LINKED: Final = {
+    "fact": FACT,
+    "life_event": LIFE_EVENT,
+    "decision": DECISION,
+    "session": SESSION,
+}
 CHECKED: Final = ("memory", "promoted_memory", "document")
 
 
@@ -76,6 +83,7 @@ async def check_links(engine: AsyncEngine, meko: Meko, household_id: uuid.UUID) 
         ).one()
         owed = await plan_for(conn, household_id)
         unshared = await shares_owed(conn, household_id)
+        unrecapped = await recaps_owed(conn, household_id)
     name = household.name
     if household.meko_datapack_id is not None and meko.datapack_id != household.meko_datapack_id:
         return [*problems, "Meko isn't on this household's datapack: nothing to compare"]
@@ -87,6 +95,10 @@ async def check_links(engine: AsyncEngine, meko: Meko, household_id: uuid.UUID) 
     for item in unshared:
         problems.append(
             f"{item.target} {item.row_id}: approved for sharing, not shared yet (kako meko sync)"
+        )
+    for recap in unrecapped:
+        problems.append(
+            f"session {recap.session_id}: ended, its recap not in Meko yet (kako meko sync)"
         )
     links = await memory_links(engine, household_id)
     if not links:
