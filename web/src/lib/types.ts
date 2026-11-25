@@ -321,3 +321,99 @@ export type Plan = {
   figures: Record<string, FigureWhy>;
   facts: Record<string, FactWhy>;
 };
+
+// --- The timeline and decisions screens (api/history.py) -----------------------------------
+
+export type EventKind =
+  | "start"
+  | "life_event"
+  | "correction"
+  | "decision"
+  | "change"
+  | "plan"
+  | "session";
+
+/** One thing that happened, on the day it took effect. */
+export type TimelineEvent = {
+  kind: EventKind | string;
+  on: string;
+  ahead: boolean; // after the household's date: told now, true from then
+  title: string;
+  detail: string | null;
+  source: string | null; // who told it and who approved it, in words
+  changes: ChangedFact[];
+  ref: string | null; // the decision, plan or session it opens
+  revisit: boolean; // a decision whose facts have moved since
+};
+
+export type ValueState = "current" | "coming" | "past" | "corrected";
+
+export type ValueAt = {
+  id: string;
+  value: string;
+  valid_from: string;
+  valid_to: string | null; // the first day it no longer holds
+  state: ValueState | string;
+  source: string;
+  shared_on: string | null; // the day it was shared with every agent in Meko
+  reason: string | null; // why it was corrected
+};
+
+export type AttributeHistory = {
+  attribute: string;
+  words: string;
+  values: ValueAt[]; // newest first
+};
+
+export type Thing = {
+  id: string | null; // null: the household itself
+  name: string;
+  kind: string; // household, income, expense, debt, account, goal
+  opened_on: string | null;
+  closed_on: string | null;
+  attributes: AttributeHistory[];
+};
+
+export type Timeline = {
+  as_of: string;
+  events: TimelineEvent[]; // newest first
+  things: Thing[];
+};
+
+export type DecisionOption = {
+  label: string;
+  chosen: boolean;
+  reason: string | null; // why it wasn't chosen
+  leans: string[]; // "keeps cash on hand", "pays debt off faster"
+};
+
+export type RestsOn = {
+  title: string;
+  value: string;
+  valid_from: string;
+  moved: boolean; // replaced or corrected since
+};
+
+export type Decision = {
+  id: string;
+  question: string;
+  chosen: string;
+  reasoning: string;
+  quote: string | null; // the household's words when they chose
+  said_by: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  session_id: string;
+  session_title: string;
+  on: string;
+  status: "active" | "revised" | "reversed" | string;
+  valid_to: string | null;
+  replaced_by: string | null;
+  outcome: string | null;
+  plan_id: string | null;
+  options: DecisionOption[]; // the chosen one first
+  rests_on: RestsOn[];
+  revisit: ChangedFact[]; // what moved under it since; empty when nothing did
+};
+
+export type Decisions = { as_of: string; decisions: Decision[] };

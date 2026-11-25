@@ -2,12 +2,14 @@
 // ApiError with a plain message the screen can show as it is.
 
 import type {
+  Decisions,
   Household,
   Plan,
   PlanSummary,
   Proposal,
   SessionSummary,
   SessionTurns,
+  Timeline,
   TurnAnswer,
 } from "./types.ts";
 
@@ -104,6 +106,9 @@ export const api = {
   plans: (signal?: AbortSignal) => call<PlanSummary[]>("/plans", { signal }),
   plan: (planId: string, signal?: AbortSignal) =>
     call<Plan>(`/plans/${encodeURIComponent(planId)}`, { signal }),
+  timeline: (signal?: AbortSignal) => call<Timeline>("/timeline", { signal }),
+  decisions: (signal?: AbortSignal) =>
+    call<Decisions>("/decisions", { signal }),
   proposals: (signal?: AbortSignal) =>
     call<Proposal[]>("/proposals?status=all", { signal }),
   decide: (

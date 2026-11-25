@@ -48,7 +48,8 @@ const MOVED_SHOWN = 6;
 // How deep "built from" opens figures inside figures before it stops.
 const MAX_DEPTH = 5;
 
-function failure(error: unknown, what: string): string {
+/** What a screen says when a read fails: the API's own words, or a plain line. */
+export function failure(error: unknown, what: string): string {
   if (error instanceof ApiError) return error.message;
   console.error(`Reading ${what} failed`, error);
   return `Couldn't read ${what}.`;
@@ -298,14 +299,15 @@ function Moved({ figures }: { figures: PlanChanged["figures"] }) {
   );
 }
 
+// Changed is orange; a corrected mistake is rose (docs/look-and-feel.md).
 const FACT_TONE: Record<string, string> = {
   replaced: "chip-orange",
-  corrected: "chip-orange",
+  corrected: "chip-rose",
   new: "chip-orange",
   ended: "chip-orange",
 };
 
-function ChangedFactRow({ fact }: { fact: ChangedFact }) {
+export function ChangedFactRow({ fact }: { fact: ChangedFact }) {
   return (
     <li className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
       <span className={`chip shrink-0 ${FACT_TONE[fact.label] ?? ""}`}>{fact.label}</span>
@@ -739,7 +741,7 @@ export function PlanSkeleton() {
   );
 }
 
-function Failed({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function Failed({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <>
       <TopBar />

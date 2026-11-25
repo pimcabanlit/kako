@@ -52,6 +52,7 @@ from kako.db.models import (
     SessionTurn,
 )
 from kako.db.models import Figure as FigureModel
+from kako.db.provenance import provenance
 from kako.engine import Run, compute
 from kako.engine.diff import diff
 from kako.engine.figures import Figure
@@ -553,64 +554,12 @@ async def _facts(
     every: Mapping[uuid.UUID, FactRow],
 ) -> dict[uuid.UUID, FactWhy]:
     """Each fact with where it came from and who said yes to it."""
-    if not rows:
-        return {}
-    proposal_ids = [f.proposal_id for f in rows if f.proposal_id is not None]
-    decided: dict[uuid.UUID, tuple[str | None, datetime | None, str | None]] = {}
-    dreamed: dict[uuid.UUID, str] = {}  # a dreaming proposal's session, by proposal
-    if proposal_ids:
-        said = (
-            select(EVIDENCE.c.proposal_id, func.min(PERSON.c.display_name).label("name"))
-            .join(PERSON, PERSON.c.id == EVIDENCE.c.person_id)
-            .where(EVIDENCE.c.proposal_id.in_(proposal_ids), EVIDENCE.c.kind == "turn")
-            .group_by(EVIDENCE.c.proposal_id)
-            .subquery()
-        )
-        dreamt = SESSION.alias("dreamt")
-        for pid, name, at, said_by, dream_title in await conn.execute(
-            select(
-                PROPOSAL.c.id,
-                PERSON.c.display_name,
-                PROPOSAL.c.decided_at,
-                said.c.name,
-                dreamt.c.title,
-            )
-            .outerjoin(PERSON, PERSON.c.id == PROPOSAL.c.decided_by_person_id)
-            .outerjoin(said, said.c.proposal_id == PROPOSAL.c.id)
-            .outerjoin(DREAM_RUN, DREAM_RUN.c.id == PROPOSAL.c.dream_run_id)
-            .outerjoin(dreamt, dreamt.c.id == DREAM_RUN.c.session_id)
-            .where(PROPOSAL.c.id.in_(proposal_ids))
-        ):
-            decided[pid] = (name, at, said_by)
-            if dream_title is not None:
-                dreamed[pid] = dream_title
-    conversations = {f.source_ref.partition(":")[0] for f in rows if f.source_ref}
-    titles = {
-        conv: title
-        for conv, title in await conn.execute(
-            select(SESSION.c.meko_conversation_id, SESSION.c.title).where(
-                SESSION.c.meko_conversation_id.in_(conversations)
-            )
-        )
-    }
-    shared = {
-        kako_id: at
-        for kako_id, at in await conn.execute(
-            select(MEKO_LINK.c.kako_id, func.min(MEKO_LINK.c.created_at))
-            .where(
-                MEKO_LINK.c.kako_table == "fact",
-                MEKO_LINK.c.kako_id.in_([f.id for f in rows]),
-                MEKO_LINK.c.meko_kind == "promoted_memory",
-            )
-            .group_by(MEKO_LINK.c.kako_id)
-        )
-    }
+    found = await provenance(conn, rows)
     out: dict[uuid.UUID, FactWhy] = {}
     for fact in rows:
         entity = entities.get(fact.entity_id) if fact.entity_id else None
-        nobody: tuple[str | None, datetime | None, str | None] = (None, None, None)
-        name, at, said_by = decided.get(fact.proposal_id, nobody) if fact.proposal_id else nobody
         old = every.get(fact.replaces) if fact.replaces else None
+        shared_on = found[fact.id].shared_on
         out[fact.id] = FactWhy(
             id=fact.id,
             title=fact_title(fact, entity),
@@ -618,46 +567,11 @@ async def _facts(
             valid_from=fact.valid_from,
             valid_to=fact.valid_to,
             status=fact.status,
-            source=_source_words(
-                fact,
-                dreamed.get(fact.proposal_id) if fact.proposal_id else None,
-                titles,
-                (name, at, said_by),
-            ),
-            shared=f"Shared with every agent in Meko on {day(shared[fact.id].date())}"
-            if fact.id in shared
-            else None,
+            source=found[fact.id].source,
+            shared=f"Shared with every agent in Meko on {day(shared_on)}" if shared_on else None,
             replaced=fact_value(old) if old is not None else None,
         )
     return out
-
-
-def _source_words(
-    fact: FactRow,
-    dreamed_in: str | None,
-    titles: Mapping[str, str],
-    decided: tuple[str | None, datetime | None, str | None],
-) -> str:
-    """Where a fact came from and who said yes to it, in words."""
-    approved_by, approved_at, said_by = decided
-    where = dreamed_in or (
-        titles.get(fact.source_ref.partition(":")[0]) if fact.source_ref else None
-    )
-    yes = (
-        f"approved by {approved_by} on {day(approved_at.date())}"
-        if approved_by and approved_at
-        else "approved"
-    )
-    if fact.source_kind == "seed":
-        return "From the household's starting figures"
-    if fact.source_kind == "dreaming":
-        return f"Learned by dreaming from {where or 'a past session'}, {yes}"
-    if fact.source_kind == "session":
-        who = f" by {said_by}" if said_by else ""
-        return f"Said{who} in {where or 'a session'}, {yes}"
-    if fact.source_kind == "statement":
-        return f"From a statement, {yes}"
-    return f"Entered by the household, {yes}"
 
 
 async def _decisions(conn: AsyncConnection, ids: set[uuid.UUID]) -> dict[uuid.UUID, DecisionWhy]:

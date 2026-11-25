@@ -39,6 +39,8 @@ def test_no_database_no_sessions(make_settings: MakeSettings) -> None:
             "/api/v1/household",
             "/api/v1/plans",
             f"/api/v1/plans/{session}",
+            "/api/v1/timeline",
+            "/api/v1/decisions",
         ):
             assert http.get(path).status_code == 503, path
         assert http.get("/api/v1/plans/not-a-uuid").status_code == 422
