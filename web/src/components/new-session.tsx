@@ -3,7 +3,7 @@
 import { CircleX, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { useShell } from "@/components/app-shell";
 import { Brand } from "@/components/brand";
@@ -27,6 +27,8 @@ export function NewSession() {
   const [starting, setStarting] = useState(false);
   const [failed, setFailed] = useState<{ message: string; error: string } | null>(null);
   const running = pending?.status === "running";
+  const startersRow = useRef<HTMLDivElement>(null);
+  const startersScroll = useScrolls(startersRow);
   const noHousehold = household.kind === "error" ? household.message : null;
 
   const start = async (message: string) => {
@@ -98,8 +100,16 @@ export function NewSession() {
           )}
           {/* One line, as chat apps show them (Pim, Nov 25): centred when they fit, as they do in
               the column's full width on a laptop, and on a narrower screen a row that scrolls
-              sideways rather than a second line. */}
-          <div className="-mx-4 mt-6 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:px-0 [&::-webkit-scrollbar]:hidden">
+              sideways rather than a second line, in line with the composer and fading at its
+              right edge to say there is more. */}
+          <div
+            ref={startersRow}
+            className={`-mx-4 mt-6 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+              startersScroll
+                ? "[mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)]"
+                : "md:px-0"
+            }`}
+          >
             <ul className="mx-auto flex w-max gap-1.5" aria-label="Questions to start with">
               {STARTERS.map((q) => (
                 <li key={q}>
@@ -119,4 +129,20 @@ export function NewSession() {
       </main>
     </>
   );
+}
+
+/** Whether a row is wider than its box, so it scrolls sideways; checked again whenever the box
+ * changes size. */
+function useScrolls(row: RefObject<HTMLElement | null>): boolean {
+  const [scrolls, setScrolls] = useState(false);
+  useEffect(() => {
+    const el = row.current;
+    if (!el) return;
+    const check = () => setScrolls(el.scrollWidth > el.clientWidth + 1);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [row]);
+  return scrolls;
 }

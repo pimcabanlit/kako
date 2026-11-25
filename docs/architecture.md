@@ -437,8 +437,8 @@ new to learn about where things are:
   is the error shown (`web/src/lib/turns.ts`). "Try again" never sends a turn that was kept.
 - **The composer**: Enter sends, Shift+Enter starts a new line, "Writing as" picks Mara, Jun or Lia,
   and nothing under it (Pim, Nov 25): "Synthetic data. Not financial advice." sits at the foot of
-  the screens that show the household's figures (money, plan, timeline, decisions, metrics), on
-  the system check and in the documentation, not under the chat.
+  the money, plan, timeline, decisions and metrics screens and on the system check, and the
+  documentation's guardrails page says it in full; the chat screens leave it out.
 
 Each turn is kept as the household saw it (`session_turn`, the answer exactly as the API returned
 it), written by the same code path for the API, `kako ask` and demo mode, so every turn shows on

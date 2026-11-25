@@ -549,7 +549,8 @@ Only after the Must and Should items work end to end.
 
 ## Video storyboard
 
-Under 5 minutes. Not financial advice, synthetic data, said on the first screen.
+Under 5 minutes. Not financial advice, synthetic data, said in the voice-over over the first screen (the chat
+screens no longer carry the line: Pim, Nov 25).
 
 1. **The problem (0:00 to 0:30).** Planning is a long relationship; assistants forget, and memories that
    only pile up don't know what's current. On screen: Meko on its own returns both ₱52,000 and ₱68,000
