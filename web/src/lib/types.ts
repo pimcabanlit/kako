@@ -35,7 +35,17 @@ export type Allocation = {
 };
 
 export type Source = {
-  kind: "figure" | "fact" | "decision" | "memory" | "knowledge" | "conversation" | string;
+  kind:
+    | "figure"
+    | "fact"
+    | "decision"
+    | "memory"
+    | "knowledge" // Meko's knowledge base
+    | "conversation"
+    | "calculation" // worked out by Kako's calculator
+    | "history" // a value Kako held over time
+    | "document" // one of Kako's own documents or the household's statements
+    | string;
   ref: string;
   shown: string;
 };
@@ -81,6 +91,32 @@ export type Replan = {
   revisit_decision_ids: string[];
 };
 
+// A what-if that changes facts or adds items: worked out for the question, never saved.
+export type FigureChange = { title: string; before: string; after: string };
+
+export type Scenario = {
+  what_if: string;
+  changes: string[];
+  assumptions: string[]; // values Kako assumed, not the household's
+  figures: FigureChange[];
+  note: string;
+};
+
+export type Calculation = {
+  ref: string;
+  label: string;
+  formula: string;
+  inputs: string[];
+  result: string;
+};
+
+// The labels under a reply (backend shown.ANSWER_LABELS).
+export type AnswerLabel =
+  | "General information"
+  | "Scenario, nothing saved"
+  | "Calculated"
+  | "From your documents";
+
 export type TurnAnswer = {
   session_id: string;
   seed: string;
@@ -109,6 +145,12 @@ export type TurnAnswer = {
     brief_tokens?: number | null; // the brief's size, kept on turns since Nov 25
     brief_budget?: number | null;
   };
+  // Kept on turns since answers had a kind (Nov 25); absent on older turns.
+  kind?: string | null;
+  labels?: (AnswerLabel | string)[];
+  sources?: Source[];
+  scenarios?: Scenario[];
+  calculations?: Calculation[];
 };
 
 export type Step = {
@@ -218,7 +260,7 @@ export type DecisionWhy = {
 };
 
 export type MemoryWhy = {
-  kind: "memory" | "knowledge" | string;
+  kind: "memory" | "knowledge" | "document" | string; // document: one of Kako's own files
   source_id: string;
   quote: string | null;
   fact_id: string | null; // the fact the memory is kept for, if any

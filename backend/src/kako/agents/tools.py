@@ -24,12 +24,12 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Final
 
-from kako.agents.answers import Allocation, Citation
+from kako.agents.answers import FILE, Allocation, Citation
 from kako.agents.brief import FREE_TEXT, Brief, BriefInputs, data, decision_lines
 from kako.agents.chat import ToolSpec
 from kako.agents.checks import CheckLog, MemoryCheckLog
 from kako.agents.conversation import History, full_text
-from kako.agents.present import KIND_ORDER, Refs, fact_value, figure_value, money
+from kako.agents.present import KIND_ORDER, Refs, day, fact_value, figure_value, money
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult
 from kako.agents.turn import short
 from kako.engine import EngineInputError, Override, Run, compute
@@ -38,6 +38,7 @@ from kako.facts.model import EntityRow, FactRow
 from kako.facts.snapshot import Snapshot
 from kako.meko.adapter import Meko
 from kako.planning.reconcile import fits
+from kako.upkeep.sentences import PHRASES
 
 if TYPE_CHECKING:  # these build on the tools
     from kako.agents.calculator import Calculation
@@ -396,7 +397,7 @@ class TurnState:
                 return found
         if kind == "doc" and value in self.documents_read:
             document = self.documents_read[value]
-            return Citation("knowledge", f"doc:{value}", f"file:{value}", document.text)
+            return Citation("knowledge", f"doc:{value}", f"{FILE}{value}", document.text)
         if kind == "calc" and value in self.calculations:
             calc = self.calculations[value]
             return Citation(
@@ -404,8 +405,9 @@ class TurnState:
             )
         if kind == "history" and value in self.history_facts:
             fact = self.history_facts[value]
-            name = self.refs.entity(fact.entity_id) or "the household"
-            shown = f"{name} {fact.attribute} = {fact_shown(fact)} from {fact.valid_from}"
+            name = next((e.name for e in self.entities if e.id == fact.entity_id), "The household")
+            phrase = PHRASES.get(fact.attribute, fact.attribute)
+            shown = f"{name}, {phrase}: {fact_shown(fact)} from {day(fact.valid_from)}"
             return Citation("history", f"history:{value}", str(fact.id), shown)
         if ref.strip() == "said":
             return Citation("conversation", "said", self.turn_seed, self.said_shown)

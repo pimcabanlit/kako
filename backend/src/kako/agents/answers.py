@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
 from kako.agents.checks import TextCheck
 from kako.engine.figures import Figure
@@ -28,6 +28,10 @@ from kako.planning.reconcile import Conflict
 SourceKind = Literal[
     "figure", "fact", "decision", "memory", "knowledge", "conversation", "calculation", "history"
 ]
+# A document Kako read from its own files (`read_document`) is cited as kind "knowledge" with
+# this prefix on its source id, and shown as a document, never as Meko's.
+FILE: Final = "file:"
+DOCUMENT: Final = "document"
 # What `recommendation_source` stores: an option cites only these.
 STORED_KINDS: tuple[SourceKind, ...] = (
     "figure",

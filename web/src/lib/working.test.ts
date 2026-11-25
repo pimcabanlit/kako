@@ -109,6 +109,8 @@ test("tones and words", () => {
   assert.equal(toneOf(step(1, "orchestrator", "run_what_if", "rejected")), "refused");
   assert.equal(describeTool("ask_savings"), "Asked the savings specialist");
   assert.equal(describeTool("search_memory"), "Searched Meko");
+  assert.equal(describeTool("calculate"), "Worked out a sum");
+  assert.equal(describeTool("get_history"), "Read values over time");
   assert.equal(describeTool("something_new"), "something_new");
   assert.equal(
     shortInput('{"allocations": [{"entity": "debt:credit-card", "amount": "rest"}]}'),

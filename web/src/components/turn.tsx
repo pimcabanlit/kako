@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import type { Loaded } from "@/components/app-shell";
+import { AnswerLabels, CalculationCard, ScenarioCard, SourceChips } from "@/components/answer-parts";
 import { ApprovalCard } from "@/components/approval-card";
 import { BeforeAfter, ComparePanels, useCompare, useMonthsOpen } from "@/components/compare-view";
 import { LiveWorking, Working } from "@/components/working";
@@ -19,7 +20,7 @@ import type {
   TurnAnswer,
 } from "@/lib/types";
 import { listOf } from "@/lib/working";
-import { initials, sourceKind } from "@/lib/words";
+import { initials } from "@/lib/words";
 
 /** The household's message: on the right, in a raised bubble, with who wrote it. */
 export function PersonMessage({ name, text }: { name: string | null; text: string }) {
@@ -103,28 +104,7 @@ function OptionCard({ option, compared }: { option: Option; compared?: ReactNode
         </table>
       )}
       {compared}
-      {option.sources.length > 0 && (
-        <div>
-          <p className="eyebrow mb-1.5">Where it comes from</p>
-          <ul className="flex flex-wrap gap-1.5">
-            {option.sources.map((s, i) => {
-              const kind = sourceKind(s);
-              const tone = kind.tone === "plain" ? "" : `chip-${kind.tone}`;
-              const quote = s.kind === "conversation";
-              return (
-                <li key={`${s.ref}-${i}`} className="max-w-full">
-                  <span className={`chip ${tone} font-medium`} title={s.shown}>
-                    <span className="shrink-0 font-semibold">{kind.label}</span>
-                    {!quote && !/^[A-Z]+\d+$/.test(s.shown) && (
-                      <span className="num truncate">{s.shown}</span>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
+      <SourceChips sources={option.sources} />
       {option.specialists.length > 0 && (
         <p className="mt-auto text-xs text-muted">
           From the {listOf(option.specialists)}{" "}
@@ -245,8 +225,8 @@ function ReplanPanel({ replan }: { replan: Replan }) {
   );
 }
 
-/** Kako's answer: unboxed text, then options, how a conflict ended, what changed, the changes
- * waiting for a yes, and "show the working". Every number in it came from the engine and passed
+/** Kako's answer: unboxed text with its labels, then any scenario or sum it worked out, options, how a conflict ended, what changed, the changes
+ * waiting for a yes, what it rests on, and "show the working". Every number in it came from the engine and passed
  * the number check; any the check couldn't match is flagged where it is shown. */
 export function KakoAnswer({
   answer,
@@ -268,6 +248,7 @@ export function KakoAnswer({
       <div className="min-w-0 flex-1 space-y-4">
         <p className="text-xs font-semibold text-muted">Kako</p>
         <Text text={answer.reply} className="text-[15px] leading-7" />
+        <AnswerLabels labels={answer.labels ?? []} />
         {answer.flagged.length > 0 && (
           <div role="note" className="flex gap-2 rounded-xl border border-rose/40 bg-rose-soft px-3 py-2 text-[13.5px] text-rose">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -281,6 +262,16 @@ export function KakoAnswer({
               ))}{" "}
               to any figure, fact or amount you said. Treat {answer.flagged.length === 1 ? "it" : "them"} with care.
             </p>
+          </div>
+        )}
+        {(answer.scenarios ?? []).map((sc) => (
+          <ScenarioCard key={sc.what_if} scenario={sc} />
+        ))}
+        {(answer.calculations ?? []).length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(answer.calculations ?? []).map((c) => (
+              <CalculationCard key={c.ref} calculation={c} />
+            ))}
           </div>
         )}
         {answer.options.length > 0 && (
@@ -319,6 +310,7 @@ export function KakoAnswer({
             </ul>
           </div>
         )}
+        <SourceChips sources={answer.sources ?? []} title="What this answer rests on" />
         <Working steps={steps} answer={answer} />
       </div>
     </div>

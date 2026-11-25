@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import BaseModel
 
-from kako.agents.answers import Citation, TurnAnswer
+from kako.agents.answers import DOCUMENT, FILE, Citation, TurnAnswer
 from kako.agents.present import figure_value, money
 from kako.agents.reconciling import LABELS
 from kako.agents.replan import changes_lines, why_lines
@@ -285,7 +285,10 @@ def labels_of(answer: TurnAnswer, state: TurnState | None) -> list[str]:
 
 
 def _source_out(c: Citation) -> SourceOut:
-    return SourceOut(kind=c.kind, ref=c.ref, shown=c.shown[:SOURCE_CHARS])
+    """A source as shown: a document Kako read from its own files is a document, not something
+    from Meko (violet means Meko only)."""
+    kind = DOCUMENT if c.kind == "knowledge" and c.source_id.startswith(FILE) else c.kind
+    return SourceOut(kind=kind, ref=c.ref, shown=c.shown[:SOURCE_CHARS])
 
 
 def turn_shown(asked: Asked, settings: Settings) -> TurnOut:
