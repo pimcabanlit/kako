@@ -311,12 +311,44 @@ What Meko does not do, and Kako adds (see [concept.md](concept.md#what-meko-alre
 Meko keeps both "₱100,000" and "₱120,000" as memories and returns both (tested); Kako decides which is
 current, what it replaced and which plans and decisions depended on it.
 
+## The session screen
+
+The household plans in one screen shaped like the chat apps they already use, so there is nothing
+new to learn about where things are:
+
+- **Down the left**, the sessions, newest first, with their date and turn count, and "New session".
+  The footer names the household and links the system check. On a phone it is a drawer.
+- **A new session** opens empty, as chat apps do: a greeting over the swirl art, the composer and a
+  few starter questions any household could ask. The first message starts the session (its title is
+  that message) and is sent as its first turn.
+- **The conversation**: each person's message on the right with who wrote it, then Kako's answer:
+  the reply, any flagged figures, the options with the monthly amounts and their sources, the
+  replan (what changed, old struck through, why, the decisions to revisit), how a conflict between
+  specialists was resolved, the approval card, and "Show the working", closed by default like a chat
+  app's "thinking".
+- **Approval cards inline.** A change the household stated waits on a gold card with the value it
+  replaces struck through, who said it and their words. Approve or reject acts as the adult chosen
+  in the composer; a child can't. Once decided it turns emerald ("Current") or rose ("Rejected").
+- **The agents' steps** ("Show the working"): every tool call in order, a specialist's steps nested
+  under the orchestrator's ask, each what-if split, what was sent back or refused and why, what each
+  specialist proposed, and the turn's model calls, tokens, cost and Meko trace. While a turn runs,
+  the steps appear as they are logged.
+- **The composer**: Enter sends, Shift+Enter starts a new line, "Writing as" picks Mara, Jun or Lia,
+  and "Synthetic data. Not financial advice." sits under it on every screen.
+
+Each turn is kept as the household saw it (`session_turn`, the answer exactly as the API returned
+it), written by the same code path for the API, `kako ask` and demo mode, so every turn shows on
+the screen whatever ran it. The screen reads `GET /sessions/{id}/turns` (the kept turns with their
+steps, and the running turn's steps so far) and polls it only while a turn runs. Every screen has
+loading, empty and error states, with a way to try again. The look follows the tokens in
+[look-and-feel.md](look-and-feel.md): dark by default with a light theme, one meaning per colour.
+
 ## Components
 
 | Component | Where | What it does |
 | --- | --- | --- |
-| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and shadcn/ui. Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas |
-| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `POST /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans, why, diff, facts timeline, decisions, what-ifs, metrics |
+| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), see "The session screen" below |
+| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans, why, diff, facts timeline, decisions, what-ifs, metrics |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |
