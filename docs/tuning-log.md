@@ -553,3 +553,25 @@ it led to.
   record` doesn't replay session 2 before recording session 4, so the brief's Meko search sees a
   different datapack (as with entry 9's recording); the replies are replayed and reported. Recording
   session 4 after session 2, as demo mode plays them, is a follow-up.
+
+### 13. The learned preference's effect: its four questions without it (Nov 25, 2026)
+
+- **Change tested:** no prompt or tool change. The metrics page (Phase 5, task 4) shows the
+  preference's effect: the test set's four questions that expect it cited (q10, q12, q16 and q21),
+  answered by the specialists on a household that never learned it, against entry 12's saved run
+  with it. The household without it is `kako demo run --without-learning` on an empty database and a
+  throwaway local Meko datapack: changes.csv row 6 is never written, nothing is shared in Meko (no
+  promoted preference, no decision record), and session 4 isn't replayed (its rows 10 and 11 are
+  loaded as they are). The three decisions of Sessions 1 to 3, all choosing cash on hand, are still
+  in every brief. Pim approved up to US$0.35 (Nov 25).
+- **Prediction (written before the run):**
+  - Entry 12, with the preference: 81.4% (q10 80%, q12 85.7%, q16 80%, q21 80%); leaving out the
+    check that cites it, 81.3%.
+  - Without it, the check that cites it fails on all four by construction, so the full score drops to
+    **60% to 68%**.
+  - Leaving that check out, I expect **75% to 82%**: the three decisions in the brief still point to
+    cash on hand, so q10 and q21 most likely still don't recommend all on the card (about 70% that
+    both hold; the likeliest miss is q21 recommending the whole surplus on the card, now that nothing
+    names the household's preference). The figures missed in entry 12 (q10's 16 months, q16's surplus,
+    q21's 7 months) are about as likely to be missed again.
+  - About 45 to 55 calls, **US$0.20 to US$0.28** (entry 12's four cost US$0.23).
