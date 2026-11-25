@@ -327,6 +327,25 @@ reads, never what Kako works out.
    Built Nov 25: the Meko client tells "nothing answered" (`MekoUnreachable`) from an error, and
    `GET /metrics/meko` answers it with 503 and "Meko isn't running here, so its own figures can't
    be shown".
+3. **Decisions as books (Nov 25; mockups first, not built yet).** Each decision is a book on a
+   shelf, after the two bookshelf pages Pim shared. The cover carries the question as its title
+   ("Should the bonus go to the card or the family trip?"), who decided as its author ("Decided by
+   Jun") and where and when as its publication line ("Session 3, Oct 18, 2026"), with its standing
+   (in force, revised, reversed) and a gold "To revisit" mark when it applies. A book opens on three
+   bookmarks:
+   - **The decision:** what was chosen then and the household's reasoning in their words, with
+     each option not chosen and why.
+   - **To revisit:** what has changed since among the facts it rests on, each change before and
+     after; when nothing has, it says so.
+   - **Rests on N facts:** the facts it was made on, each with its value then and whether it has
+     moved.
+   It keeps the screen pattern of item 1 (the title and view chips at the top left, the details in
+   a sheet) and the look and feel's colours (gold only for "to revisit", emerald for in force, rose
+   for options turned down), and reads only what `GET /decisions` already returns. Next: Pim picks
+   from the mockups; then it is built.
+   Done when: Pim has approved a mockup, and the screen built from it shows every decision as a
+   book, each bookmark one click away, by keyboard too, in both themes, at phone width, and in its
+   loading, empty and error states.
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 
