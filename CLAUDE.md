@@ -524,15 +524,18 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   the number check, the turn's Meko calls; docs/architecture.md, "The plan screen"),
   `timeline-view.tsx` (what happened as a list and each thing as cards, details in a sheet),
   `page-header.tsx` (a screen's title and its view chips), `detail-sheet.tsx` (an item's details in
-  a modal sheet), `decisions-view.tsx` (each decision,
-  its options and what to revisit; docs/architecture.md, "The timeline and decisions screens"),
+  a modal sheet), `decisions-view.tsx` (the decisions
+  as books on a shelf, each opened at three bookmarks: the decision, what to revisit, the facts it
+  rests on; the open book in the address, `?book=<id>&mark=`; docs/architecture.md, "The timeline
+  and decisions screens"),
   `metrics-view.tsx` (what Kako measured; docs/architecture.md, "The metrics screen") and
   `health-panel.tsx`. `src/lib/`: `api.ts` (every call, and `ApiError`), `types.ts`
   (the API's shapes, kept in step with `api/sessions.py`, `api/proposals.py`, `api/household.py`,
   `api/plans.py`, `api/history.py` and `api/metrics.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
   that ran them), `plan.ts` (a plan's status, the facts behind its figures, the number check's
   tally), `history.ts` (events by month and the line under each, a thing's card, a value's state and window,
-  a decision's standing),
+  a decision's standing, an older `#decision-<id>` link), `shelf.ts` (the decisions shelf: its chips,
+  each book's cover and picture, the pattern across the shelf, the bookmarks, the facts by kind),
   `metrics.ts` (the metrics screen's words and formats), `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.

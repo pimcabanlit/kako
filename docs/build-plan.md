@@ -327,25 +327,43 @@ reads, never what Kako works out.
    Built Nov 25: the Meko client tells "nothing answered" (`MekoUnreachable`) from an error, and
    `GET /metrics/meko` answers it with 503 and "Meko isn't running here, so its own figures can't
    be shown".
-3. **Decisions as books (Nov 25; mockups first, not built yet).** Each decision is a book on a
-   shelf, after the two bookshelf pages Pim shared. The cover carries the question as its title
-   ("Should the bonus go to the card or the family trip?"), who decided as its author ("Decided by
-   Jun") and where and when as its publication line ("Session 3, Oct 18, 2026"), with its standing
-   (in force, revised, reversed) and a gold "To revisit" mark when it applies. A book opens on three
-   bookmarks:
+3. **Decisions as books (Nov 25).** Each decision is a book on a shelf, after the two bookshelf
+   pages Pim shared. The cover carries the question as its title ("Should the bonus go to the card
+   or the family trip?"), who decided as its author ("by Jun") and where and when as its publication
+   line ("Session 3 · Oct 18, 2026"), with its standing (in force, revised, reversed) and a gold
+   ribbon when it is to be revisited. A book opens on three bookmarks:
    - **The decision:** what was chosen then and the household's reasoning in their words, with
      each option not chosen and why.
    - **To revisit:** what has changed since among the facts it rests on, each change before and
      after; when nothing has, it says so.
    - **Rests on N facts:** the facts it was made on, each with its value then and whether it has
      moved.
-   It keeps the screen pattern of item 1 (the title and view chips at the top left, the details in
-   a sheet) and the look and feel's colours (gold only for "to revisit", emerald for in force, rose
-   for options turned down), and reads only what `GET /decisions` already returns. Next: Pim picks
-   from the mockups; then it is built.
+   It keeps the screen pattern of item 1 (the title and view chips at the top left) and the look and
+   feel's colours (gold only for "to revisit", emerald for in force), and reads only what
+   `GET /decisions` returns.
    Done when: Pim has approved a mockup, and the screen built from it shows every decision as a
    book, each bookmark one click away, by keyboard too, in both themes, at phone width, and in its
    loading, empty and error states.
+   Approved Nov 25, with Pim's changes to the mockup: the three bookmarks sit on one row, never
+   wrapping ("The decision", "To revisit · 1", "Rests on 21 facts"); no option letters ("B") and no
+   "Chosen" mark (the bookmark and "What Jun chose" already say it); options turned down shown plain
+   and greyed, with no colour and no "Not chosen" (this replaces "rose for options turned down").
+   Built Nov 25: the shelf (`components/decisions-view.tsx`, chips All, To revisit, In force and
+   Revised with their counts; covers whose colour and pattern stand for the session, decoration
+   only; a pattern "across the shelf" counted in code from each chosen option's tags), and the open
+   book (the cover on the left, or on top on a phone, the bookmarks as tabs hanging from the page,
+   arrow keys between them). The book and bookmark open are in the address
+   (`/decisions?book=<id>&mark=revisit`), so the timeline's decision opens its book, the browser's
+   back button returns to the shelf and an older `#decision-<id>` link still opens the book. On a
+   phone the bookmarks keep one row with short names ("Decision", "Revisit · 1", "21 facts"). For
+   the third bookmark each fact `GET /decisions` returns now says what it is about (`thing`, `kind`,
+   `words`), so the facts are grouped by kind like the mockup. The pure parts are `lib/shelf.ts`.
+   Checked on the demo story through Dec 1, in both themes, at phone width, by keyboard, from the
+   timeline, and loading, empty, error and an unknown book.
+   Later, not built (they need new backend work, Meko or the models, and Pim's yes): the mockup's
+   "Then and now" totals (the household's take-home pay when it decided and now, worked out in
+   code), and its "Keep the decision as it is" and "Talk it over in a new session" buttons on the
+   "To revisit" bookmark.
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 

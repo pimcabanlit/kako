@@ -417,15 +417,28 @@ or from the bottom on a phone; Escape, the close button or a click outside close
   shared in Meko, and its state on the household's date: current (emerald), coming (orange), past,
   or corrected (rose, struck through, with the reason).
 
-`/decisions` lists every decision, newest first: the question, who decided, in which session and
-when (linked, and to the plan it accepted when there is one), the chosen option with the
-household's reasoning, every option not chosen with why not (rose), what each leans to from its
-tags ("keeps cash on hand", "pays debt off faster"), the household's words when they differ from the
-reasoning, and the facts it rests on with the ones that have changed marked. A decision still in
-force whose facts have moved shows "To revisit" (gold edge) with each change; it uses everything
-Kako knows now, so a new salary approved on Nov 20 for Dec 1 already marks the three decisions of
-Sessions 1 to 3. Balances, savings and the plan's own amounts are never among what a decision rests
-on, so the plan working doesn't mark anything.
+`/decisions` is a bookshelf (Pim, Nov 25): every decision a book, newest first, under the title
+and four chips (All, To revisit, In force, Revised, each with its count; Revised takes in reversed
+ones). A cover carries the question, who decided as its author ("by Jun"), the session and day, its
+standing when it is no longer in force, and a gold ribbon when it is to be revisited; its colour and
+pattern stand for the session it was made in and mean nothing else. Under the shelf, a pattern
+across it is counted in code from each chosen option's tags ("All 3 of 3 decisions chose the option
+that keeps cash on hand, never the one that pays debt off faster"), shown only when two or more
+share one. Opening a book (`/decisions?book=<id>`, a link the timeline uses too) shows its cover
+beside its page, with three bookmarks on one row as tabs:
+
+- **The decision**: what was chosen (no option letter), what it leans to, the reasoning when the
+  household's own words don't already say it, and their words; under "What was turned down", each
+  option not chosen, greyed, with what it leans to and why not. Its standing, the decision that
+  replaced it and the plan it accepted are linked when they apply.
+- **To revisit** (`&mark=revisit`): each fact it rests on that has changed since, before struck
+  through and after, from when; or that nothing has. A decision still in force uses everything Kako
+  knows now, so a new salary approved on Nov 20 for Dec 1 already marks the three decisions of
+  Sessions 1 to 3.
+- **Rests on N facts** (`&mark=facts`): the facts Kako held when it was decided, grouped by kind
+  (income, debts, spending, savings, goals, the house rules), each thing with its values, the moved
+  one struck through with what holds now. Balances, savings and the plan's own amounts are never
+  among what a decision rests on, so the plan working doesn't mark anything.
 
 The words are written by code: `planning/timeline.py` (the events, the things, each value's state)
 and `decisions/revisit.py` (what moved under a decision), both pure, from the rows
@@ -466,7 +479,7 @@ result that can't be read is reported in its place; the screen has loading and e
 | Component | Where | What it does |
 | --- | --- | --- |
 | Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), the plan screen (task 2), the timeline and decisions screens (task 3), and the metrics screen (task 4), see their sections above |
-| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans and their why (built: `GET /plans`, newest version first, and `GET /plans/{id}`: the options, each one's why down to the facts with where each came from, the number check's matches, the turn's Meko calls and trace link, and what changed against the last plan or decision, with the decisions to revisit; read-only, the household's rows only), the timeline and decisions (built: `GET /timeline`, what happened newest first with who approved or decided each and each thing's values over time with their windows and states, and `GET /decisions`, every decision with its options, the facts it rests on and what to revisit; read-only, the household's rows only), metrics (built: `GET /metrics`, every figure worked out in code from stored rows and saved results, a saved result that can't be read reported on its own; `GET /metrics/meko`, Meko's `datapack_metrics` with the brief against it; read-only, the household's rows only), what-ifs |
+| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans and their why (built: `GET /plans`, newest version first, and `GET /plans/{id}`: the options, each one's why down to the facts with where each came from, the number check's matches, the turn's Meko calls and trace link, and what changed against the last plan or decision, with the decisions to revisit; read-only, the household's rows only), the timeline and decisions (built: `GET /timeline`, what happened newest first with who approved or decided each and each thing's values over time with their windows and states, and `GET /decisions`, every decision with its options, the facts it rests on (each with what it is about: its thing, kind and words) and what to revisit; read-only, the household's rows only), metrics (built: `GET /metrics`, every figure worked out in code from stored rows and saved results, a saved result that can't be read reported on its own; `GET /metrics/meko`, Meko's `datapack_metrics` with the brief against it; read-only, the household's rows only), what-ifs |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |

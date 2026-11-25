@@ -122,6 +122,12 @@ Sizes used in the preview: body 15px / line-height 1.55; chat bubble 14.5px; pan
   34px wide), with its views as chips under it; lists and cards first, one line or one card per
   item, and an item's details in a sheet (from the right, or from the bottom on a phone). Built on
   the timeline first (`PageHeader`, `ViewChips`, `DetailSheet`).
+- Decisions as books (Pim, Nov 25): each decision a book on a shelf, opened at three bookmarks on one
+  row. A book's cover is a coloured object, the same in both themes, its colour and pattern standing
+  for the session it was made in: the one place colour is decoration, so covers keep to deep teal,
+  green and brown and never use a state colour. The gold ribbon on a cover means "to revisit", as
+  gold does everywhere. The open bookmark takes its own colour (emerald the decision, gold to
+  revisit, teal the facts); an option turned down is greyed, with no colour.
 - The swirl art (Pim's title card, `web/public/swirl.jpg`, 1400 x 724) sits on the empty new-session screen.
 - The fonts load with `next/font/google` and the `latin-ext` subset as well as `latin`: the peso sign (U+20B1) is
   only in `latin-ext`.
