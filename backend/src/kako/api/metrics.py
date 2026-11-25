@@ -33,6 +33,7 @@ from kako.db.metrics_read import (
     GapRow,
     Group,
     read_stored_metrics,
+    read_turns,
 )
 from kako.db.models import Household
 from kako.evals.preference import EffectSide, PreferenceEffect, read_preference_effect
@@ -442,6 +443,9 @@ class DatapackOut(BaseModel):
     relevance_mid: int | None
     relevance_low: int | None
     relevant_pct: int | None
+    # The household's sessions' average brief against everything the datapack holds.
+    brief_tokens: str | None
+    brief_pct_of_context: str | None
 
 
 def session_key(household_id: uuid.UUID) -> str:
@@ -461,6 +465,7 @@ async def read_meko_metrics(request: Request, household_id: uuid.UUID | None = N
                 )
             )
         ).one()
+        briefs = spread((await read_turns(conn, household))["household"], lambda t: t.brief_tokens)
     key = session_key(household)
     try:
         async with services.open_meko(DbCallLog(services.engine), MEKO_CALLS) as meko:
@@ -481,8 +486,12 @@ async def read_meko_metrics(request: Request, household_id: uuid.UUID | None = N
     except MekoError as exc:
         services.conversations.pop(key, None)  # made again next time, in case it is gone
         raise HTTPException(502, f"Meko: {safe_error(exc)}") from None
+    brief = whole(briefs.average) if briefs is not None else None
+    brief_pct = share(brief, found.context_tokens) if brief is not None else None
     return DatapackOut(
         target=services.settings.meko_target,
+        brief_tokens=str(brief) if brief is not None else None,
+        brief_pct_of_context=str(brief_pct) if brief_pct is not None else None,
         datapack_id=found.datapack_id,
         datapack_name=found.datapack_name,
         days=found.days,

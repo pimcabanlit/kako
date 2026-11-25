@@ -396,6 +396,8 @@ async def test_meko_metrics_once_a_conversation(
     assert found["target"] == "local"
     assert found["context_tokens"] == 0
     assert found["memories"] == {"count": 0, "tokens": 0}
+    assert found["brief_tokens"] is None  # no turn kept its brief's size
+    assert found["brief_pct_of_context"] is None
     # One conversation for the process, then a metrics call each time.
     assert meko.calls == ["conversation_create", "datapack_metrics", "datapack_metrics"]
     assert len(conversations) == 1
@@ -426,3 +428,20 @@ async def test_meko_metrics_refusals(migrated: AsyncEngine, make_settings: MakeS
 
     assert await _api(migrated, make_settings, gone, twice) == [502, 502]
     assert gone.calls.count("conversation_create") == 2
+
+
+async def test_the_brief_against_the_whole_context(
+    migrated: AsyncEngine, make_settings: MakeSettings
+) -> None:
+    await _seed(migrated)
+    meko = FakeMeko()
+    conversation = await meko.create_conversation(agent_id="kako:upkeep", title="t")
+    await meko.add_memory(conversation, "x" * 40_000, {}, agent_id="kako:upkeep")  # 10,000 tokens
+
+    async def read(api: httpx.AsyncClient, _: Services) -> Any:
+        return (await api.get("/api/v1/metrics/meko")).json()
+
+    found = await _api(migrated, make_settings, meko, read)
+    # Only the household's sessions count (Session 2's 2,400), not the test set's briefs.
+    assert (found["context_tokens"], found["brief_tokens"]) == (10_000, "2400")
+    assert found["brief_pct_of_context"] == "24.0"
