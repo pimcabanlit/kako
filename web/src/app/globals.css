@@ -486,6 +486,44 @@ body {
     background: linear-gradient(90deg, var(--raised), var(--line), var(--raised));
     background-size: 200% 100%;
   }
+
+  /* The documentation screen (docs/architecture.md, "The documentation screen"). */
+  .doc-body {
+    font-size: 15.5px;
+    line-height: 1.65;
+  }
+  .doc-dashed-left {
+    border-left-style: dashed;
+  }
+  .flow-node {
+    background: var(--surface);
+    border-color: var(--line-strong);
+  }
+  .flow-meko {
+    border-color: color-mix(in srgb, var(--meko) 55%, var(--line));
+  }
+  .flow-kako {
+    border-color: color-mix(in srgb, var(--emerald) 55%, var(--line));
+  }
+  .flow-person {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--gold) 60%, var(--line));
+  }
+  .flow-shared {
+    background: var(--emerald-soft);
+    border-color: color-mix(in srgb, var(--emerald) 60%, var(--line));
+  }
+  /* An arrow tag between two steps: the verb, on Meko's violet. */
+  .flow-arrow {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--bg);
+    background: var(--meko);
+    padding: 3px 11px 3px 7px;
+    clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 0 100%);
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {

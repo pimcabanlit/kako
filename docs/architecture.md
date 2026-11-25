@@ -298,7 +298,7 @@ real run's misses are the model's.
 | Meko part | Kako's use | Where it shows |
 | --- | --- | --- |
 | Conversations | One per planning session, turns stored with `plan` and `reasoning` | Session history; dreaming's input |
-| Decision traces | The conversation id is the trace id; every Meko call in the session is a span under it | "Open trace" on each recommendation (Meko Cloud's Observe for the demo) |
+| Decision traces | The conversation id is the trace id; every Meko call in the session is a span under it | "Open the trace on Meko Cloud" for each turn, on the plan screen and in "Show the working" (Meko Cloud's Observe for the demo) |
 | Memory | One sentence per approved fact, decision and preference, with Kako's ids in its metadata; replaced facts rewritten in the past tense. Sentences name people and things in full ("Mara Villanueva's take-home pay…"), because Meko's search boosts named entities. Meko's own extracted memories are candidates for dreaming | Specialists' context; the timeline |
 | Learning (promotion) | Dreaming reads Meko's Learnings and extracted memories, proposes, the household approves; a preference is promoted to collective memory, a decision record to shared knowledge | "Learned by dreaming from Session 3, approved by Mara on Oct 20, 2026" and "Shared with every agent in Meko" on the fact in the plan screen's why |
 | Knowledge base | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) | Cited excerpts in the why panel |
@@ -520,11 +520,39 @@ The API is `GET /money`, read-only, the household's rows only. On a phone the ta
 sideways with their first column kept in place. Year-end projections, a one-off what-if (such as
 a bonus) and paydays are later items.
 
+## The documentation screen
+
+How Kako works and how it uses every part of Meko's context, written for a judge or a new member of
+the household, inside the app (`/docs`, Phase 5a, item 7, approved Nov 25). It opens from the
+household menu: the sidebar's footer (the household's name and date) is a button whose menu holds
+System check, Documentation and the household's people. Three groups of pages, in the style of
+Meko's own docs:
+
+- **Start here:** how Kako uses Meko (the first page), the Villanuevas' story from Aug 15 to Dec 1,
+  and the one rule (the engine calculates, the agents explain and propose, the household decides).
+- **Meko in Kako:** the sections of the first page, one per part of Meko's context: the datapack
+  and its isolation, conversations, decision traces, memory, learning and promotion, the knowledge
+  base, self-learning, artifacts, Postgres in the datapack, sharing and collaboration, metrics, and
+  where Kako keeps what, ending with the story told through Meko. Each section carries its status
+  (built, in part, planned), what Kako does with that part, the moment in the household's story
+  where it shows, and links to the screens that show it. A part not yet built is a dashed
+  placeholder that says what it will be.
+- **Under the hood:** the engine, the agents, dreaming and the guardrails.
+
+The pages are data (`web/src/lib/docs/`): sections of blocks (text, lists, tables, steps, a
+timeline, the datapack's parts, a flow, "in the story" and note callouts, placeholders). The same
+data draws the screen and "Copy page as Markdown", and a test holds every internal link to a page,
+section or screen that exists. Every figure on a page is one the demo's files or the engine give.
+The first page says live whether Meko is reachable on this machine, off (`KAKO_MEKO_OFF`) or
+unreachable, from `/api/v1/health`. On a wide screen the page has its menu on the left and "On this
+page" on the right, following the section being read; on a phone both fold into a "Pages" button.
+No API of its own.
+
 ## Components
 
 | Component | Where | What it does |
 | --- | --- | --- |
-| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), the plan screen (task 2), the timeline and decisions screens (task 3), the metrics screen (task 4) and the money screen (Phase 5a, item 4), see their sections above |
+| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), the plan screen (task 2), the timeline and decisions screens (task 3), the metrics screen (task 4), the money screen (Phase 5a, item 4) and the documentation screen (item 7), see their sections above |
 | API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans and their why (built: `GET /plans`, newest version first, and `GET /plans/{id}`: the options, each one's why down to the facts with where each came from, the number check's matches, the turn's Meko calls and trace link, and what changed against the last plan or decision, with the decisions to revisit; `GET /plans/{id}/compare`: each option beside today's plan, the turn's own snapshot taken again, with what each reaches, what it changes and its months one by one, 409 when that snapshot can't be taken again exactly; read-only, the household's rows only), the timeline and decisions (built: `GET /timeline`, what happened newest first with who approved or decided each and each thing's values over time with their windows and states, and `GET /decisions`, every decision with its options, the facts it rests on (each with what it is about: its thing, kind and words) and what to revisit; read-only, the household's rows only), metrics (built: `GET /metrics`, every figure worked out in code from stored rows and saved results, a saved result that can't be read reported on its own; `GET /metrics/meko`, Meko's `datapack_metrics` with the brief against it; read-only, the household's rows only), the money screen (built: `GET /money`, where the money stands on the household's date: M-1 to M-6 with the headline figures, 13th-month pay, changes ahead and the decisions in force; read-only, the household's rows only), what-ifs |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |

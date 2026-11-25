@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kako Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Unbounded:wght@500;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Mockup: a Documentation page inside Kako, laid out like Meko's docs (left nav, content, "On this page"), in Kako's own look. */
+:root {
+  --bg:#0a0f0d; --surface:#111916; --raised:#17221e; --line:#22302b; --line-strong:#2e3f39; --glass:rgba(23,34,30,.66);
+  --fg:#f2f6f3; --muted:#9daea6; --emerald:#34d399; --teal:#2dd4bf; --gold:#fcd34d; --orange:#fb923c; --rose:#fb7185; --meko:#b9a4ff;
+  --emerald-soft:rgba(52,211,153,.12); --gold-soft:rgba(252,211,77,.12); --meko-soft:rgba(185,164,255,.12); --teal-soft:rgba(45,212,191,.10);
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg:#f5f7f4; --surface:#fff; --raised:#eef3ef; --line:#dce5e0; --line-strong:#c6d3cc; --glass:rgba(255,255,255,.9);
+  --fg:#0d1613; --muted:#52625b; --emerald:#047857; --teal:#0f766e; --gold:#8a5a00; --orange:#c2410c; --rose:#be123c; --meko:#6d3fd6;
+  --emerald-soft:#e1f3ea; --gold-soft:#fbf0cf; --meko-soft:#eee8fd; --teal-soft:#dff2ef; color-scheme: light;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:"Plus Jakarta Sans", system-ui, "Segoe UI", sans-serif; font-size:15.5px; line-height:1.65; }
+a { color:var(--teal); }
+code, .mono { font-family:"Geist Mono", ui-monospace, Menlo, Consolas, monospace; font-size:.88em; }
+code { background:var(--raised); border:1px solid var(--line); border-radius:6px; padding:1px 6px; }
+.app { display:flex; min-height:100vh; }
+/* Kako sidebar */
+nav.side { flex:0 0 248px; position:sticky; top:0; height:100vh; padding:20px 14px; border-right:1px solid var(--line); background:color-mix(in srgb, var(--surface) 80%, transparent); display:flex; flex-direction:column; gap:3px; }
+.wordmark { font-family:Unbounded,sans-serif; font-weight:700; font-size:22px; letter-spacing:-.02em; padding:4px 10px 14px; }
+.nav { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; color:var(--fg); font-size:14px; font-weight:600; text-decoration:none; }
+.nav:hover { background:var(--raised); }
+.eyebrow { font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+.foot { margin-top:auto; position:relative; border-top:1px solid var(--line); padding-top:10px; }
+.foot-btn { width:100%; text-align:left; display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px; border:1px solid transparent; background:transparent; color:var(--fg); font:inherit; cursor:pointer; }
+.foot-btn:hover, .foot-btn[aria-expanded="true"] { background:var(--raised); border-color:var(--line); }
+.foot-btn .hh { font-size:13px; line-height:1.35; flex:1; }
+.foot-btn .hh b { display:block; }
+.foot-btn .hh span { color:var(--muted); }
+.menu { position:absolute; bottom:calc(100% + 6px); left:0; right:0; background:var(--surface); border:1px solid var(--line-strong); border-radius:14px; padding:6px; box-shadow:0 20px 50px -20px rgba(0,0,0,.6); }
+.menu a { display:flex; gap:10px; align-items:flex-start; padding:9px 10px; border-radius:10px; color:var(--fg); text-decoration:none; font-size:14px; }
+.menu a:hover, .menu a.on { background:var(--raised); }
+.menu small { display:block; color:var(--muted); font-size:12px; line-height:1.35; }
+.menu .new { margin-left:auto; font-size:10.5px; font-weight:700; padding:1px 6px; border-radius:6px; background:var(--meko-soft); color:var(--meko); }
+.menu hr { border:none; border-top:1px solid var(--line); margin:4px 6px; }
+/* Docs layout */
+.docs { flex:1; min-width:0; display:grid; grid-template-columns: 230px minmax(0,1fr) 220px; }
+.dnav { position:sticky; top:0; height:100vh; overflow:auto; padding:28px 14px 28px 22px; border-right:1px solid var(--line); font-size:14px; }
+.dnav .group { margin:16px 0 6px; }
+.dnav a { display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:8px; color:var(--fg); text-decoration:none; }
+.dnav a:hover { background:var(--raised); }
+.dnav a.on { color:var(--meko); background:var(--meko-soft); font-weight:600; }
+.dnav .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+.d-built { background:var(--emerald); } .d-part { background:var(--gold); } .d-plan { background:transparent; border:1.5px dashed var(--muted); }
+.content { padding:40px 48px 96px; max-width:860px; }
+.toc { position:sticky; top:0; height:100vh; overflow:auto; padding:40px 18px; border-left:1px solid var(--line); font-size:13.5px; }
+.toc a { display:block; color:var(--muted); text-decoration:none; padding:4px 0 4px 10px; border-left:2px solid transparent; }
+.toc a:hover { color:var(--fg); border-left-color:var(--line-strong); }
+.crumbs { font-size:13px; color:var(--muted); margin-bottom:10px; }
+h1 { font-family:Unbounded,sans-serif; font-weight:500; font-size:36px; letter-spacing:-.02em; line-height:1.1; margin:0 0 10px; }
+.tagline { font-size:17px; color:var(--muted); margin:0 0 18px; }
+.actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:28px; }
+.btn { font:600 13px "Plus Jakarta Sans",sans-serif; padding:7px 12px; border-radius:9px; border:1px solid var(--line-strong); background:var(--raised); color:var(--fg); cursor:pointer; }
+h2 { font-family:Unbounded,sans-serif; font-weight:500; font-size:23px; letter-spacing:-.015em; margin:48px 0 12px; scroll-margin-top:20px; }
+h3 { font-size:17px; margin:26px 0 8px; scroll-margin-top:20px; }
+p { margin:0 0 12px; }
+ul.defs { padding-left:20px; margin:0 0 14px; }
+ul.defs li { margin:0 0 10px; }
+.status { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:2px 9px; border-radius:999px; vertical-align:2px; margin-left:6px; white-space:nowrap; }
+.s-built { color:var(--emerald); background:var(--emerald-soft); }
+.s-part { color:var(--gold); background:var(--gold-soft); }
+.s-plan { color:var(--muted); border:1px dashed var(--line-strong); }
+.callout { border:1px solid var(--line); border-left:3px solid var(--meko); background:var(--meko-soft); border-radius:12px; padding:12px 16px; margin:16px 0; font-size:14.5px; }
+.callout.story { border-left-color:var(--gold); background:var(--gold-soft); }
+.callout.plan { border-left-color:var(--muted); background:var(--raised); border-style:dashed; border-left-style:solid; }
+.callout b.lbl { display:block; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:2px; }
+.callout.story b.lbl { color:var(--gold); } .callout b.lbl { color:var(--meko); } .callout.plan b.lbl { color:var(--muted); }
+table { width:100%; border-collapse:collapse; font-size:14px; margin:10px 0 16px; }
+th { text-align:left; font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--line-strong); }
+td { padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+.scroll { overflow-x:auto; }
+/* Flow diagram */
+.flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:14px 0 6px; }
+.node { flex:1 1 120px; min-width:0; border:1.5px solid var(--line-strong); border-radius:12px; padding:10px 12px; background:var(--surface); font-size:13.5px; }
+.node b { display:block; font-size:14px; }
+.node span { color:var(--muted); font-size:12.5px; }
+.node.m { border-color:color-mix(in srgb, var(--meko) 55%, var(--line)); }
+.node.k { border-color:color-mix(in srgb, var(--emerald) 55%, var(--line)); }
+.node.r { border-style:dashed; border-color:color-mix(in srgb, var(--gold) 60%, var(--line)); }
+.node.s { background:var(--emerald-soft); border-color:color-mix(in srgb, var(--emerald) 60%, var(--line)); }
+.arr { align-self:center; font-family:"Geist Mono",monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--bg); background:var(--meko); padding:3px 9px 3px 7px; clip-path:polygon(0 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 0 100%); }
+.legend { font-size:12.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:6px 16px; }
+/* Datapack box */
+.pack { border:1.5px solid color-mix(in srgb, var(--meko) 60%, var(--line)); border-radius:18px; padding:26px 16px 16px; position:relative; margin:18px 0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.pack .badge { position:absolute; top:-12px; left:50%; transform:translateX(-50%); background:var(--meko); color:var(--bg); font-family:Unbounded,sans-serif; font-weight:700; font-size:11.5px; letter-spacing:.1em; padding:3px 12px; border-radius:999px; white-space:nowrap; }
+.part { border:1px solid var(--line); border-left:4px solid var(--meko); border-radius:10px; padding:10px 12px; background:var(--surface); font-size:13.5px; }
+.part b { font-size:14.5px; }
+.part.plan { border-left-style:dashed; border-left-color:var(--muted); }
+.part p { margin:4px 0 0; color:var(--muted); }
+.tl { list-style:none; padding:0; margin:12px 0; border-left:2px solid var(--line-strong); }
+.tl li { position:relative; padding:0 0 14px 18px; }
+.tl li::before { content:""; position:absolute; left:-6px; top:7px; width:10px; height:10px; border-radius:50%; background:var(--meko); }
+.tl li.plan::before { background:var(--bg); border:1.5px dashed var(--muted); }
+.tl b { display:block; }
+.next { margin-top:40px; padding-top:18px; border-top:1px solid var(--line); }
+.themebtn { font:600 13px "Plus Jakarta Sans",sans-serif; border:1px solid var(--line-strong); background:transparent; color:var(--fg); border-radius:10px; padding:6px 10px; cursor:pointer; margin:0 10px 8px; }
+button:focus-visible, a:focus-visible { outline:2px solid var(--teal); outline-offset:2px; }
+@media (max-width:1200px) { .docs { grid-template-columns:200px minmax(0,1fr); } .toc { display:none; } }
+@media (max-width:900px) { nav.side { display:none; } .docs { grid-template-columns:minmax(0,1fr); } .dnav { display:none; } .content { padding:24px 16px 64px; } .pack { grid-template-columns:minmax(0,1fr); } h1 { font-size:28px; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+<nav class="side" aria-label="Kako">
+  <div class="wordmark">kako</div>
+  <a class="nav" href="#" style="border:1px solid var(--line-strong); background:var(--raised); margin-bottom:10px">+ New session</a>
+  <a class="nav" href="#">Money</a><a class="nav" href="#">Plan</a><a class="nav" href="#">Timeline</a><a class="nav" href="#">Decisions</a><a class="nav" href="#">Metrics</a>
+  <div class="eyebrow" style="padding:16px 10px 4px">Sessions</div>
+  <a class="nav" href="#" style="flex-direction:column;align-items:flex-start;gap:0">Session 3<span style="color:var(--muted);font-size:12px;font-weight:500">Oct 18, 2026 · ended</span></a>
+  <a class="nav" href="#" style="flex-direction:column;align-items:flex-start;gap:0">Session 2<span style="color:var(--muted);font-size:12px;font-weight:500">Sep 15, 2026 · ended</span></a>
+  <a class="nav" href="#" style="flex-direction:column;align-items:flex-start;gap:0">Session 1<span style="color:var(--muted);font-size:12px;font-weight:500">Aug 15, 2026 · ended</span></a>
+  <div class="foot">
+    <button class="themebtn" type="button" id="theme">Switch to light</button>
+    <div class="menu" id="footmenu" role="menu" aria-label="Household and help">
+      <a href="#" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><div>System check<small>Postgres, Meko and the models, live</small></div></a>
+      <a href="#" role="menuitem" class="on" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg><div>Documentation<small>How Kako works and uses Meko</small></div><span class="new">new</span></a>
+      <hr>
+      <a href="#" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><div>The household<small>Mara, Jun and Lia</small></div></a>
+    </div>
+    <button class="foot-btn" type="button" id="footbtn" aria-haspopup="menu" aria-expanded="true" aria-controls="footmenu">
+      <span class="hh"><b>Villanueva household</b><span>Dec 1, 2026</span></span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>
+    </button>
+  </div>
+</nav>
+
+<div class="docs">
+  <nav class="dnav" aria-label="Documentation">
+    <div class="eyebrow">Documentation</div>
+    <div class="group eyebrow">Start here</div>
+    <a href="#top" class="on">How Kako uses Meko</a>
+    <a href="#">The Villanuevas' story</a>
+    <a href="#">The one rule</a>
+    <div class="group eyebrow">Meko in Kako</div>
+    <a href="#datapack"><span class="dot d-built"></span>The household's datapack</a>
+    <a href="#conversations"><span class="dot d-built"></span>Conversations</a>
+    <a href="#traces"><span class="dot d-built"></span>Decision traces</a>
+    <a href="#memory"><span class="dot d-built"></span>Memory</a>
+    <a href="#learning"><span class="dot d-built"></span>Learning and promotion</a>
+    <a href="#knowledge"><span class="dot d-built"></span>Knowledge base</a>
+    <a href="#gaps"><span class="dot d-built"></span>Self-learning</a>
+    <a href="#artifacts"><span class="dot d-plan"></span>Artifacts</a>
+    <a href="#postgres"><span class="dot d-plan"></span>Postgres in the datapack</a>
+    <a href="#sharing"><span class="dot d-part"></span>Sharing and collaboration</a>
+    <a href="#metrics"><span class="dot d-built"></span>Metrics</a>
+    <a href="#where"><span class="dot d-built"></span>Where Kako keeps what</a>
+    <div class="group eyebrow">Under the hood</div>
+    <a href="#">The engine</a><a href="#">The agents</a><a href="#">Dreaming</a><a href="#">Guardrails</a>
+    <div class="legend" style="margin-top:18px"><span><span class="dot d-built" style="display:inline-block"></span> built</span><span><span class="dot d-part" style="display:inline-block"></span> in part</span><span><span class="dot d-plan" style="display:inline-block"></span> planned</span></div>
+  </nav>
+
+  <main class="content" id="top">
+    <div class="crumbs">Documentation / Meko in Kako</div>
+    <h1>How Kako uses Meko</h1>
+    <p class="tagline">Every part of Meko's context, followed through one household: the Villanuevas, from August to December 2026.</p>
+    <div class="actions"><button class="btn" type="button" id="copy">Copy page as Markdown</button><a class="btn" href="https://docs.mekodata.ai/concepts/datapacks/" style="text-decoration:none">Meko's own docs ↗</a></div>
+
+    <p>Kako is a planner for a household's money. Mara and Jun talk to it in planning sessions; an orchestrator and four specialists answer; an engine works out every peso. <b>Meko is where Kako keeps the household's context</b>: what was said, what was learned, what every agent can find, and the trace of how each answer was reached. Postgres keeps the exact numbers. This page shows how each part of Meko's context is used, with the moment in the Villanuevas' story where you can see it.</p>
+    <div class="callout"><b class="lbl">On this laptop</b>The sandbox runs with Meko switched off (<code>KAKO_MEKO_OFF</code>), so new questions there are kept in Kako only. Everything below describes Kako against Meko: local Meko in development, Meko Cloud for the demo.</div>
+
+    <h2 id="datapack">The household's datapack</h2>
+    <p>The Villanuevas have one datapack. Every call Kako makes names it with <code>datapack_id</code>, and every agent speaks as itself: <code>kako:orchestrator</code>, <code>kako:debt</code>, <code>kako:savings</code>, and so on. It holds:</p>
+    <div class="pack" role="img" aria-label="The Villanuevas' datapack and its parts">
+      <span class="badge">THE VILLANUEVAS' DATAPACK</span>
+      <div class="part"><b>Conversations</b> <span class="status s-built">built</span><p>Sessions 2 and 4, every turn with its plan and reasoning.</p></div>
+      <div class="part"><b>Memories</b> <span class="status s-built">built</span><p>One sentence per approved fact, decision and preference.</p></div>
+      <div class="part"><b>Collective memory</b> <span class="status s-built">built</span><p>The flexibility preference, shared with every agent.</p></div>
+      <div class="part"><b>Knowledge base</b> <span class="status s-built">built</span><p>Statements, planning rules, PH reference documents, a decision record.</p></div>
+      <div class="part"><b>Traces</b> <span class="status s-built">built</span><p>Every Meko call of every session, under its conversation.</p></div>
+      <div class="part plan"><b>Artifacts</b> <span class="status s-plan">planned</span><p>Each plan report, kept whole.</p></div>
+      <div class="part plan"><b>Postgres (AMP)</b> <span class="status s-plan">planned</span><p>The household's facts inside the datapack.</p></div>
+      <div class="part"><b>Search log</b> <span class="status s-built">built</span><p>Weak searches turned into questions (Meko Cloud).</p></div>
+    </div>
+    <h3>Isolation</h3>
+    <ul class="defs">
+      <li><b>One household, one datapack.</b> Nothing from another household can reach the Villanuevas' answers, and every call carries their <code>datapack_id</code>.</li>
+      <li><b>Local first.</b> Development and tests use local Meko on <code>127.0.0.1</code>. Meko Cloud is reached only for the demo, and a call counter stops each Free-tier tool at a ceiling so rehearsals can't use up the lifetime allowances.</li>
+      <li><b>Agents by name.</b> Each agent writes and deletes only its own memories, which Meko enforces.</li>
+    </ul>
+
+    <h2 id="conversations">Conversations <span class="status s-built">built</span></h2>
+    <p>Each planning session is one Meko conversation. When Kako answers a turn, it adds the household's words, Kako's reply, the <b>plan</b> (the steps taken: the brief, the specialists asked, the reconciliation, the options) and the <b>reasoning</b> (the specialists' summaries), with metadata naming the plan, run and recommendation. After the session, dreaming reads the turns back from Meko.</p>
+    <div class="callout story"><b class="lbl">In the story · Session 2, Sep 15</b>Mara asks how hard to pay down the card; Jun wants ₱4,000 extra and the rest to the emergency fund. The turn kept in Meko carries both specialists' proposals, the conflict, and options A and B. That same conversation is what dreaming reads later.</div>
+
+    <h2 id="traces">Decision traces <span class="status s-built">built</span></h2>
+    <p>The conversation id is the trace. Every Meko call in a session (the brief's search, a specialist's extra search, the turn being kept) is a step under it. Each recommendation in Kako has an <b>Open trace</b> link: to Meko Cloud's Observe for the demo, or to local Meko's call log, read back by <code>GET /api/v1/sessions/{id}/trace</code>. Kako also counts every call in its own table, so the trace and Kako's records always agree.</p>
+    <div class="callout story"><b class="lbl">In the story · Session 4, Nov 20</b>Jun's "what does it change?" is answered as a replan. Its trace shows the one search the brief made, what came back, and the turn kept with "what changed" and "why".</div>
+
+    <h2 id="memory">Memory <span class="status s-built">built</span></h2>
+    <p>Kako writes one sentence to Meko for each fact, decision and preference a person approved, naming people and things in full because Meko's search favours named entities. When a fact is replaced, its sentence is rewritten in the past tense; when one is withdrawn, its memories are deleted. Meko also extracts memories from the household's words on its own. Kako treats those as <b>candidates</b>: each ends linked to a fact a person approved, or deleted.</p>
+    <div class="callout story"><b class="lbl">In the story · Nov 20 → Dec 1</b>After Mara approves her new job, "Mara Villanueva's take-home pay is ₱52,000 a month" becomes "…was ₱52,000 a month", and a new memory says ₱68,000 from Dec 1. Meko keeps both; Kako's ledger says which one is true today.</div>
+
+    <h2 id="learning">Learning and promotion <span class="status s-built">built</span></h2>
+    <p>Meko's path from conversations to shared knowledge, and Kako's version of each step:</p>
+    <div class="flow" role="img" aria-label="Conversation, memories, dreaming, approval, promotion">
+      <div class="node m"><b>Conversation</b><span>raw turns</span></div><span class="arr">extract</span>
+      <div class="node m"><b>Memories</b><span>Meko's candidates</span></div><span class="arr">check</span>
+      <div class="node k"><b>Dreaming</b><span>Kako's code: quotes, numbers, patterns</span></div><span class="arr">propose</span>
+      <div class="node r"><b>Approvals</b><span>a person says yes</span></div><span class="arr">promote</span>
+      <div class="node s"><b>Collective memory · shared knowledge</b><span>every agent finds it</span></div>
+    </div>
+    <p>Dreaming runs once after a session ends. It reads the turns and Meko's candidate memories, checks every claim in code (the quote is real, every number is in the quote), and puts proposals in front of the household. Across sessions, code counts the options the household chose: three the same way across at least two sessions make a pattern. Promotion is asked twice, because it can't be undone.</p>
+    <div class="callout story"><b class="lbl">In the story · Oct 20</b>Sessions 1, 2 and 3 (Aug, Sep, Oct) each chose the option that keeps cash on hand. Dreaming proposes the preference for flexibility; <b>Mara approves</b> it, <b>Jun confirms</b> sharing it and Session 1's decision record. In Session 4 the debt specialist cites the preference though nobody mentions it.</div>
+
+    <h2 id="knowledge">Knowledge base <span class="status s-built">built</span></h2>
+    <p>The household's documents go to the datapack's knowledge base: the monthly statements for the card, the car loan, the emergency fund and savings; Kako's planning rules; and Philippine reference documents on 13th-month pay, SSS, Pag-IBIG and emergency funds. A decision record promoted from dreaming lands here too. Each turn's brief makes <b>one</b> <code>context_search</code>, which covers memories, the knowledge base and past conversations together, and cited passages show in the plan's "why".</p>
+    <div class="callout story"><b class="lbl">In the story · Session 4, Nov 20</b>When Jun asks what Mara's new job changes, the one search can bring back the November statements, the 13th-month pay reference and Session 1's decision record ("keep a bigger buffer"), promoted to shared knowledge on Oct 20.</div>
+
+    <h2 id="gaps">Self-learning <span class="status s-built">built</span></h2>
+    <p>Meko logs every <code>context_search</code> with how well it scored. Kako turns weak searches (best score under 0.75) into plain questions for the household ("Kako would like to know…"). Once an answer is approved and its memory is in Meko, Kako replays the search (<code>selflearning_verify</code>) and keeps the score before and after for the Metrics page. Meko Cloud only: local Meko has no self-learning tools.</p>
+    <div class="callout plan"><b class="lbl">Placeholder</b>The demo datapack's first real gap and its before/after score go here once the sessions run on Meko Cloud.</div>
+
+    <h2 id="artifacts">Artifacts <span class="status s-plan">planned</span></h2>
+    <p>Each plan report will be kept whole as a Meko artifact, its hash stored with the plan, so the report the household accepted can be fetched later exactly as it was, and downloaded from the Plan screen.</p>
+    <div class="callout plan"><b class="lbl">Placeholder · not built yet</b>Plan v2 (Sep 15, option B: ₱4,000 on the card, ₱5,050 to the emergency fund) as the first artifact.</div>
+
+    <h2 id="postgres">Postgres in the datapack <span class="status s-plan">planned</span></h2>
+    <p>The household's facts (dated, never overwritten) live in plain Postgres today. The plan is to keep them in the datapack's own Postgres (AMP), next to the rest of the context. A Phase 1 test ran Kako's migrations and health check against AMP from this laptop; what-ifs stay in the engine in memory, because a Free account's compute can't query a branch.</p>
+    <div class="callout plan"><b class="lbl">Placeholder · not in use yet</b>The Villanuevas' ledger, with Mara's salary closed on Dec 1 and the new one opened, inside the datapack.</div>
+
+    <h2 id="sharing">Sharing and collaboration <span class="status s-part">in part</span></h2>
+    <p>Mara and Jun share one household datapack. Either can speak in a session, and each approves the other's changes: every fact, decision, preference and promotion waits for an adult's yes. Promotion is how something one session learned becomes context every agent shares.</p>
+    <div class="callout story"><b class="lbl">In the story</b>Mara chooses the split in Session 2; Jun accepts plan v3 on Dec 1; Mara approves the preference and Jun confirms sharing it.</div>
+    <div class="callout plan"><b class="lbl">Not pursued</b>Each adult's private memories next to shared household knowledge needs Meko's roles (Viewer, Contributor, Maintainer) on a paid plan. Documented as the production path.</div>
+
+    <h2 id="metrics">Metrics <span class="status s-built">built</span></h2>
+    <p>The Metrics page reads Meko's <code>datapack_metrics</code>: how big the household's whole context is, how much one search saves sending, and how relevant results were. Next to it, Kako's own figures: each turn's brief against the whole context, its model calls, tokens and cost.</p>
+
+    <h2 id="where">Where Kako keeps what</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Kept in</th><th>What</th><th>The Villanuevas' example</th></tr></thead>
+      <tbody>
+        <tr><td>Postgres</td><td>Exact, dated facts; decisions with every option; plans; approvals</td><td>Mara's salary ₱52,000 until Dec 1, then ₱68,000</td></tr>
+        <tr><td>Meko memory</td><td>One sentence per approved fact, decision, preference</td><td>"Mara Villanueva's take-home pay was ₱52,000 a month."</td></tr>
+        <tr><td>Collective memory</td><td>What the household shared with every agent</td><td>The preference for keeping cash on hand</td></tr>
+        <tr><td>Knowledge base</td><td>Documents agents search inside</td><td>The November card statement; 13th-month pay rules</td></tr>
+        <tr><td>Conversations</td><td>Every turn, with its plan and reasoning</td><td>Session 4: the new job and the replan</td></tr>
+        <tr><td>Artifacts (planned)</td><td>Whole files, fetched by hash</td><td>Plan v2's report</td></tr>
+      </tbody>
+    </table></div>
+    <p>The rule of thumb: <b>Postgres knows what is true; Meko knows what was said, what was learned, and how each answer was reached.</b> Meko can hold "₱52,000" and "₱68,000" side by side; Kako decides which one is current and which decisions rested on the old one.</p>
+
+    <h3>The story through Meko</h3>
+    <ul class="tl">
+      <li><b>Aug 15 · Session 1</b>Jun keeps a bigger buffer. A decision record, later promoted to shared knowledge.</li>
+      <li><b>Sep 15 · Session 2</b>Mara picks the split (plan v2). A conversation, a trace, memories of the new allocations.</li>
+      <li><b>Oct 18 · Session 3</b>Jun keeps the bonus for the trip. The third choice for flexibility.</li>
+      <li><b>Oct 20 · Dreaming</b>The pattern becomes a preference; Mara approves, Jun shares it. Collective memory.</li>
+      <li><b>Nov 20 · Session 4</b>Mara's new job; Jun's replan. Memory rewritten in the past tense; three decisions to revisit.</li>
+      <li class="plan"><b>Dec 1 · Plan v3</b>₱10,000 on the card, ₱10,000 to the emergency fund, ₱5,050 to the house fund. Placeholder: today it's background in the story, with no session of its own.</li>
+    </ul>
+
+    <div class="next"><div class="eyebrow">Next steps</div>
+      <ul class="defs"><li><a href="#">The Villanuevas' story</a>, session by session.</li><li><a href="#">Dreaming</a>: how a session becomes proposals.</li><li><a href="https://docs.mekodata.ai/concepts/datapacks/">Meko's datapacks</a>, the concepts this page follows.</li></ul>
+    </div>
+  </main>
+
+  <aside class="toc" aria-label="On this page">
+    <div class="eyebrow" style="margin-bottom:8px">On this page</div>
+    <a href="#datapack">The household's datapack</a><a href="#conversations">Conversations</a><a href="#traces">Decision traces</a><a href="#memory">Memory</a><a href="#learning">Learning and promotion</a><a href="#knowledge">Knowledge base</a><a href="#gaps">Self-learning</a><a href="#artifacts">Artifacts</a><a href="#postgres">Postgres in the datapack</a><a href="#sharing">Sharing and collaboration</a><a href="#metrics">Metrics</a><a href="#where">Where Kako keeps what</a>
+  </aside>
+</div>
+</div>
+<script>
+const btn = document.getElementById("footbtn"), menu = document.getElementById("footmenu");
+btn.addEventListener("click", () => { const open = btn.getAttribute("aria-expanded") !== "true"; btn.setAttribute("aria-expanded", String(open)); menu.hidden = !open; });
+document.getElementById("theme").addEventListener("click", e => { const r = document.documentElement, light = r.dataset.theme !== "light"; r.dataset.theme = light ? "light" : "dark"; e.target.textContent = light ? "Switch to dark" : "Switch to light"; });
+document.getElementById("copy").addEventListener("click", async e => { try { await navigator.clipboard.writeText(document.querySelector("main").innerText); e.target.textContent = "Copied"; } catch { e.target.textContent = "Copy not allowed here"; } });
+</script>
+</body>
+</html>
