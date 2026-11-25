@@ -33,7 +33,7 @@ from kako.agents.recorded import ChatBackend
 from kako.agents.single import answer_alone
 from kako.db.meko_log import DbCallLog
 from kako.db.models import LlmCall, MekoCall
-from kako.evals.questions import Question
+from kako.evals.questions import Question, session_title
 from kako.evals.scoring import Score, score
 from kako.health import safe_error
 from kako.meko.client import MekoError
@@ -174,7 +174,7 @@ async def _one(
                 message=question.message,
                 on=question.on,
                 known_at=question.known_at,
-                title=f"Agent test set {question.id} ({architecture})",
+                title=session_title(question.id, architecture),
                 seed=question.seed,
                 call_log=calls,
                 answerer=ANSWERERS[architecture],

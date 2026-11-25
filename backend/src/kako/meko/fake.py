@@ -18,7 +18,9 @@ from typing import Any, Literal
 from kako.meko.adapter import (
     Band,
     Context,
+    DatapackMetrics,
     Document,
+    Holding,
     KnowledgeHit,
     LoggedSearch,
     Memory,
@@ -322,6 +324,45 @@ class FakeMeko:
             if key is None:
                 raise MekoToolError(f"knowledgebase_delete_document failed: no {document_id}")
             del self.documents[key]
+
+    async def datapack_metrics(
+        self, conversation_id: str, *, agent_id: str, days: int = 0
+    ) -> DatapackMetrics:
+        """What the fake holds, at a token per four characters; every search counted relevant."""
+        async with self._call("datapack_metrics", agent_id, conversation_id):
+            knowledge = Holding(
+                len(self.documents), sum(len(d.text) for d in self.documents.values()) // 4
+            )
+            memories = Holding(
+                len(self.memories) + len(self.promoted),
+                sum(len(m.text) for m in (*self.memories.values(), *self.promoted.values())) // 4,
+            )
+            conversations = Holding(
+                len(self.conversations),
+                sum(
+                    (len(t.input) + len(t.output)) // 4
+                    for c in self.conversations.values()
+                    for t in c.turns
+                ),
+            )
+            searches = len(self.search_log)
+            return DatapackMetrics(
+                datapack_id=self.datapack_id,
+                datapack_name=None,
+                days=days or 90,
+                searches=searches,
+                context_tokens=knowledge.tokens + memories.tokens + conversations.tokens,
+                knowledge=knowledge,
+                memories=memories,
+                conversations=conversations,
+                tokens_sent=None,
+                tokens_saved=None,
+                saved_pct=None,
+                relevance_high=None,
+                relevance_mid=None,
+                relevance_low=None,
+                relevant_pct=None,
+            )
 
 
 def _check_limit(limit: int) -> None:

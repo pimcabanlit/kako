@@ -20,6 +20,10 @@ TEST_SET: Final = Path(__file__).resolve().parents[4] / "data" / "test-set" / "q
 ID: Final = re.compile(r"^q\d{2}$")
 ENTITY_REF: Final = re.compile(r"^(income|expense|debt|account|goal):[a-z0-9-]+$")
 SOURCE: Final = re.compile(r"^(said|memory|doc|(fact|decision):\S+)$")
+# Each question is asked in a session of its own, titled so the metrics can tell it apart from the
+# household's own sessions (and the architecture that answered it).
+SESSION_TITLE: Final = "Agent test set"
+_SESSION_TITLE: Final = re.compile(r"^Agent test set q\d{2} \((specialists|single)\)$")
 EXPECT_KEYS: Final = frozenset(
     {
         "states",
@@ -32,6 +36,17 @@ EXPECT_KEYS: Final = frozenset(
         "sources",
     }
 )
+
+
+def session_title(question_id: str, architecture: str) -> str:
+    """The title of the session a question is asked in."""
+    return f"{SESSION_TITLE} {question_id} ({architecture})"
+
+
+def architecture_of(title: str) -> str | None:
+    """The architecture that answered a test-set session, from its title; None for any other."""
+    found = _SESSION_TITLE.match(title)
+    return found.group(1) if found else None
 
 
 class TestSetError(Exception):

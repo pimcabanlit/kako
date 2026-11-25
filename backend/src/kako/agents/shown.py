@@ -109,6 +109,10 @@ class CostOut(BaseModel):
     input_tokens: int
     output_tokens: int
     usd: str  # a decimal string: money is never a float
+    # The brief every agent of the turn was sent, estimated high, and its budget then (the
+    # metrics page). None on a turn kept before they were.
+    brief_tokens: int | None = None
+    brief_budget: int | None = None
 
 
 class TurnOut(BaseModel):
@@ -217,5 +221,7 @@ def turn_shown(asked: Asked, settings: Settings) -> TurnOut:
             input_tokens=asked.input_tokens,
             output_tokens=asked.output_tokens,
             usd=f"{asked.cost_usd:.6f}",
+            brief_tokens=asked.state.brief.tokens if asked.state is not None else None,
+            brief_budget=asked.state.brief.budget if asked.state is not None else None,
         ),
     )

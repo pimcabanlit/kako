@@ -2,8 +2,10 @@
 // ApiError with a plain message the screen can show as it is.
 
 import type {
+  DatapackMetrics,
   Decisions,
   Household,
+  Metrics,
   Plan,
   PlanSummary,
   Proposal,
@@ -109,6 +111,9 @@ export const api = {
   timeline: (signal?: AbortSignal) => call<Timeline>("/timeline", { signal }),
   decisions: (signal?: AbortSignal) =>
     call<Decisions>("/decisions", { signal }),
+  metrics: (signal?: AbortSignal) => call<Metrics>("/metrics", { signal }),
+  mekoMetrics: (signal?: AbortSignal) =>
+    call<DatapackMetrics>("/metrics/meko", { signal }),
   proposals: (signal?: AbortSignal) =>
     call<Proposal[]>("/proposals?status=all", { signal }),
   decide: (

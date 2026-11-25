@@ -186,7 +186,7 @@ uv run pytest                             # unit tests; integration tests skip u
 KAKO_TEST_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/kako_test \
 KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against local Postgres and local Meko (never Meko Cloud)
 uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
-uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback only: no sign-in yet); /api/v1/health, /api/v1/sessions (turns, trace), /api/v1/plans (each with its why), /api/v1/timeline, /api/v1/decisions, docs at /api/v1/docs
+uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback only: no sign-in yet); /api/v1/health, /api/v1/sessions (turns, trace), /api/v1/plans (each with its why), /api/v1/timeline, /api/v1/decisions, /api/v1/metrics (and /metrics/meko), docs at /api/v1/docs
 uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
@@ -198,10 +198,12 @@ uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s
 KAKO_MODEL_MODE=replay KAKO_RECORDED_RESPONSES=../data/recorded/session-2.json uv run kako ask …   # the same turn from a recording, no Foundry
 uv run kako demo run                      # demo mode: migrate, load the whole story, upload the documents, replay the scripted sessions, with dreaming over Session 3 before session 4 (local Meko, no Azure)
 uv run kako demo run --test-set           # … and replay the agent test set for each recorded architecture (--strict: refuse a request that differs from its recording)
+uv run kako demo run --without-learning   # … the household as if dreaming had learned nothing (no preference, sessions from then on left out), on an empty database
 KAKO_MODEL_MODE=record uv run kako demo record session-4   # record one scripted session on Foundry, on an empty database (spends; log a prediction in docs/tuning-log.md first)
 uv run kako test-set                      # the agent test set's score, replayed from data/recorded/test-set-specialists.json (needs the household loaded through Dec 1)
 uv run kako test-set --architecture single --only q01,q07   # the single-agent baseline, some questions (--household, --save: data/test-set/results/)
 KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
+uv run kako test-set --without-preference    # the preference's four questions on the household without it, from test-set-specialists-without-preference.json (--save: data/test-set/results/preference.json)
 uv run kako dream end <session>           # end a session (once) and queue its dreaming run (--at; the API: POST /api/v1/sessions/{id}/end)
 uv run kako dream run                     # run the queued or failed dreaming runs: read the session, one extraction, checks in code, pending proposals (--session, --at)
 uv run kako dream settle                  # carry out each memory Meko extracted from a dreamed session: linked to what a person approved, or deleted (--at)
@@ -280,7 +282,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   and what changed (F-DIFF-1 as rows, the headline figures first); `planning/timeline.py` the
   timeline in words: what happened (life events with their facts, batches of new or replaced facts,
   corrections, decisions, plans, sessions, those after the household's date ahead) and each thing's
-  values over time with their state (current, coming, past, corrected). `facts/`, `engine/` and `planning/` use no database,
+  values over time with their state (current, coming, past, corrected). `metrics/turns.py` works out each turn's figures (model time as the turn ran it, average and
+  worst case) and how they are written. `facts/`, `engine/`, `planning/` and `metrics/` use no database,
   clock or randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
   any past their `max_tool_calls` ceiling, 0 by default; `adapter.py`, the one interface for every
@@ -334,7 +337,13 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   0), and `runner.py` runs the set through `ask` for either architecture and reports the score, model
   calls, tokens, cost and Meko calls; `evals/dreaming.py` dreaming's labelled set
   (`data/dreaming/labelled.toml`): each case's expected, maybe and forbidden proposals, the score
-  and the cases run through extraction and classification. `dreaming/` the background job after a
+  and the cases run through extraction and classification; `evals/results.py` reads the saved
+  test-set and dreaming results for the metrics page, and `evals/preference.py` the learned
+  preference's effect (the questions that should cite it, each side scored with every check and
+  without the one that names it). `db/metrics_read.py` reads the metrics page's rows (each turn's
+  calls by group, the last number check of each text, dreaming runs, gaps, the call counter), only
+  the household's; `api/metrics.py` is `/api/v1/metrics` and `/api/v1/metrics/meko` (Meko's
+  `datapack_metrics`, in a conversation made once per process). `dreaming/` the background job after a
   session: `claims.py` (pure: the claims `submit_claims` hands in, checked for shape), `classify.py`
   (pure: each claim against what Kako holds, the quote in its turn, V-09, new, replace, retract,
   correction, same, conflict, refused or deferred, and the proposals it makes), `candidates.py`
@@ -490,7 +499,13 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_meko_quota.py` and `test_meko_adapter.py` test the counter, the guard, `McpMeko` against a
   scripted server, `FakeMeko` and the demo upload; `tests/integration/test_meko_adapter.py` runs the
   adapter on local Meko with every call counted in Postgres (documents go to a throwaway datapack),
-  the ceiling, two callers racing for the last call, and `kako demo upload`.
+  the ceiling, two callers racing for the last call, `kako demo upload` and `datapack_metrics` in a
+  throwaway datapack. `test_metrics.py` tests the per-turn figures, the saved results, the
+  preference's effect and `datapack_metrics` against a scripted server, and
+  `tests/integration/test_metrics_api.py` the metrics API on seeded rows (the groups, the checks,
+  dreaming, gaps, the counter, a broken result reported on its own, Meko's part and its failure);
+  `test_demo_mode.py` also loads the household without what dreaming learned and refuses
+  `--without-preference` on one that learned it.
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons, laid out like ChatGPT,
   Claude and Gemini (docs/architecture.md, "The session screen" and "The plan screen"). `next.config.ts` passes `/api/v1/*`
   to the backend; `src/proxy.ts` refuses any Host but loopback (`src/lib/hosts.ts`), as the backend
@@ -498,7 +513,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   and the shared classes: panel, edge, chip, btn), `layout.tsx` (the fonts, the theme set before the
   first paint, the app shell), `page.tsx` (a new session), `sessions/[id]/page.tsx` (a session),
   `plans/page.tsx` (the newest plan), `plans/[id]/page.tsx` (one version), `timeline/page.tsx`,
-  `decisions/page.tsx` and `system/page.tsx` (the system check). `src/components/`: `app-shell.tsx` (the frame, and what every
+  `decisions/page.tsx`, `metrics/page.tsx` and `system/page.tsx` (the system check). `src/components/`: `app-shell.tsx` (the frame, and what every
   screen shares: the household, who is writing, the sessions, the one turn that can run),
   `sidebar.tsx`, `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as", the
   "synthetic data, not financial advice" line every screen keeps), `new-session.tsx`,
@@ -508,13 +523,14 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   turn runs), `plan-view.tsx` (the plan screen: what changed, each option's why down to the facts,
   the number check, the turn's Meko calls; docs/architecture.md, "The plan screen"),
   `timeline-view.tsx` (what happened and each thing over time), `decisions-view.tsx` (each decision,
-  its options and what to revisit; docs/architecture.md, "The timeline and decisions screens") and
+  its options and what to revisit; docs/architecture.md, "The timeline and decisions screens"),
+  `metrics-view.tsx` (what Kako measured; docs/architecture.md, "The metrics screen") and
   `health-panel.tsx`. `src/lib/`: `api.ts` (every call, and `ApiError`), `types.ts`
   (the API's shapes, kept in step with `api/sessions.py`, `api/proposals.py`, `api/household.py`,
-  `api/plans.py` and `api/history.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
+  `api/plans.py`, `api/history.py` and `api/metrics.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
   that ran them), `plan.ts` (a plan's status, the facts behind its figures, the number check's
   tally), `history.ts` (events by day, a value's state and window, a decision's standing),
-  `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
+  `metrics.ts` (the metrics screen's words and formats), `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.
 - Ruff bans model SDK imports (`openai`, `azure.identity`, `azure.ai`) everywhere except

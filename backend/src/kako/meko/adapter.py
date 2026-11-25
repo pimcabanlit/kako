@@ -126,6 +126,37 @@ class Replay:
     nothing_added: bool  # nothing changed since the last replay: this one isn't new
 
 
+@dataclass(frozen=True)
+class Holding:
+    """One part of a datapack: how many items, and their tokens as Meko estimates them."""
+
+    count: int
+    tokens: int
+
+
+@dataclass(frozen=True)
+class DatapackMetrics:
+    """`datapack_metrics`: a datapack's context as Meko measures it (its web UI's Overview)."""
+
+    datapack_id: str | None
+    datapack_name: str | None
+    days: int  # the searches of the last this many days are measured
+    searches: int
+    context_tokens: int  # everything the datapack holds
+    knowledge: Holding
+    memories: Holding
+    conversations: Holding
+    # Context efficiency: the tokens context_search sent, against sending the whole knowledge base.
+    tokens_sent: int | None
+    tokens_saved: int | None
+    saved_pct: int | None
+    # Context relevance: search results by band, and the share scoring 0.5 or more.
+    relevance_high: int | None
+    relevance_mid: int | None
+    relevance_low: int | None
+    relevant_pct: int | None
+
+
 def check_document(filename: str, content: bytes) -> None:
     suffix = filename[filename.rfind(".") :].lower() if "." in filename else ""
     if suffix not in DOCUMENT_TYPES:
@@ -250,3 +281,10 @@ class Meko(Protocol):
     async def delete_document(
         self, conversation_id: str, document_id: str, *, agent_id: str
     ) -> None: ...
+
+    async def datapack_metrics(
+        self, conversation_id: str, *, agent_id: str, days: int = 0
+    ) -> DatapackMetrics:
+        """The datapack's context size, efficiency and relevance, over the searches of the last
+        `days` days (0: all Meko's call log keeps). Read only; not a capped tool."""
+        ...

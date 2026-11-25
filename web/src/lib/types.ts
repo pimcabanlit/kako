@@ -106,6 +106,8 @@ export type TurnAnswer = {
     input_tokens: number;
     output_tokens: number;
     usd: string;
+    brief_tokens?: number | null; // the brief's size, kept on turns since Nov 25
+    brief_budget?: number | null;
   };
 };
 
@@ -417,3 +419,150 @@ export type Decision = {
 };
 
 export type Decisions = { as_of: string; decisions: Decision[] };
+
+// GET /api/v1/metrics (api/metrics.py): every figure worked out in the backend; decimals as strings.
+export type MetricsGroup = "household" | "specialists" | "single";
+
+export type Spread = {
+  average: string;
+  worst: string;
+  worst_session_id: string;
+  worst_seed: string;
+  worst_title: string;
+};
+
+export type NumberChecks = {
+  texts: number;
+  passed: number;
+  failed: number;
+  regenerated: number;
+  pass_pct: string | null;
+};
+
+export type TurnGroup = {
+  group: MetricsGroup;
+  turns: number;
+  replayed: number;
+  model_calls: Spread | null;
+  tokens: Spread | null;
+  cached_pct: string | null;
+  cost_usd: Spread | null;
+  seconds: Spread | null;
+  brief_tokens: Spread | null;
+  brief_turns: number;
+  checks: NumberChecks;
+};
+
+export type TestSetRun = {
+  architecture: string;
+  mode: string;
+  run_at: string;
+  deployments: Record<string, string>;
+  questions: number;
+  answered: number;
+  score_pct: string;
+  checks_passed: number;
+  checks_total: number;
+  model_calls: number;
+  tokens: number;
+  cost_usd: string;
+  meko_calls: number;
+};
+
+export type EffectSide = {
+  run_at: string;
+  mode: string;
+  model_calls: number;
+  cost_usd: string;
+  score_pct: string;
+  behaviour_pct: string;
+};
+
+export type EffectQuestion = {
+  id: string;
+  message: string | null;
+  score_with_pct: string;
+  score_without_pct: string;
+  behaviour_with_pct: string;
+  behaviour_without_pct: string;
+  cited_with: boolean | null;
+  cited_without: boolean | null;
+};
+
+export type Metrics = {
+  measured_at: string;
+  brief_budget: number;
+  turns: TurnGroup[];
+  test_set: { specialists: TestSetRun | null; single: TestSetRun | null; error: string | null };
+  preference: {
+    measured: boolean;
+    preference: string | null;
+    with_side: EffectSide | null;
+    without_side: EffectSide | null;
+    questions: EffectQuestion[];
+    error: string | null;
+  };
+  dreaming: {
+    runs_done: number;
+    runs_failed: number;
+    runs_waiting: number;
+    proposals: number;
+    eval_at: string | null;
+    eval_mode: string | null;
+    expected: number | null;
+    found: number | null;
+    score_pct: string | null;
+    wrong: number | null;
+    unquoted: number | null;
+    passed: boolean | null;
+    error: string | null;
+  };
+  gaps: {
+    total: number;
+    by_status: Record<string, number>;
+    replayed: number;
+    improved: number;
+    gaps: {
+      query: string;
+      band_before: string;
+      score_before: string;
+      status: string;
+      verify_outcome: string | null;
+      score_after: string | null;
+    }[];
+  };
+  meko_calls: {
+    target: "local" | "cloud";
+    allowances: {
+      name: string;
+      tools: string[];
+      free: number;
+      local_used: number;
+      cloud_used: number;
+      cloud_ceiling: number;
+      cloud_left: number;
+    }[];
+  };
+};
+
+// GET /api/v1/metrics/meko: Meko's own datapack_metrics, read live.
+export type DatapackMetrics = {
+  target: "local" | "cloud";
+  datapack_id: string | null;
+  datapack_name: string | null;
+  days: number;
+  searches: number;
+  context_tokens: number;
+  knowledge: { count: number; tokens: number };
+  memories: { count: number; tokens: number };
+  conversations: { count: number; tokens: number };
+  tokens_sent: number | null;
+  tokens_saved: number | null;
+  saved_pct: number | null;
+  relevance_high: number | null;
+  relevance_mid: number | null;
+  relevance_low: number | null;
+  relevant_pct: number | null;
+  brief_tokens: string | null;
+  brief_pct_of_context: string | null;
+};

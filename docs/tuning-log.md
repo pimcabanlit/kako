@@ -553,3 +553,54 @@ it led to.
   record` doesn't replay session 2 before recording session 4, so the brief's Meko search sees a
   different datapack (as with entry 9's recording); the replies are replayed and reported. Recording
   session 4 after session 2, as demo mode plays them, is a follow-up.
+
+### 13. The learned preference's effect: its four questions without it (Nov 25, 2026)
+
+- **Change tested:** no prompt or tool change. The metrics page (Phase 5, task 4) shows the
+  preference's effect: the test set's four questions that expect it cited (q10, q12, q16 and q21),
+  answered by the specialists on a household that never learned it, against entry 12's saved run
+  with it. The household without it is `kako demo run --without-learning` on an empty database and a
+  throwaway local Meko datapack: changes.csv row 6 is never written, nothing is shared in Meko (no
+  promoted preference, no decision record), and session 4 isn't replayed (its rows 10 and 11 are
+  loaded as they are). The three decisions of Sessions 1 to 3, all choosing cash on hand, are still
+  in every brief. Pim approved up to US$0.35 (Nov 25).
+- **Prediction (written before the run):**
+  - Entry 12, with the preference: 81.4% (q10 80%, q12 85.7%, q16 80%, q21 80%); leaving out the
+    check that cites it, 81.3%.
+  - Without it, the check that cites it fails on all four by construction, so the full score drops to
+    **60% to 68%**.
+  - Leaving that check out, I expect **75% to 82%**: the three decisions in the brief still point to
+    cash on hand, so q10 and q21 most likely still don't recommend all on the card (about 70% that
+    both hold; the likeliest miss is q21 recommending the whole surplus on the card, now that nothing
+    names the household's preference). The figures missed in entry 12 (q10's 16 months, q16's surplus,
+    q21's 7 months) are about as likely to be missed again.
+  - About 45 to 55 calls, **US$0.20 to US$0.28** (entry 12's four cost US$0.23).
+- **Run:** on the household above (database `kako_nopref`, its own throwaway datapack), gpt-5.4 and
+  gpt-5-mini: `KAKO_MODEL_MODE=record uv run kako test-set --without-preference`, then replayed
+  strictly with `--save` (the same scores; `data/test-set/results/preference.json`, recording
+  `data/recorded/test-set-specialists-without-preference.json`). 37 model calls, 227,609 tokens,
+  **US$0.26** of the US$0.35 approved.
+- **Result:**
+
+  | | With (entry 12) | Without |
+  | --- | --- | --- |
+  | Score, every check | **81.4%** | **59.3%** |
+  | Leaving out the check that cites the preference | 81.3% | 72.9% |
+  | Model calls | 49 | 37 |
+  | Cost | US$0.23 | US$0.26 |
+
+  The full score is just under the predicted 60% to 68%; leaving out the citation it is under the
+  predicted 75% to 82%. As predicted, the check that cites the preference failed on all four, and
+  **q10 and q21 still didn't recommend all on the card**: the three decisions in the brief were
+  enough to keep cash on hand (q12's reply: "Since you previously chose a bigger cash buffer and a
+  split approach for the card, I'd treat this as a choice for you"). The same figures as entry 12
+  were missed (q10's 16 months, q16's surplus, q21's 7 months). The difference without the
+  citation is q12 alone: asked "What if we moved the ₱5,050 from the emergency fund to the card
+  instead?", the agents ran the card at ₱5,050 instead of ₱4,000 plus ₱5,050, so the option is
+  14 months, not 8 (the figure is the engine's for the move it ran, so the number check passed).
+- **Root cause:** what the preference changes here is what the answer cites and names, not what it
+  recommends: the decisions it was learned from already steer the specialists. q12's miss is a
+  misread move, not the preference; one run each, so one question moves a score by about 20 points.
+- **Change made:** none to the prompts. The metrics page shows both scores, each with and without
+  the citation, and says what the difference rests on. A what-if that reads "moved X to Y" as "set
+  Y to X" is worth a test-set question of its own.

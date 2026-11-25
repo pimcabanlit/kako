@@ -205,3 +205,28 @@ async def test_the_upload_command(
     searchable = f"{len(demo.documents)} documents searchable in Meko (local)"
     assert out == [f"{searchable}; {len(demo.documents)} new.", f"{searchable}; 0 new."]
     assert all(c[0] == "local" for c in await _calls(migrated))
+
+
+async def test_datapack_metrics_on_local_meko(
+    migrated: AsyncEngine, test_meko_url: str, make_settings: MakeSettings
+) -> None:
+    """The metrics page's Meko figures (Phase 5, task 4): a throwaway datapack's size grows by the
+    memory written to it, and the call is counted, with no `agent_id` sent."""
+    run = uuid.uuid4().hex[:12]
+    async with throwaway_datapack(test_meko_url) as datapack_id:
+        settings = make_settings(meko_mcp_url=test_meko_url, meko_datapack_id=datapack_id)
+        async with open_meko(settings, DbCallLog(migrated), max_calls=6) as meko:
+            conversation = await meko.create_conversation(agent_id=AGENT, title=f"CI {run}")
+            before = await meko.datapack_metrics(conversation, agent_id=AGENT)
+            assert before.datapack_id == datapack_id
+            memory_id = await meko.add_memory(
+                conversation, f"Testhouse {run} keeps a buffer of three months.", {}, agent_id=AGENT
+            )
+            after = await meko.datapack_metrics(conversation, agent_id=AGENT)
+            await meko.delete_memory(conversation, memory_id, agent_id=AGENT)
+    assert after.memories.count == before.memories.count + 1
+    assert after.context_tokens > before.context_tokens
+    assert 0 <= after.days <= 3650
+    calls = await _calls(migrated)
+    assert [c[1] for c in calls].count("datapack_metrics") == 2
+    assert {c[3] for c in calls} == {"ok"}

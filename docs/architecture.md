@@ -305,7 +305,7 @@ real run's misses are the model's.
 | Artifacts | Each plan report | Download on the plan screen |
 | Postgres in the datapack (AMP) | The household's structured data, if the Phase 1 test passes; a scenario kept as an AMP branch (Should) | Architecture slide; what-if screen |
 | Self-learning (Context Gaps) | Built (Phase 4, task 6), on Meko Cloud only (local Meko has no self-learning tools). `selflearning_query_log` lists `context_search` queries that came back Mid or Low (best score under 0.75); Kako keeps each shortfall of coverage as a `context_gap` with a question written by code; an adult ties the proposal that answers it (one that writes a fact); once that is approved and upkeep has written its memory, `selflearning_verify` replays the search, and the outcome and the score after are kept. Kako's brief uses `context_search`, which is the only search the log counts. Each replay counts as one search, so it goes through the call counter, at most 5 a run | "Kako would like to know" card (Phase 5); before and after scores on the metrics page |
-| Metrics | `datapack_metrics` (context size, efficiency, relevance) next to Kako's own token and number-check counts | The metrics page |
+| Metrics | Built (Phase 5, task 4). `datapack_metrics` (context size, how much `context_search` saves sending, relevance high, mid and low) read live by `GET /api/v1/metrics/meko`, in a conversation of its own made once per process; the tool takes no agent id. Shown next to Kako's own figures: each turn's tokens and cost, its brief against the whole context, and the number check | The metrics page |
 
 What Meko does not do, and Kako adds (see [concept.md](concept.md#what-meko-already-does-and-what-kako-adds)):
 Meko keeps both "₱100,000" and "₱120,000" as memories and returns both (tested); Kako decides which is
@@ -425,12 +425,40 @@ and `decisions/revisit.py` (what moved under a decision), both pure, from the ro
 screen. The API is `GET /timeline` and `GET /decisions`. Both screens have loading, empty and error
 states.
 
+## The metrics screen
+
+What the judges asked to see measured, on one screen in the sidebar after Plan, Timeline and Decisions (`/metrics`). Every
+figure is worked out in code from stored rows and saved results; the screen only names and formats
+them. Six parts, top to bottom:
+
+- **Each turn:** model calls, tokens, cost and seconds per turn, average and worst case (the worst
+  turn named and linked), for the household's own sessions, the test set with specialists and the
+  single-agent baseline. Seconds are model time as the turn ran it: the orchestrator's calls one
+  after another, and between them each round of specialists counted at its slowest agent. A
+  replayed turn keeps its recording's cost and seconds, and the screen says how many were replayed.
+- **The brief against the whole context:** the brief each agent of a turn is sent (estimated high,
+  against `KAKO_BRIEF_TOKEN_BUDGET`) set against Meko's `datapack_metrics`: the datapack's context
+  size, how much `context_search` saves sending, and how relevant its results are. Meko's part is
+  read live and fails on its own, with the rest of the screen shown.
+- **Every number checked:** V-10's pass rate over the texts the household read, and how many first
+  tries were sent back with the numbers named.
+- **Specialists against one agent:** the agent test set's two architectures from
+  `data/test-set/results/`, each with its run date and how it ran (recorded on Foundry or replayed).
+- **What Kako learned, measured:** the learned preference's effect (the four test-set questions
+  whose answer should cite it, scored with the preference and without it, and again leaving out the
+  check that names it, question by question), dreaming's labelled set and its runs, and Context
+  Gaps' scores before and after each replayed search (Meko Cloud only, so locally none yet).
+- **Meko calls left:** each Free-tier allowance, what `meko_call` has counted and what is left.
+
+The API is `GET /metrics` and `GET /metrics/meko`. Each part has its own empty state and a saved
+result that can't be read is reported in its place; the screen has loading and error states.
+
 ## Components
 
 | Component | Where | What it does |
 | --- | --- | --- |
-| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), the plan screen (task 2), and the timeline and decisions screens (task 3), see their sections above |
-| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans and their why (built: `GET /plans`, newest version first, and `GET /plans/{id}`: the options, each one's why down to the facts with where each came from, the number check's matches, the turn's Meko calls and trace link, and what changed against the last plan or decision, with the decisions to revisit; read-only, the household's rows only), the timeline and decisions (built: `GET /timeline`, what happened newest first and each thing's values over time with their windows and states, and `GET /decisions`, every decision with its options, the facts it rests on and what to revisit; read-only, the household's rows only), what-ifs, metrics |
+| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), the plan screen (task 2), the timeline and decisions screens (task 3), and the metrics screen (task 4), see their sections above |
+| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans and their why (built: `GET /plans`, newest version first, and `GET /plans/{id}`: the options, each one's why down to the facts with where each came from, the number check's matches, the turn's Meko calls and trace link, and what changed against the last plan or decision, with the decisions to revisit; read-only, the household's rows only), the timeline and decisions (built: `GET /timeline`, what happened newest first and each thing's values over time with their windows and states, and `GET /decisions`, every decision with its options, the facts it rests on and what to revisit; read-only, the household's rows only), metrics (built: `GET /metrics`, every figure worked out in code from stored rows and saved results, a saved result that can't be read reported on its own; `GET /metrics/meko`, Meko's `datapack_metrics` with the brief against it; read-only, the household's rows only), what-ifs |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |
