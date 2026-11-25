@@ -20,6 +20,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { useShell } from "@/components/app-shell";
+import { Brand } from "@/components/brand";
+import { CollapseSidebar, OpenSidebar } from "@/components/sidebar-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { formatDay } from "@/lib/text";
 import { listOf, plural } from "@/lib/working";
@@ -34,18 +36,28 @@ const SCREENS: { href: string; label: string; note: string; icon: LucideIcon }[]
   { href: "/metrics", label: "Metrics", note: "what Kako measured", icon: Gauge },
 ];
 
-/** The sessions down the left, newest first, with "New session" and the screens at the top. */
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+/** Whether a screen's link is the one open: the screen itself or a page under it. */
+function isHere(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** The sessions down the left, newest first, with "New session" and the screens at the top. The
+ * header's last button collapses it to the rail (`SidebarRail`), or in the phone's drawer closes the
+ * drawer (`onClose`). */
+export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose?: () => void }) {
   const { sessions, reloadSessions, pending } = useShell();
   const pathname = usePathname();
 
   return (
     <nav aria-label="Sessions and screens" className="flex h-full w-full flex-col">
-      <div className="flex items-center justify-between px-4 pt-4 pb-3">
-        <Link href="/" onClick={onNavigate} className="wordmark text-[22px]" aria-label="Kako, new session">
-          kako
+      <div className="flex items-center justify-between gap-2 pt-3.5 pr-2.5 pb-3 pl-4">
+        <Link href="/" onClick={onNavigate} className="rounded-lg" aria-label="Kako, new session">
+          <Brand />
         </Link>
-        <ThemeToggle />
+        <div className="flex items-center gap-0.5">
+          <ThemeToggle />
+          <CollapseSidebar onClose={onClose} />
+        </div>
       </div>
       <div className="px-3">
         <Link
@@ -59,7 +71,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </Link>
         <ul className="mt-1.5 space-y-0.5">
           {SCREENS.map(({ href, label, note, icon: Icon }) => {
-            const here = pathname === href || pathname.startsWith(`${href}/`);
+            const here = isHere(pathname, href);
             return (
               <li key={href}>
                 <Link
@@ -144,6 +156,53 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+/** The sidebar collapsed, as ChatGPT's does: a rail of icons, each named on hover and to a screen
+ * reader. The mark at the top opens the sidebar again; "New session" and the screens stay a click
+ * away, and the theme switch sits at the foot. The sessions wait in the open sidebar. */
+export function SidebarRail() {
+  const pathname = usePathname();
+  const item = (here: boolean) =>
+    `grid size-10 place-items-center rounded-xl transition-colors ${
+      here ? "bg-raised text-teal" : "text-muted hover:bg-raised/70 hover:text-fg"
+    }`;
+
+  return (
+    <nav aria-label="Screens" className="flex h-full w-full flex-col items-center gap-1 py-3">
+      <OpenSidebar />
+      <Link
+        href="/"
+        aria-label="New session"
+        title="New session"
+        aria-current={pathname === "/" ? "page" : undefined}
+        className={`mt-2 ${item(pathname === "/")}`}
+      >
+        <Plus className="size-[18px]" aria-hidden />
+      </Link>
+      <ul className="flex flex-col items-center gap-1">
+        {SCREENS.map(({ href, label, note, icon: Icon }) => {
+          const here = isHere(pathname, href);
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                aria-label={label}
+                title={`${label}: ${note}`}
+                aria-current={here ? "page" : undefined}
+                className={item(here)}
+              >
+                <Icon className="size-[18px]" aria-hidden />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mt-auto">
+        <ThemeToggle />
+      </div>
+    </nav>
+  );
+}
+
 // The household at the foot of the sidebar opens a small menu above it: the system check, the
 // documentation, and who the household is (docs/architecture.md, "The documentation screen").
 const MENU: { href: string; label: string; note: string; icon: LucideIcon; badge?: string }[] = [
@@ -191,7 +250,7 @@ function HouseholdMenu({ onNavigate }: { onNavigate?: () => void }) {
         >
           <ul>
             {MENU.map(({ href, label, note, icon: Icon, badge }) => {
-              const here = pathname === href || pathname.startsWith(`${href}/`);
+              const here = isHere(pathname, href);
               return (
                 <li key={href}>
                   <Link

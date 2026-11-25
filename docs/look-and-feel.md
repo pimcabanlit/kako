@@ -154,6 +154,13 @@ Sizes used in the preview: body 15px / line-height 1.55; chat bubble 14.5px; pan
   gold does everywhere. The open bookmark takes its own colour (emerald the decision, gold to
   revisit, teal the facts); an option turned down is greyed, with no colour.
 - The swirl art (Pim's title card, `web/public/swirl.jpg`, 1400 x 724) sits on the empty new-session screen.
+- The mark (Pim, Nov 25): three rising bars, emerald, gold and orange, over an orange swoosh
+  (`web/public/kako-mark.png`, 256 x 256, transparent, so it sits on both themes). It goes to the left of the
+  wordmark (26px beside the sidebar's 22px "kako", 22px on a phone's top bar) and alone at the top of the
+  collapsed sidebar. It is a picture beside the word, never in place of it.
+- The sidebar collapses (Pim, Nov 25), as ChatGPT's does: the panel icon at the header's right, after the theme
+  switch, folds it to a 60px rail of icons; on the rail the mark turns into the panel icon under the pointer or
+  the keyboard's focus and opens it again.
 - The fonts load with `next/font/google` and the `latin-ext` subset as well as `latin`: the peso sign (U+20B1) is
   only in `latin-ext`.
 - The theme is kept per device (`kako-theme` in local storage) and set before the first paint, so it never flashes.

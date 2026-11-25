@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* The sidebar collapsed to its rail (data-sidebar on <html>, set before the first paint). */
+@custom-variant collapsed (:root[data-sidebar="collapsed"] &);
+
 /*
  * Kako's look and feel (docs/look-and-feel.md).
  * Dark is the default; light uses the same token names. Every text colour meets WCAG AA on bg,

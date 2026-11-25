@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useShell } from "@/components/app-shell";
+import { Brand } from "@/components/brand";
 import { Composer } from "@/components/composer";
 import { TopBar } from "@/components/top-bar";
 import { api, ApiError } from "@/lib/api";
@@ -51,7 +52,7 @@ export function NewSession() {
     <>
       <div className="md:hidden">
         <TopBar>
-          <span className="wordmark text-lg">kako</span>
+          <Brand size="sm" />
         </TopBar>
       </div>
       <main className="dust flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -62,6 +63,7 @@ export function NewSession() {
               alt="kako"
               width={1400}
               height={724}
+              sizes="(min-width: 452px) 420px, calc(100vw - 32px)"
               priority
               className="block h-auto w-full"
             />

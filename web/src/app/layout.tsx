@@ -27,9 +27,9 @@ export const metadata: Metadata = {
   description: "The household financial planner that learns why.",
 };
 
-// The saved theme, before the first paint (dark when none is saved). Only the two known values
-// are applied.
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("kako-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
+// The saved theme and sidebar, before the first paint (dark and open when none is saved). Only the
+// known values are applied: "light" or "dark" (theme-toggle.tsx), "collapsed" (src/lib/sidebar.ts).
+const THEME_SCRIPT = `(function(){try{var d=document.documentElement,t=localStorage.getItem("kako-theme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t);if(localStorage.getItem("kako-sidebar")==="collapsed")d.setAttribute("data-sidebar","collapsed")}catch(e){}})()`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
