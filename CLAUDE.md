@@ -219,7 +219,7 @@ The web app, from `web/` (Node.js 24, see `web/.nvmrc`; the backend must be runn
 
 ```
 npm ci              # install exact versions from package-lock.json
-npm run dev         # http://localhost:3000; /api/v1/* is passed to the backend (KAKO_API_URL, default http://127.0.0.1:8000)
+npm run dev         # http://localhost:3000 (loopback only); /api/v1/* is passed to the backend (KAKO_API_URL, default http://127.0.0.1:8000)
 npm run lint        # ESLint (Next.js rules)
 npm run typecheck   # route types, then tsc (strict)
 npm test            # node --test on src/**/*.test.ts (the pure lib modules; Node strips the types)
@@ -464,7 +464,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   the ceiling, two callers racing for the last call, and `kako demo upload`.
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons, laid out like ChatGPT,
   Claude and Gemini (docs/architecture.md, "The session screen"). `next.config.ts` passes `/api/v1/*`
-  to the backend. `src/app/`: `globals.css` (the tokens of `docs/look-and-feel.md`, dark and light,
+  to the backend; `src/proxy.ts` refuses any Host but loopback (`src/lib/hosts.ts`), as the backend
+  does, and `dev` and `start` listen on 127.0.0.1 only. `src/app/`: `globals.css` (the tokens of `docs/look-and-feel.md`, dark and light,
   and the shared classes: panel, edge, chip, btn), `layout.tsx` (the fonts, the theme set before the
   first paint, the app shell), `page.tsx` (a new session), `sessions/[id]/page.tsx` (a session) and
   `system/page.tsx` (the system check). `src/components/`: `app-shell.tsx` (the frame, and what every
@@ -477,7 +478,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   turn runs) and `health-panel.tsx`. `src/lib/`: `api.ts` (every call, and `ApiError`), `types.ts`
   (the API's shapes, kept in step with `api/sessions.py`, `api/proposals.py` and
   `api/household.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
-  that ran them), `text.ts` and `words.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
+  that ran them), `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.
 - Ruff bans model SDK imports (`openai`, `azure.identity`, `azure.ai`) everywhere except
