@@ -433,6 +433,24 @@ reads, never what Kako works out.
    was kept, but the screen said HTTP 500: Next.js's pass-through gives up after 30 seconds. The web
    app now waits up to 5 minutes, and a request that ends with no answer reads the session again
    before calling the turn failed (docs/architecture.md, "The session screen").
+   What looked off while trying it (Nov 25), to fix or decide on:
+   - Plan v3 (Dec 1: ₱10,000 on the card, ₱10,000 to the emergency fund, ₱5,050 to a new house
+     fund) has no session or decision behind it: it is loaded as approved facts labelled
+     `session-5:plan-v3`, so the step from Mara's new job to the new split is invisible, and a
+     plan's "What changed" compares against the Oct 18 decision instead. Either session 4's replan
+     proposes plan v3 and Jun accepts it on Dec 1, or plan v3 gets its own decision in
+     `decisions.toml`.
+   - Two cited figures read oddly to a household: the house fund's "on track" shown as "0 (nothing
+     allocated to it)" and the emergency fund's months to target as "none". They should read as
+     words ("not on track", "no money going in").
+   - The sidebar's turn count stayed at 0 after the long turn's error (it is read again once the
+     turn ends, which the fix above now reaches).
+   - In Session 2's recording the orchestrator corrected two slips of its own (citing the wrong
+     what-if, guessing a figure's name), each costing an extra call; a sharper tool message would
+     avoid them.
+   - A what-if can't yet try a one-off amount (the ₱48,000 13th-month pay), a spending change or an
+     income change.
+   - Dreaming runs only when someone runs it, and a session nobody ends stays open.
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 
