@@ -32,6 +32,7 @@ from kako.agents.tool_loop import Tool, ToolInputError, ToolResult
 from kako.agents.turn import short
 from kako.engine import EngineInputError, Run, compute
 from kako.engine.dates import add_months
+from kako.facts.attributes import CATALOG
 from kako.facts.model import FactRow
 from kako.facts.snapshot import take_snapshot
 
@@ -174,6 +175,11 @@ def history_tool(state: TurnState) -> Tool:
             entity_ref, _, key = subject.rpartition("/")
             if "/" not in subject and subject in state.refs.by_ref:
                 entity_ref, key = subject, ""
+            if key and key not in CATALOG:
+                raise ToolInputError(
+                    f"no entity or attribute {subject!r}: use a ref from the brief, such as "
+                    "debt:credit-card or income:<ref>/income.monthly_net"
+                )
             entity_id = None
             if entity_ref:
                 entity_id = state.refs.by_ref.get(entity_ref)

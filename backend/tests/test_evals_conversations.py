@@ -8,9 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from kako.agents.answers import Option, TurnAnswer
+from kako.agents.answers import Citation, Option, TurnAnswer
 from kako.agents.ask import Asked, StoredProposal
 from kako.evals.conversations import (
+    OPEN_QUESTIONS,
     ConversationSetError,
     Turn,
     read_conversations,
@@ -19,9 +20,16 @@ from kako.evals.conversations import (
 from kako.evals.questions import architecture_of, session_title
 
 
-def _asked(reply: str, *, options: int = 0, proposed: tuple[str, ...] = ()) -> Asked:
+def _asked(
+    reply: str,
+    *,
+    options: int = 0,
+    proposed: tuple[str, ...] = (),
+    kind: str | None = None,
+    sources: tuple[Citation, ...] = (),
+) -> Asked:
     offered = tuple(Option(f"{'AB'[n]}: one", "a summary", "", (), (), ()) for n in range(options))
-    answer = TurnAnswer(reply, offered, None, ())
+    answer = TurnAnswer(reply, offered, None, (), kind=kind, sources=sources)  # type: ignore[arg-type]
     return Asked(
         answer,
         uuid.uuid4(),
@@ -77,6 +85,36 @@ def test_the_checks_on_an_answer() -> None:
     assert [c.name for c in reply_checks(go, None)] == ["answered"]
 
 
+def test_the_open_questions_read_and_score_kind_sources_and_labels() -> None:
+    questions = read_conversations(OPEN_QUESTIONS)
+    assert [c.id for c in questions] == [f"o{n:02}" for n in range(1, 31)]
+    assert all(len(c.turns) == 1 and c.turns[0].kinds for c in questions)
+    # Every question but small talk is answered, never turned away.
+    assert all(
+        "Kako can't test" in c.turns[0].lacks
+        for c in questions
+        if "small_talk" not in c.turns[0].kinds
+    )
+    raise_ = questions[0].turns[0]
+    assert raise_.kinds == ("simulate",)
+    assert raise_.sourced
+    assert raise_.labels == ("Scenario, nothing saved",)
+    doc = Citation("knowledge", "doc:sss", "file:sss", "")
+    assert _failed(raise_, _asked("Your surplus would grow.", kind="explain", sources=(doc,))) == [
+        "a simulate answer",
+        "labelled 'Scenario, nothing saved'",
+    ]
+    assert _failed(raise_, _asked("Kako can't test that. Your surplus.", kind="simulate")) == [
+        "doesn't say \"Kako can't test\"",
+        "doesn't say \"can't test that\"",
+        "names its sources",
+        "labelled 'Scenario, nothing saved'",
+    ]
+    guide = next(c for c in questions if "From your documents" in c.turns[0].labels).turns[0]
+    labelled = [c.name for c in reply_checks(guide, _asked("x", sources=(doc,))) if c.passed]
+    assert "labelled 'From your documents'" in labelled
+
+
 @pytest.mark.parametrize(
     ("text", "error"),
     [
@@ -108,6 +146,18 @@ def test_the_checks_on_an_answer() -> None:
             "known_at = 2026-12-01T12:00:00+08:00\n[[conversation.turn]]\n"
             'by = "jun"\nmessage = "hi"\nsays = ["x"]',
             "unknown fields",
+        ),
+        (
+            'version = 1\n[[conversation]]\nid = "o01"\ntitle = "t"\non = 2026-12-01\n'
+            "known_at = 2026-12-01T12:00:00+08:00\n[[conversation.turn]]\n"
+            'by = "jun"\nmessage = "hi"\nkinds = ["guess"]',
+            "kinds are among",
+        ),
+        (
+            'version = 1\n[[conversation]]\nid = "o01"\ntitle = "t"\non = 2026-12-01\n'
+            "known_at = 2026-12-01T12:00:00+08:00\n[[conversation.turn]]\n"
+            'by = "jun"\nmessage = "hi"\nlabels = ["Advice"]',
+            "labels are among",
         ),
     ],
 )
