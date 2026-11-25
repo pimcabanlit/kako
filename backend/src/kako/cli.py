@@ -75,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
         help="refuse a call whose request differs from its recording (by default its reply is "
         "replayed and the difference reported)",
     )
+    run.add_argument(
+        "--without-learning",
+        action="store_true",
+        help="leave out what dreaming learns in the story (the preference and what is shared with "
+        "it), on an empty database: the household for `kako test-set --without-preference`",
+    )
 
     record = demo_commands.add_parser(
         "record",
@@ -137,6 +143,14 @@ def main(argv: list[str] | None = None) -> int:
         help="the orchestrator with its specialists, or the single-agent baseline",
     )
     test_set.add_argument("--only", help="question ids, such as q01,q07")
+    test_set.add_argument(
+        "--without-preference",
+        action="store_true",
+        help="the questions that expect the learned preference, on a household that never "
+        "learned it (`kako demo run --without-learning`), from "
+        "test-set-specialists-without-preference.json; --save writes "
+        "data/test-set/results/preference.json beside the specialists' saved run",
+    )
     test_set.add_argument("--household", type=uuid.UUID, help="needed when there are several")
     test_set.add_argument(
         "--save",
@@ -314,7 +328,18 @@ def main(argv: list[str] | None = None) -> int:
         except DemoModeError as exc:
             print(f"Demo mode can't start: {exc}", file=sys.stderr)
             return 1
-        return _migrate() or asyncio.run(_demo_run(test_set=args.test_set, strict=args.strict))
+        if args.without_learning and args.test_set:
+            print(
+                "--without-learning can't replay the test set: its recordings were made after "
+                "dreaming learned. Use `kako test-set --without-preference`.",
+                file=sys.stderr,
+            )
+            return 1
+        return _migrate() or asyncio.run(
+            _demo_run(
+                test_set=args.test_set, strict=args.strict, without_learning=args.without_learning
+            )
+        )
     if args.command == "demo" and args.demo_command == "record":
         from kako.demo.mode import DemoModeError, check_target
 
@@ -353,7 +378,13 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "test-set":
         return asyncio.run(
-            _test_set(args.architecture, args.only, household_id=args.household, save=args.save)
+            _test_set(
+                args.architecture,
+                args.only,
+                household_id=args.household,
+                save=args.save,
+                without_preference=args.without_preference,
+            )
         )
     if args.command == "dream":
         if args.dream_command == "end":
@@ -483,7 +514,7 @@ async def _demo_upload(folder: Path | None) -> int:
     return 0
 
 
-async def _demo_run(*, test_set: bool, strict: bool) -> int:
+async def _demo_run(*, test_set: bool, strict: bool, without_learning: bool = False) -> int:
     """Demo mode: everything from local services and recordings (`demo/mode.py`)."""
     from kako.agents.ask import render_answer
     from kako.agents.brief_store import BriefStoreError
@@ -529,9 +560,34 @@ async def _demo_run(*, test_set: bool, strict: bool) -> int:
         return 1
     engine = make_engine(database_url)
     try:
+        later: list[str] = []
+        if without_learning and learning is not None:
+            # A session after what dreaming learned was recorded with it, so it can't replay
+            # without it: the story's rows it writes are loaded as they are instead.
+            later = [s.title for s in sessions if s.known_at >= learning.at]
+            sessions = tuple(s for s in sessions if s.known_at < learning.at)
         skip = written_by_sessions(sessions) | ({learning.writes} if learning else set())
         prepared = await prepare(engine, settings, demo, skip=skip)
         learned: Learned | None = None
+        if without_learning:
+            if not prepared.loaded:
+                raise DemoModeError(
+                    "--without-learning needs an empty database: this one holds the household"
+                )
+            print(
+                "What dreaming learns in the story is left out: no preference, nothing shared "
+                "with it (changes.csv row "
+                + (f"{learning.writes}" if learning else "none")
+                + " isn't written)"
+                + (
+                    f"; {', '.join(later)} came after it, so its recording isn't replayed and the "
+                    "story's rows it writes are loaded instead"
+                    if later
+                    else ""
+                )
+                + ".\n"
+            )
+            learning = None
 
         async def learning_step() -> Learned | None:
             if learning is None or learned is not None:
@@ -1216,7 +1272,12 @@ def settings_for_test_set(settings: Settings, architecture: str) -> Settings:
 
 
 async def _test_set(
-    architecture: str, only: str | None, *, household_id: uuid.UUID | None, save: bool
+    architecture: str,
+    only: str | None,
+    *,
+    household_id: uuid.UUID | None,
+    save: bool,
+    without_preference: bool = False,
 ) -> int:
     import json
 
@@ -1235,12 +1296,21 @@ async def _test_set(
         # Every question is a Meko conversation: never spent from Meko Cloud's lifetime 1,000.
         print("The test set runs on local Meko only (MEKO_MCP_URL).", file=sys.stderr)
         return 1
-    settings = settings_for_test_set(settings, architecture)
+    if without_preference and architecture != "specialists":
+        print("--without-preference runs the specialists only.", file=sys.stderr)
+        return 1
+    settings = settings_for_test_set(
+        settings, architecture + ("-without-preference" if without_preference else "")
+    )
     try:
         questions = read_test_set()
     except TestSetError as exc:
         print(f"The test set can't be read: {exc}", file=sys.stderr)
         return 1
+    if without_preference:
+        from kako.evals.preference import preference_questions
+
+        questions = preference_questions(questions)
     if only:
         wanted = {q.strip() for q in only.split(",") if q.strip()}
         unknown = wanted - {q.id for q in questions}
@@ -1260,6 +1330,13 @@ async def _test_set(
     try:
         async with engine.connect() as conn:
             chosen = await _household(conn, household_id)
+            if chosen is not None and without_preference and await _holds_preference(conn, chosen):
+                print(
+                    "This household holds the preference: --without-preference needs one that "
+                    "never learned it (`kako demo run --without-learning` on an empty database).",
+                    file=sys.stderr,
+                )
+                return 1
         if chosen is None:
             return 1
 
@@ -1279,7 +1356,29 @@ async def _test_set(
     finally:
         await engine.dispose()
     print(render_report(report))
-    if save:
+    if save and without_preference:
+        from kako.evals.preference import PREFERENCE_RESULTS, effect_json
+        from kako.evals.results import ResultsError, load_json
+
+        try:
+            with_run = load_json(PREFERENCE_RESULTS.parent / "specialists.json")
+            if with_run is None:
+                raise ResultsError("specialists.json isn't saved yet: `kako test-set --save`")
+            effect = effect_json(with_run, report.as_json(), [q.id for q in questions])
+        except ResultsError as exc:
+            print(f"Not saved: {exc}", file=sys.stderr)
+            return 1
+        PREFERENCE_RESULTS.write_text(
+            json.dumps(effect, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        print(
+            f"With the preference {effect['with']['score']}, without "
+            f"{effect['without']['score']}; leaving out the check that cites it, "
+            f"{effect['with']['score_without_citation']} and "
+            f"{effect['without']['score_without_citation']}."
+        )
+        print(f"Saved {PREFERENCE_RESULTS}")
+    elif save:
         path = TEST_SET.parent / "results" / f"{architecture}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
@@ -1287,6 +1386,25 @@ async def _test_set(
         )
         print(f"Saved {path}")
     return 0
+
+
+async def _holds_preference(conn: Any, household_id: uuid.UUID) -> bool:
+    """Whether the household holds the learned preference, in any status."""
+    from typing import cast
+
+    from sqlalchemy import Table, select
+
+    from kako.db.models import Fact
+    from kako.evals.preference import PREFERENCE
+
+    fact = cast(Table, Fact.__table__)
+    attribute = PREFERENCE.removeprefix("fact:")
+    found = await conn.execute(
+        select(fact.c.id)
+        .where(fact.c.household_id == household_id, fact.c.attribute == attribute)
+        .limit(1)
+    )
+    return found.first() is not None
 
 
 async def _dream_end(session_id: uuid.UUID, at: datetime | None) -> int:
