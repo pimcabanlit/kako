@@ -27,6 +27,10 @@ class MekoError(Exception):
     """Meko could not be reached or answered with an error."""
 
 
+class MekoUnreachable(MekoError):
+    """Nothing answered at Meko's address: it isn't running there, or the address is wrong."""
+
+
 class MekoAuthError(MekoError):
     """Meko refused the request's credentials (HTTP 401 or 403)."""
 
@@ -175,6 +179,8 @@ class MekoMcpSession:
             response = await self._http.post(self._url, json=message, headers=self._headers())
         except httpx.TimeoutException as exc:
             raise MekoError("Meko did not answer in time") from exc
+        except httpx.ConnectError as exc:
+            raise MekoUnreachable(f"Meko could not be reached ({type(exc).__name__})") from exc
         except httpx.HTTPError as exc:
             raise MekoError(f"Meko could not be reached ({type(exc).__name__})") from exc
         if response.status_code in (401, 403):

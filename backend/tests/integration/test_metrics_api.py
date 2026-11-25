@@ -429,6 +429,23 @@ async def test_meko_metrics_refusals(migrated: AsyncEngine, make_settings: MakeS
     assert await _api(migrated, make_settings, gone, twice) == [502, 502]
     assert gone.calls.count("conversation_create") == 2
 
+    class Stopped(FakeMeko):
+        async def create_conversation(self, *args: Any, **kwargs: Any) -> Any:
+            from kako.meko.client import MekoUnreachable
+
+            raise MekoUnreachable("Meko could not be reached (ConnectError)")
+
+    async def stopped(api: httpx.AsyncClient, services: Services) -> tuple[int, str]:
+        answer = await api.get("/api/v1/metrics/meko")
+        assert services.conversations == {}
+        return answer.status_code, answer.json()["detail"]
+
+    # Nothing runs at Meko's address: not an error in Meko, so 503 with a plain note.
+    assert await _api(migrated, make_settings, Stopped(), stopped) == (
+        503,
+        "Meko isn't running here, so its own figures can't be shown",
+    )
+
 
 async def test_the_brief_against_the_whole_context(
     migrated: AsyncEngine, make_settings: MakeSettings

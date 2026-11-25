@@ -16,6 +16,7 @@ from kako.meko.client import (
     MekoMcpSession,
     MekoProtocolError,
     MekoToolError,
+    MekoUnreachable,
 )
 
 URL = "http://meko.test/mcp"
@@ -121,7 +122,7 @@ async def test_unreachable() -> None:
         raise httpx.ConnectError("connection refused", request=request)
 
     async with client(refuse) as http:
-        with pytest.raises(MekoError, match="could not be reached"):
+        with pytest.raises(MekoUnreachable, match="could not be reached"):
             await MekoMcpSession(http, URL).__aenter__()
 
 
