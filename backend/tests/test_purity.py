@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "kako"
-PURE_PACKAGES = ("facts", "engine", "planning", "decisions")
+PURE_PACKAGES = ("facts", "engine", "planning", "decisions", "metrics")
 # Pure modules in packages that aren't, and the one pure module of `kako.agents` they may use (the
 # way the agents write values: pesos, days).
 PURE_MODULES = (

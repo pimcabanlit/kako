@@ -20,7 +20,7 @@ import re
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Annotated, Final, Literal, cast
 
@@ -86,6 +86,9 @@ class Services:
     http: httpx.AsyncClient  # for local Meko's call log
     turn_lock: asyncio.Lock
     running: Running | None = None  # set while a turn runs (one at a time)
+    # Meko conversations the routes made for their own calls, by session key, so each is made
+    # once per process (`conversation_create` is capped on Meko Cloud).
+    conversations: dict[str, str] = field(default_factory=dict)
 
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
