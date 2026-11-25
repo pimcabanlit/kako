@@ -28,6 +28,7 @@ from kako.agents.answers import TurnAnswer
 from kako.agents.brief_store import gather_brief
 from kako.agents.checks import record
 from kako.agents.conversation import history
+from kako.agents.lookups import documents_of
 from kako.agents.model_manager import ModelManager
 from kako.agents.orchestrator import answer_turn
 from kako.agents.present import money
@@ -234,6 +235,7 @@ async def run_turn(
         checks=checks,
         said_on=session.on,
         history=history(inputs.earlier, settings.history_token_budget),
+        documents=documents_of(settings),
     )
     manager = ModelManager(settings, backend, DbLlmLog(engine))
     turn = manager.turn(

@@ -29,16 +29,22 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Final
 
 from kako.agents.answers import (
+    ANSWER_KINDS,
     SPECIALISTS,
+    STORED_KINDS,
+    AnswerKind,
+    Citation,
     Option,
     Specialist,
     SpecialistProposal,
     TurnAnswer,
 )
 from kako.agents.brief import data
+from kako.agents.calculator import calculate_tool
 from kako.agents.chat import ToolSpec
 from kako.agents.checks import Subject, record
 from kako.agents.conversation import ASKS_CHARS, TOPIC_CHARS, new_message
+from kako.agents.lookups import document_tool, figures_on_tool, history_tool
 from kako.agents.model_manager import ModelManager
 from kako.agents.numbers import check_texts, mismatch
 from kako.agents.present import day, money
@@ -60,7 +66,7 @@ from kako.agents.turn import TurnContext, short
 
 PATH: Final = ORCHESTRATOR
 MAX_SPECIALIST_CALLS: Final = 4
-MAX_TOOL_CALLS: Final = 8
+MAX_TOOL_CALLS: Final = 10
 MAX_OPTIONS: Final = 4
 MAX_REPLY: Final = 4_000
 MAX_OPTION_SUMMARY: Final = 1_000
@@ -181,9 +187,22 @@ def _option(state: TurnState, raw: Any, asked: AskedSpecialists) -> Option:
     what_if = state.what_ifs.get(ref)
     if what_if is None:
         raise ToolInputError(f"option {label!r}: {ref!r} isn't a what-if of this turn")
+    if what_if.hypothetical:
+        raise ToolInputError(
+            f"option {label!r}: {ref} changes facts or adds items, so it is a what-if to show in "
+            "the reply, not a plan the household can accept: an option only moves the surplus"
+        )
     if what_if.over_allocated:
         raise ToolInputError(f"option {label!r}: {ref} allocates more than the surplus")
     citations = state.citations(raw.get("sources"), PATH)
+    for c in citations:
+        if c.kind not in STORED_KINDS or (
+            c.what_if is not None and c.what_if not in state.what_ifs
+        ):
+            raise ToolInputError(
+                f"option {label!r}: {c.ref} can't be an option's source; cite it in the answer's "
+                "sources instead"
+            )
     if not any(c.kind == "figure" and c.what_if == ref for c in citations):
         raise ToolInputError(f"option {label!r}: cite at least one figure of {ref}")
     names = raw.get("specialists")
@@ -220,13 +239,39 @@ def turn_message(state: TurnState, *notes: str) -> str:
     )
 
 
+# The kinds of answer whose reply rests on the household's own figures, facts or records: each
+# names at least one source. The others may (general information cites a document if it uses one).
+SOURCED: Final[frozenset[AnswerKind]] = frozenset(
+    {"explain", "look_up", "compute", "simulate", "advise", "plan"}
+)
+
+
+def _kind(arguments: dict[str, Any]) -> AnswerKind | None:
+    raw = arguments.get("kind")
+    if raw is None:  # an answer recorded before answers had a kind
+        return None
+    kind = next((k for k in ANSWER_KINDS if k == raw), None)
+    if kind is None:
+        raise ToolInputError(f"kind is one of: {', '.join(ANSWER_KINDS)}")
+    return kind
+
+
 def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconciler) -> Tool:
     async def submit_answer(arguments: dict[str, Any]) -> ToolResult:
         reply = _text(arguments, "reply", MAX_REPLY)
+        kind = _kind(arguments)
+        sources: tuple[Citation, ...] = state.sources(arguments.get("sources"))
+        if kind in SOURCED and not sources and "sources" in arguments:
+            raise ToolInputError(
+                f"a {kind} answer names what it rests on in sources: the figures, facts, "
+                "what-ifs, calculations, documents or history lines it uses"
+            )
         raw = arguments.get("options")
         if not isinstance(raw, list) or len(raw) > MAX_OPTIONS:
             raise ToolInputError(f"options must be a list of at most {MAX_OPTIONS}")
         options = tuple(_option(state, item, asked) for item in raw)
+        if kind == "plan" and not options:
+            raise ToolInputError("a plan answer has options; with none, pick another kind")
         labels = [o.label for o in options]
         if len(set(labels)) != len(labels):
             raise ToolInputError("two options share a label")
@@ -263,7 +308,7 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
             texts.append(("recommendation", f"option {o.label!r}'s summary", o.summary))
         if resolution is not None:
             texts.append(("reconciliation", "the resolution's reason", resolution.reason))
-        checks = check_texts(state, texts)
+        checks = check_texts(state, texts, cited=sources)
         answer = TurnAnswer(
             reply,
             options,
@@ -274,6 +319,8 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
             why or None,
             topic or None,
             asks or None,
+            kind,
+            sources,
         )
         failed = [c for c in checks if not c.ok]
         if failed and PATH not in state.regenerated:
@@ -284,8 +331,10 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
                 await state.checks.write(record(check, "regenerated"))
             raise ToolInputError(mismatch(failed))
         state.held.pop(PATH, None)
-        summary = f"{len(options)} options" + (
-            f", recommends {answer.recommended}" if answer.recommended else ""
+        summary = (
+            (f"{kind}: " if kind else "")
+            + f"{len(options)} options"
+            + (f", recommends {answer.recommended}" if answer.recommended else "")
         )
         return ToolResult("Answer received.", short(summary), value=answer)
 
@@ -304,14 +353,18 @@ def answer_tool(state: TurnState, asked: AskedSpecialists, reconciler: Reconcile
     return Tool(
         ToolSpec(
             "submit_answer",
-            "Hand in the turn's answer. Call it once, last. reply: what the household reads. "
+            "Hand in the turn's answer. Call it once, last. kind: the kind of answer. reply: what "
+            "the household reads. sources: what the reply rests on (figure:, fact:, calc:, "
+            "history:, doc:, decision:, memory: refs or said); code shows them under the answer. "
             'options: 0 to 4, each one what-if, cited. recommended: an option\'s label, or "" '
             "when the choice is the household's. resolution: null unless code reported a "
             'conflict; then the split that resolves it and the what-if you rejected, or both "" '
             "to leave the choice to the household, with your reason.",
             object_schema(
                 {
+                    "kind": {"type": "string", "enum": list(ANSWER_KINDS)},
                     "reply": {"type": "string"},
+                    "sources": {"type": "array", "items": {"type": "string"}},
                     "options": {"type": "array", "items": option},
                     "recommended": {"type": "string"},
                     "resolution": RESOLUTION_SCHEMA,
@@ -346,7 +399,11 @@ async def answer_turn(manager: ModelManager, turn: TurnContext, state: TurnState
         *read_tools(state),
         decisions_tool(state),
         turns_tool(state),
-        reconciler.split_tool(what_if_tool(state, PATH)),
+        history_tool(state),
+        figures_on_tool(state),
+        document_tool(state),
+        calculate_tool(state, PATH),
+        reconciler.split_tool(what_if_tool(state, PATH, changes=True)),
         *(_ask_tool(manager, turn, state, s, asked) for s in SPECIALISTS),
         proposal_tool(state),
         answer_tool(state, asked, reconciler),

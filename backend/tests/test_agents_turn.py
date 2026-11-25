@@ -325,8 +325,8 @@ async def test_what_each_agent_was_sent(house: Villanueva, make_settings: MakeSe
     )
     assert "What-if debt1-W1: account:emergency-fund gets ₱0.00 a month (none)" in seen
     assert "account:emergency-fund gets ₱5,050.00 a month (rest)" in seen
-    assert f"- {CARD_PAYOFF} = 9 months" in seen
-    assert f"- {CARD_PAYOFF} = 17 months" in seen
+    assert f"- {CARD_PAYOFF} = 47 months → 9 months" in seen  # before → after
+    assert f"- {CARD_PAYOFF} = 47 months → 17 months" in seen
 
     # The orchestrator read each proposal with what it cited.
     read = "\n".join(
@@ -345,6 +345,10 @@ async def test_what_each_agent_was_sent(house: Villanueva, make_settings: MakeSe
         "get_facts",
         "get_decisions",
         "read_turns",
+        "get_history",
+        "get_figures_on",
+        "read_document",
+        "calculate",
         "run_what_if",
         "ask_budget",
         "ask_debt",

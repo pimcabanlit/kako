@@ -99,6 +99,10 @@ class Settings(BaseSettings):
     # The session's earlier turns the orchestrator reads word for word, in estimated tokens; older
     # turns are shortened by code to a line each (docs/architecture.md, "The conversation").
     history_token_budget: int = Field(default=12_000, ge=2_000, le=60_000)
+    # The household's documents the agents read with read_document (`statements/*.csv` and
+    # `kb/*.md`), from files, so it works with Meko off. Unset: the demo household's
+    # (data/demo-household), the same files `kako demo upload` puts in Meko's knowledge base.
+    documents_dir: Path | None = None
     # Results the brief's one context_search asks Meko for.
     brief_search_limit: int = Field(default=5, ge=0, le=10)
     # The most a model may write in one call, reasoning included: a specialist (fast deployment)

@@ -1,9 +1,11 @@
 """A turn's answer in Postgres: its what-ifs as scenarios, and the plan it proposes.
 
 - Each what-if is a `scenario` with one `scenario_override` per allocation (`plan.allocation`,
-  never a fact), and its run is stored with the scenario. The tools run what-ifs in memory and
-  write nothing; every what-if of a turn is kept when the turn is, and the `agent_step` rows that
-  ran it are then given its run. A turn that fails leaves no scenario behind.
+  never a fact) and per fact it changed for the run, and its run is stored with the scenario (a
+  new item's own figures aside: it has no `entity` row, so the scenario's name lists it). The
+  tools run what-ifs in memory and write nothing; every what-if of a turn is kept when the turn
+  is, and the `agent_step` rows that ran it are then given its run. A turn that fails leaves no
+  scenario behind.
 - A turn that offers options, or found a conflict, proposes a `plan` (`save_answer`): the reply is
   its summary, each option's allocations are its `recommendation` rows with the option's cited
   sources, and each conflict is a `reconciliation` row. The plan stays `proposed` until the
@@ -16,9 +18,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
-from typing import cast
+from typing import Any, cast
 
 from sqlalchemy import Table, func, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
@@ -26,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from kako.agents.answers import Allocation, Citation, Option, TurnAnswer
 from kako.agents.checks import TextCheck
 from kako.agents.present import money
+from kako.agents.scenarios import change_line
 from kako.agents.tools import TurnState, WhatIf
 from kako.db.calc_store import figure_ids, save_run
 from kako.db.models import (
@@ -38,7 +41,9 @@ from kako.db.models import (
     Scenario,
     ScenarioOverride,
 )
-from kako.engine.figures import FigureRef
+from kako.engine.figures import FigureRef, Run
+from kako.facts.attributes import attribute
+from kako.facts.values import value_columns
 from kako.planning.reconcile import OWNER
 
 AGENT_STEP = cast(Table, AgentStep.__table__)
@@ -60,33 +65,66 @@ def allocations_text(allocations: tuple[Allocation, ...]) -> str:
     return "; ".join(f"{a.entity_ref} {money(a.centavos)} a month" for a in allocations)
 
 
+def _stored_run(what_if: WhatIf) -> Run:
+    """The run as Postgres can hold it: a new item has no `entity` row, so its own figures are
+    left out (the scenario's name lists it); every other figure is kept as the engine gave it."""
+    new = {item.entity.id for item in what_if.new}
+    if not new:
+        return what_if.run
+    figures = tuple(f for f in what_if.run.figures if f.entity_id not in new)
+    kept = {f.ref for f in figures}
+    figures = tuple(
+        replace(f, input_figures=tuple(r for r in f.input_figures if r in kept)) for f in figures
+    )
+    return replace(what_if.run, figures=figures)
+
+
+def scenario_name(what_if: WhatIf) -> str:
+    parts = [allocations_text(what_if.allocations)] if what_if.allocations else []
+    parts += [change_line(c) for c in what_if.changes]
+    parts += [f"new {n.entity.kind} {n.entity.name}" for n in what_if.new]
+    return f"{what_if.ref}: {'; '.join(parts)}"[:500]
+
+
 async def save_what_if(conn: AsyncConnection, what_if: WhatIf, *, on: date) -> uuid.UUID:
-    """A what-if as a scenario, its overrides and its run, in the caller's transaction."""
+    """A what-if as a scenario, its overrides and its run, in the caller's transaction: its
+    allocations and any facts it changed, each a `scenario_override` (never a fact)."""
     scenario_id = uuid.uuid4()
     await conn.execute(
         SCENARIO.insert().values(
             id=scenario_id,
             household_id=what_if.run.household_id,
-            name=f"{what_if.ref}: {allocations_text(what_if.allocations)}"[:500],
+            name=scenario_name(what_if),
             base_as_of=on,
         )
     )
-    if what_if.allocations:
-        await conn.execute(
-            OVERRIDE.insert(),
-            [
-                {
-                    "id": uuid.uuid4(),
-                    "scenario_id": scenario_id,
-                    "entity_id": a.entity_id,
-                    "attribute": "plan.allocation",
-                    "value_money": a.centavos,
-                    "valid_from": on,
-                }
-                for a in what_if.allocations
-            ],
-        )
-    return await save_run(conn, what_if.run, created_at=datetime.now(UTC), scenario_id=scenario_id)
+    rows: list[dict[str, Any]] = [
+        {
+            "id": uuid.uuid4(),
+            "scenario_id": scenario_id,
+            "entity_id": a.entity_id,
+            "attribute": "plan.allocation",
+            "valid_from": on,
+            **value_columns(attribute("plan.allocation"), a.centavos),
+        }
+        for a in what_if.allocations
+    ]
+    rows += [
+        {
+            "id": uuid.uuid4(),
+            "scenario_id": scenario_id,
+            "entity_id": c.entity_id,
+            "attribute": c.attribute,
+            "valid_from": on,
+            **value_columns(attribute(c.attribute), c.after),
+        }
+        for c in what_if.changes
+    ]
+    if rows:
+        await conn.execute(OVERRIDE.insert(), rows)
+    return await save_run(
+        conn, _stored_run(what_if), created_at=datetime.now(UTC), scenario_id=scenario_id
+    )
 
 
 @dataclass(frozen=True)
