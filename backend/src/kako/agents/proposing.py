@@ -7,6 +7,8 @@ value copied from the household's words, with the exact words it was copied from
 all before holding it:
 
 - the quote is in this turn's message, word for word;
+- the words it comes from say something happened, never a what-if ("what if I lose my job?",
+  "suppose Mara gets a raise", "paano kung…"): a hypothetical is never filed as a change;
 - every number the proposal would write is in the quote (V-09, `facts.evidence`), so a value is
   one the household said, never one a model worked out;
 - the entity and the attribute exist, and the value is the attribute's type;
@@ -53,6 +55,28 @@ MAX_DESCRIPTION: Final = 300
 NOT_PROPOSED: Final = frozenset({"plan.allocation"})
 ATTRIBUTES: Final = tuple(sorted(k for k in CATALOG if k not in NOT_PROPOSED))
 SPACE: Final = re.compile(r"\s+")
+# Words that make a sentence a what-if, not news: English and Filipino.
+HYPOTHETICAL: Final = re.compile(
+    r"\b(what if|what happens if|what would happen|suppose|supposing|imagine|hypothetically|"
+    r"let's say|lets say|paano kung|kung sakali|sakaling)\b",
+    re.IGNORECASE,
+)
+IF: Final = re.compile(r"\bif\b", re.IGNORECASE)
+SENTENCE: Final = re.compile(r"[^.!?\n]+[.!?]*")
+
+
+def hypothetical(message: str, quote: str) -> bool:
+    """Whether the household's words the quote comes from ask a what-if rather than tell news: a
+    sentence it overlaps that has a what-if phrase, or that asks a question with "if"."""
+    words = _words(quote).lower()
+    for match in SENTENCE.finditer(message):
+        sentence = _words(match.group(0))
+        lowered = sentence.lower()
+        if not lowered or (lowered not in words and words not in lowered):
+            continue
+        if HYPOTHETICAL.search(sentence) or (IF.search(sentence) and sentence.endswith("?")):
+            return True
+    return False
 
 
 @dataclass(frozen=True)
@@ -128,6 +152,13 @@ def proposal_tool(state: TurnState) -> Tool:
         if not quote or _words(quote) not in _words(state.message):
             raise ToolInputError(
                 "quote must be the household's own words, copied exactly from its message"
+            )
+        if hypothetical(state.message, quote):
+            raise ToolInputError(
+                "those words ask a what-if: nothing has happened, so nothing is filed. Don't "
+                "propose it; answer the what-if instead. Kako's what-ifs move the surplus between "
+                "debts, savings and goals; they can't yet change income or spending, so say that "
+                "plainly and show what Kako can test"
             )
         today = state.said_on or state.snapshot.on
         held: list[HeldProposal] = []

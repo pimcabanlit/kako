@@ -17,7 +17,7 @@ import pytest
 
 from kako.agents.brief import BriefInputs, LifeEventView, render_brief
 from kako.agents.numbers import check_texts
-from kako.agents.proposing import HeldChange, parse_stated, proposal_tool
+from kako.agents.proposing import HeldChange, hypothetical, parse_stated, proposal_tool
 from kako.agents.tool_loop import ToolInputError
 from kako.agents.tools import TurnState
 from kako.engine import compute
@@ -186,3 +186,37 @@ async def test_what_a_turn_proposed_may_be_named_in_its_reply(house: Villanueva)
     (after,) = check_texts(state, [("reply", "the reply", reply)])
     assert after.unmatched == ()
     assert {n.match for n in after.numbers} == {"proposed:C1"}
+
+
+@pytest.mark.parametrize(
+    ("message", "quote", "what_if"),
+    [
+        ("what if i lose my job", "i lose my job", True),
+        ("What if Jun loses the job?", "Jun loses the job", True),
+        ("Suppose Mara gets a raise to ₱70,000.", "Mara gets a raise to ₱70,000", True),
+        ("If I lose my job next month, how long does the fund last?", "I lose my job", True),
+        ("Paano kung mawalan ng trabaho si Jun?", "mawalan ng trabaho si Jun", True),
+        ("Let's say my salary goes to 200000 per month.", "my salary goes to 200000", True),
+        (MESSAGE, QUOTE, False),
+        (
+            "I lost my job yesterday. What if we pause the extra on the card?",
+            "I lost my job",
+            False,
+        ),
+        ("If it helps: my pay went up to ₱70,000 this month.", "my pay went up to ₱70,000", False),
+        ("I got a raise, in case you didn't know: ₱70,000 now.", "I got a raise", False),
+        ("What would happen if Mara stops working?", "Mara stops working", True),
+    ],
+)
+def test_a_what_if_is_told_from_news(message: str, quote: str, what_if: bool) -> None:
+    assert hypothetical(message, quote) is what_if
+
+
+async def test_a_what_if_is_never_filed_as_a_change(house: Villanueva) -> None:
+    """Pim's sandbox, Nov 25: "what if i lose my job" was filed as Jun's job loss, for a yes."""
+    message = "What if Jun loses the job?"
+    state = _state(house, message=message)
+    loss = {"kind": "job_loss", "description": "Jun loses the job", "occurs_on": "2026-12-01"}
+    with pytest.raises(ToolInputError, match="those words ask a what-if: nothing has happened"):
+        await _propose(state, quote="Jun loses the job", life_event=loss)
+    assert state.proposed == []
