@@ -238,7 +238,7 @@ def _input(state: TurnState, name: str, spec: str, path: str) -> CalcInput:
     kind, _, value = spec.strip().partition(":")
     value = value.strip()
     if kind == "figure":
-        figure, what_if = state.figure(value, path)
+        figure, _ = state.figure(value, path)
         if figure.value is None or isinstance(figure.value, date):
             raise ToolInputError(f"{name}: figure:{value} has no number")
         number = Decimal(figure.value)

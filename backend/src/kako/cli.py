@@ -170,12 +170,20 @@ def main(argv: list[str] | None = None) -> int:
         default="specialists",
         help="the orchestrator with its specialists, or the single-agent baseline",
     )
+    conversations.add_argument(
+        "--set",
+        dest="which",
+        choices=("conversations", "open"),
+        default="conversations",
+        help="the conversations (data/test-set/conversations.toml) or the open questions "
+        "(open-questions.toml); each replays its own recording, <set>-<architecture>.json",
+    )
     conversations.add_argument("--only", help="conversation ids, such as c01,c03")
     conversations.add_argument("--household", type=uuid.UUID, help="needed when there are several")
     conversations.add_argument(
         "--save",
         action="store_true",
-        help="write the report to data/test-set/results/conversations-<architecture>.json",
+        help="write the report to data/test-set/results/<set>-<architecture>.json",
     )
 
     dream = commands.add_parser(
@@ -409,7 +417,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "conversations":
         return asyncio.run(
             _conversations(
-                args.architecture, args.only, household_id=args.household, save=args.save
+                args.architecture,
+                args.only,
+                household_id=args.household,
+                save=args.save,
+                which=args.which,
             )
         )
     if args.command == "dream":
@@ -1300,7 +1312,12 @@ async def _demo_record(name: str) -> int:
 
 
 async def _conversations(
-    architecture: str, only: str | None, *, household_id: uuid.UUID | None, save: bool
+    architecture: str,
+    only: str | None,
+    *,
+    household_id: uuid.UUID | None,
+    save: bool,
+    which: str = "conversations",
 ) -> int:
     import json
 
@@ -1308,6 +1325,8 @@ async def _conversations(
     from kako.agents.model_manager import chat_backend
     from kako.db.engine import make_engine
     from kako.evals.conversations import (
+        CONVERSATIONS,
+        OPEN_QUESTIONS,
         ConversationOutcome,
         ConversationSetError,
         read_conversations,
@@ -1316,6 +1335,8 @@ async def _conversations(
     )
     from kako.evals.questions import TEST_SET
 
+    path = OPEN_QUESTIONS if which == "open" else CONVERSATIONS
+    name = "open-questions" if which == "open" else "conversations"
     settings = get_settings()
     database_url = settings.database_url
     if database_url is None:
@@ -1329,7 +1350,7 @@ async def _conversations(
         update={
             "model_mode": "record" if settings.model_mode == "record" else "replay",
             "recorded_responses": settings.recorded_responses
-            or TEST_SET.parent.parent / "recorded" / f"conversations-{architecture}.json",
+            or TEST_SET.parent.parent / "recorded" / f"{name}-{architecture}.json",
         }
     )
     recording = settings.recorded_responses
@@ -1341,7 +1362,7 @@ async def _conversations(
         )
         return 1
     try:
-        conversations = read_conversations()
+        conversations = read_conversations(path)
     except ConversationSetError as exc:
         print(f"The conversation set can't be read: {exc}", file=sys.stderr)
         return 1
@@ -1386,12 +1407,12 @@ async def _conversations(
         await engine.dispose()
     print(render_conversations(report))
     if save:
-        path = TEST_SET.parent / "results" / f"conversations-{architecture}.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
+        saved = TEST_SET.parent / "results" / f"{name}-{architecture}.json"
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_text(
             json.dumps(report.as_json(), indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
         )
-        print(f"Saved {path}")
+        print(f"Saved {saved}")
     return 0
 
 

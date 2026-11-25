@@ -1,0 +1,439 @@
+# Kako's open-question test set: everyday questions nobody planned for, one turn each.
+#
+# The same format and checks as conversations.toml (backend/src/kako/evals/conversations.py), on the
+# demo household loaded through Dec 1, 2026. Each question must be answered (no flat "can't"), change
+# nothing unless it is news (`proposes`), pass the number check, and here also:
+#   kinds    the kinds of answer that fit (inform, explain, look_up, compute, simulate, advise, plan,
+#            record, small_talk)
+#   sourced  true: the answer names at least one source
+#   labels   labels the answer must carry: "General information", "Scenario, nothing saved",
+#            "Calculated", "From your documents"
+# `kako conversations --set open` replays data/recorded/open-questions-<architecture>.json.
+
+version = 1
+
+[[conversation]]
+id = "o01"
+title = "Salary up by 20k"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "what happens if my salary increases by 20000"
+kinds = ["simulate"]
+proposes = false
+sourced = true
+labels = ["Scenario, nothing saved"]
+any = ["surplus", "left over", "what-if"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o02"
+title = "Job loss"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "what if i lose my job"
+kinds = ["simulate", "compute", "explain"]
+proposes = false
+sourced = true
+any = ["emergency fund", "runway", "months"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o03"
+title = "Mara's raise from March"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "What if my pay goes up 10% from March?"
+kinds = ["simulate"]
+proposes = false
+sourced = true
+labels = ["Scenario, nothing saved"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o04"
+title = "Car loan"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "We're thinking of a second car loan, ₱350,000 at 1% a month with a ₱12,000 monthly payment. What would that do to us?"
+kinds = ["simulate", "advise"]
+proposes = false
+sourced = true
+labels = ["Scenario, nothing saved"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o05"
+title = "Eating out cut"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "What if we cut eating out to ₱3,000 a month?"
+kinds = ["simulate"]
+proposes = false
+sourced = true
+labels = ["Scenario, nothing saved"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o06"
+title = "Bonus to the card"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "If we put a ₱50,000 bonus on the credit card, when is it paid off?"
+kinds = ["simulate"]
+proposes = false
+sourced = true
+labels = ["Scenario, nothing saved"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o07"
+title = "Rent goes up"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "Our landlord might raise rent and utilities by ₱5,000. How bad is that?"
+kinds = ["simulate", "advise"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o08"
+title = "Surplus lower than last month"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "Why is our surplus different from last month?"
+kinds = ["explain", "look_up"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o09"
+title = "How the surplus is worked out"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "How do you work out what's left over each month?"
+kinds = ["explain"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o10"
+title = "Explain 13th-month pay"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "Explain how 13th-month pay works."
+kinds = ["inform"]
+proposes = false
+any = ["13th-month", "13th month"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o11"
+title = "What's SSS"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "What's SSS?"
+kinds = ["inform"]
+proposes = false
+any = ["SSS", "Social Security"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o12"
+title = "What's an emergency fund"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "what's an emergency fund and how big should ours be?"
+kinds = ["inform", "explain"]
+proposes = false
+any = ["emergency fund"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o13"
+title = "Card interest"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "How do credit card interest rates work?"
+kinds = ["inform"]
+proposes = false
+any = ["interest"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o14"
+title = "Eating out a lot?"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "Is ₱6,000 on eating out a lot for us?"
+kinds = ["advise", "explain", "compute"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o15"
+title = "Cashback card"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "Should we get a cashback credit card?"
+kinds = ["advise"]
+proposes = false
+lacks = ["BDO", "BPI", "Metrobank", "Citi", "Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o16"
+title = "Decisions this year"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "Summarise what we decided this year."
+kinds = ["look_up"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o17"
+title = "Interest paid on the card"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "How much interest did we pay on the card last month?"
+kinds = ["look_up", "explain"]
+proposes = false
+sourced = true
+labels = ["From your documents"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o18"
+title = "When did Mara's salary change"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "When did Mara's salary change?"
+kinds = ["look_up"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o19"
+title = "Yearly eating out"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "How much do we spend on eating out in a year?"
+kinds = ["compute"]
+proposes = false
+sourced = true
+labels = ["Calculated"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o20"
+title = "Share of income to debt"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "What share of our income goes to debt payments?"
+kinds = ["explain", "compute"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o21"
+title = "Fund months without pay"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "If both of us stopped earning, how many months would the emergency fund last?"
+kinds = ["explain", "compute", "simulate"]
+proposes = false
+sourced = true
+any = ["month", "months"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o22"
+title = "Card payoff date"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "When will the credit card be paid off?"
+kinds = ["explain", "look_up"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o23"
+title = "House fund on track"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "Are we on track for the house fund?"
+kinds = ["explain"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o24"
+title = "Invest the savings"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "Should we invest our long-term savings? Which fund should we buy?"
+kinds = ["advise", "inform"]
+proposes = false
+lacks = ["you should buy", "Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o25"
+title = "Tax on 13th month"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "How much tax will I pay on my 13th-month pay?"
+kinds = ["inform", "explain"]
+proposes = false
+any = ["tax"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o26"
+title = "Pay down the card plan"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "How hard should we pay down the card now?"
+kinds = ["plan"]
+proposes = false
+options = [2, 4]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o27"
+title = "New job news"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "I got promoted! My take-home pay is ₱75,000 a month from Jan 1, 2027."
+kinds = ["record"]
+proposes = ["Mara's salary"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o28"
+title = "Small talk"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "thanks, that helps a lot"
+kinds = ["small_talk"]
+proposes = false
+options = [0, 0]
+
+[[conversation]]
+id = "o29"
+title = "Snowball or avalanche"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "What's the difference between snowball and avalanche, and which do we use?"
+kinds = ["inform", "explain"]
+proposes = false
+any = ["avalanche", "snowball"]
+lacks = ["Kako can't test", "can't test that", "cannot answer"]
+
+[[conversation]]
+id = "o30"
+title = "Gym membership"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "Can we afford a ₱2,500 a month gym membership?"
+kinds = ["simulate", "advise"]
+proposes = false
+sourced = true
+lacks = ["Kako can't test", "can't test that", "cannot answer"]

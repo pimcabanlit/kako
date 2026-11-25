@@ -71,7 +71,7 @@ async def test_demo_run_replays_session_2_and_the_test_set(
 async def _demo_run_twice(migrated: AsyncEngine, capsys: pytest.CaptureFixture[str]) -> None:
     assert await asyncio.to_thread(_main, ["demo", "run", "--test-set"]) == 0
     out = capsys.readouterr().out
-    assert "Villanueva household: loaded with its whole story; 15 documents" in out
+    assert "Villanueva household: loaded with its whole story; 16 documents" in out
     assert "== Session 2, turn s2:t1 ==" in out
     assert "A: all extra on the card" in out
     assert "B: Jun's split: Put ₱4,000.00 extra a month on the credit card" in out
@@ -163,7 +163,7 @@ async def _demo_run_twice(migrated: AsyncEngine, capsys: pytest.CaptureFixture[s
     assert await asyncio.to_thread(_main, ["demo", "run"]) == 0
     out = capsys.readouterr().out
     assert (
-        "Villanueva household: already loaded; 15 documents searchable in local Meko (0 new)" in out
+        "Villanueva household: already loaded; 16 documents searchable in local Meko (0 new)" in out
     )
     assert "== Session 2, turn s2:t1 ==" in out
     assert any(x.startswith("Session 2: ") for x in out.splitlines())  # matched, or reported

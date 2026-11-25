@@ -178,6 +178,11 @@ class TurnOut(BaseModel):
     calculations: list[CalculationOut] = []
 
 
+GENERAL: Final = "General information"
+SCENARIO: Final = "Scenario, nothing saved"
+CALCULATED: Final = "Calculated"
+DOCUMENTS: Final = "From your documents"
+ANSWER_LABELS: Final = (GENERAL, SCENARIO, CALCULATED, DOCUMENTS)
 SCENARIO_NOTE: Final = (
     "Worked out by Kako's engine for this question only. Nothing was saved, and the household's "
     "facts are unchanged. Changes are run as if they start today."
@@ -264,18 +269,18 @@ def labels_of(answer: TurnAnswer, state: TurnState | None) -> list[str]:
     if answer.kind in ("inform", "advise") and not any(
         c.kind in ("figure", "fact", "history") for c in answer.sources
     ):
-        labels.append("General information")
+        labels.append(GENERAL)
     hypothetical = state is not None and any(
         c.what_if in state.what_ifs and state.what_ifs[c.what_if].hypothetical
         for c in answer.sources
         if c.what_if is not None
     )
     if hypothetical:
-        labels.append("Scenario, nothing saved")
+        labels.append(SCENARIO)
     if any(c.kind == "calculation" for c in answer.sources):
-        labels.append("Calculated")
+        labels.append(CALCULATED)
     if any(c.kind == "knowledge" for c in answer.sources):
-        labels.append("From your documents")
+        labels.append(DOCUMENTS)
     return labels
 
 
