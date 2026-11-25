@@ -20,6 +20,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from kako import __version__
 from kako.api.gaps import router as gaps_router
+from kako.api.history import router as history_router
 from kako.api.household import router as household_router
 from kako.api.plans import router as plans_router
 from kako.api.proposals import router as proposals_router
@@ -107,4 +108,5 @@ def create_app(
     app.include_router(gaps_router)
     app.include_router(household_router)
     app.include_router(plans_router)
+    app.include_router(history_router)
     return app

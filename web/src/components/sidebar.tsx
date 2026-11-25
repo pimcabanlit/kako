@@ -1,6 +1,15 @@
 "use client";
 
-import { Activity, ClipboardList, MessageSquare, Plus, RefreshCw } from "lucide-react";
+import {
+  Activity,
+  ClipboardList,
+  History,
+  type LucideIcon,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Signpost,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -9,14 +18,20 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { formatDay } from "@/lib/text";
 import { plural } from "@/lib/working";
 
-/** The sessions down the left, newest first, with "New session" and the plan at the top. */
+// The screens above the sessions: what the household plans, its story, and what it decided.
+const SCREENS: { href: string; label: string; note: string; icon: LucideIcon }[] = [
+  { href: "/plans", label: "Plan", note: "why and what changed", icon: ClipboardList },
+  { href: "/timeline", label: "Timeline", note: "what happened when", icon: History },
+  { href: "/decisions", label: "Decisions", note: "and what to revisit", icon: Signpost },
+];
+
+/** The sessions down the left, newest first, with "New session" and the screens at the top. */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { sessions, reloadSessions, household, pending } = useShell();
   const pathname = usePathname();
-  const onPlans = pathname === "/plans" || pathname.startsWith("/plans/");
 
   return (
-    <nav aria-label="Sessions and plans" className="flex h-full w-full flex-col">
+    <nav aria-label="Sessions and screens" className="flex h-full w-full flex-col">
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
         <Link href="/" onClick={onNavigate} className="wordmark text-[22px]" aria-label="Kako, new session">
           kako
@@ -33,18 +48,27 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <Plus className="size-4" aria-hidden />
           New session
         </Link>
-        <Link
-          href="/plans"
-          onClick={onNavigate}
-          aria-current={onPlans ? "page" : undefined}
-          className={`mt-1.5 flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors ${
-            onPlans ? "bg-raised text-fg" : "text-fg/90 hover:bg-raised/70"
-          }`}
-        >
-          <ClipboardList className={`size-4 shrink-0 ${onPlans ? "text-teal" : "text-muted"}`} aria-hidden />
-          Plan
-          <span className="ml-auto text-xs font-normal text-muted">why and what changed</span>
-        </Link>
+        <ul className="mt-1.5 space-y-0.5">
+          {SCREENS.map(({ href, label, note, icon: Icon }) => {
+            const here = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  onClick={onNavigate}
+                  aria-current={here ? "page" : undefined}
+                  className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors ${
+                    here ? "bg-raised text-fg" : "text-fg/90 hover:bg-raised/70"
+                  }`}
+                >
+                  <Icon className={`size-4 shrink-0 ${here ? "text-teal" : "text-muted"}`} aria-hidden />
+                  {label}
+                  <span className="ml-auto truncate text-xs font-normal text-muted">{note}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
       <p className="eyebrow mt-6 mb-2 px-5">Sessions</p>

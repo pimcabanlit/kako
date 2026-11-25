@@ -12,3 +12,9 @@ from typing import Final
 
 # The two sides of `preference.debt_vs_flexibility`.
 DECISION_TAGS: Final = ("favours_flexibility", "favours_speed")
+
+# What each tag says about an option, in the household's words.
+TAG_WORDS: Final[dict[str, str]] = {
+    "favours_flexibility": "keeps cash on hand",
+    "favours_speed": "pays debt off faster",
+}
