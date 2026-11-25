@@ -575,3 +575,32 @@ it led to.
     names the household's preference). The figures missed in entry 12 (q10's 16 months, q16's surplus,
     q21's 7 months) are about as likely to be missed again.
   - About 45 to 55 calls, **US$0.20 to US$0.28** (entry 12's four cost US$0.23).
+- **Run:** on the household above (database `kako_nopref`, its own throwaway datapack), gpt-5.4 and
+  gpt-5-mini: `KAKO_MODEL_MODE=record uv run kako test-set --without-preference`, then replayed
+  strictly with `--save` (the same scores; `data/test-set/results/preference.json`, recording
+  `data/recorded/test-set-specialists-without-preference.json`). 37 model calls, 227,609 tokens,
+  **US$0.26** of the US$0.35 approved.
+- **Result:**
+
+  | | With (entry 12) | Without |
+  | --- | --- | --- |
+  | Score, every check | **81.4%** | **59.3%** |
+  | Leaving out the check that cites the preference | 81.3% | 72.9% |
+  | Model calls | 49 | 37 |
+  | Cost | US$0.23 | US$0.26 |
+
+  The full score is just under the predicted 60% to 68%; leaving out the citation it is under the
+  predicted 75% to 82%. As predicted, the check that cites the preference failed on all four, and
+  **q10 and q21 still didn't recommend all on the card**: the three decisions in the brief were
+  enough to keep cash on hand (q12's reply: "Since you previously chose a bigger cash buffer and a
+  split approach for the card, I'd treat this as a choice for you"). The same figures as entry 12
+  were missed (q10's 16 months, q16's surplus, q21's 7 months). The difference without the
+  citation is q12 alone: asked "What if we moved the ₱5,050 from the emergency fund to the card
+  instead?", the agents ran the card at ₱5,050 instead of ₱4,000 plus ₱5,050, so the option is
+  14 months, not 8 (the figure is the engine's for the move it ran, so the number check passed).
+- **Root cause:** what the preference changes here is what the answer cites and names, not what it
+  recommends: the decisions it was learned from already steer the specialists. q12's miss is a
+  misread move, not the preference; one run each, so one question moves a score by about 20 points.
+- **Change made:** none to the prompts. The metrics page shows both scores, each with and without
+  the citation, and says what the difference rests on. A what-if that reads "moved X to Y" as "set
+  Y to X" is worth a test-set question of its own.

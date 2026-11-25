@@ -1,0 +1,270 @@
+{
+ "preference": "fact:preference.debt_vs_flexibility",
+ "architecture": "specialists",
+ "question_ids": [
+  "q10",
+  "q12",
+  "q16",
+  "q21"
+ ],
+ "with": {
+  "run_at": "2026-11-24T14:04:08+00:00",
+  "mode": "replay",
+  "model_calls": 49,
+  "cost_usd": "0.229094",
+  "score": "0.8143",
+  "score_without_citation": "0.8125",
+  "questions": [
+   {
+    "id": "q10",
+    "score": "0.8000",
+    "score_without_citation": "0.7500",
+    "cites_preference": true,
+    "checks": [
+     {
+      "name": "answered",
+      "passed": true
+     },
+     {
+      "name": "numbers",
+      "passed": true
+     },
+     {
+      "name": "states 16 months",
+      "passed": false
+     },
+     {
+      "name": "doesn't recommend account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
+      "passed": true
+     },
+     {
+      "name": "cites fact:preference.debt_vs_flexibility",
+      "passed": true
+     }
+    ]
+   },
+   {
+    "id": "q12",
+    "score": "0.8571",
+    "score_without_citation": "1.0000",
+    "cites_preference": false,
+    "checks": [
+     {
+      "name": "answered",
+      "passed": true
+     },
+     {
+      "name": "numbers",
+      "passed": true
+     },
+     {
+      "name": "states 8 months",
+      "passed": true
+     },
+     {
+      "name": "1 to 4 options",
+      "passed": true
+     },
+     {
+      "name": "offers account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
+      "passed": true
+     },
+     {
+      "name": "cites debt.payoff_months@debt:credit-card",
+      "passed": true
+     },
+     {
+      "name": "cites fact:preference.debt_vs_flexibility",
+      "passed": false
+     }
+    ]
+   },
+   {
+    "id": "q16",
+    "score": "0.8000",
+    "score_without_citation": "0.7500",
+    "cites_preference": true,
+    "checks": [
+     {
+      "name": "answered",
+      "passed": true
+     },
+     {
+      "name": "numbers",
+      "passed": true
+     },
+     {
+      "name": "states ₱25,050.00 or ₱16,000.00",
+      "passed": false
+     },
+     {
+      "name": "2 to 4 options",
+      "passed": true
+     },
+     {
+      "name": "cites fact:preference.debt_vs_flexibility",
+      "passed": true
+     }
+    ]
+   },
+   {
+    "id": "q21",
+    "score": "0.8000",
+    "score_without_citation": "0.7500",
+    "cites_preference": true,
+    "checks": [
+     {
+      "name": "answered",
+      "passed": true
+     },
+     {
+      "name": "numbers",
+      "passed": true
+     },
+     {
+      "name": "states 7 months",
+      "passed": false
+     },
+     {
+      "name": "doesn't recommend account:emergency-fund ₱0.00, debt:credit-card ₱25,050.00, goal:house-fund ₱0.00",
+      "passed": true
+     },
+     {
+      "name": "cites fact:preference.debt_vs_flexibility",
+      "passed": true
+     }
+    ]
+   }
+  ]
+ },
+ "without": {
+  "run_at": "2026-11-25T02:36:01+00:00",
+  "mode": "replay",
+  "model_calls": 37,
+  "cost_usd": "0.259621",
+  "score": "0.5929",
+  "score_without_citation": "0.7292",
+  "questions": [
+   {
+    "id": "q10",
+    "score": "0.6000",
+    "score_without_citation": "0.7500",
+    "cites_preference": false,
+    "checks": [
+     {
+      "name": "answered",
+      "passed": true
+     },
+     {
+      "name": "numbers",
+      "passed": true
+     },
+     {
+      "name": "states 16 months",
+      "passed": false
+     },
+     {
+      "name": "doesn't recommend account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
+      "passed": true
+     },
+     {
+      "name": "cites fact:preference.debt_vs_flexibility",
+      "passed": false
+     }
+    ]
+   },
+   {
+    "id": "q12",
+    "score": "0.5714",
+    "score_without_citation": "0.6667",
+    "cites_preference": false,
+    "checks": [
+     {
+      "name": "answered",
+      "passed": true
+     },
+     {
+      "name": "numbers",
+      "passed": true
+     },
+     {
+      "name": "states 8 months",
+      "passed": false
+     },
+     {
+      "name": "1 to 4 options",
+      "passed": true
+     },
+     {
+      "name": "offers account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
+      "passed": false
+     },
+     {
+      "name": "cites debt.payoff_months@debt:credit-card",
+      "passed": true
+     },
+     {
+      "name": "cites fact:preference.debt_vs_flexibility",
+      "passed": false
+     }
+    ]
+   },
+   {
+    "id": "q16",
+    "score": "0.6000",
+    "score_without_citation": "0.7500",
+    "cites_preference": false,
+    "checks": [
+     {
+      "name": "answered",
+      "passed": true
+     },
+     {
+      "name": "numbers",
+      "passed": true
+     },
+     {
+      "name": "states ₱25,050.00 or ₱16,000.00",
+      "passed": false
+     },
+     {
+      "name": "2 to 4 options",
+      "passed": true
+     },
+     {
+      "name": "cites fact:preference.debt_vs_flexibility",
+      "passed": false
+     }
+    ]
+   },
+   {
+    "id": "q21",
+    "score": "0.6000",
+    "score_without_citation": "0.7500",
+    "cites_preference": false,
+    "checks": [
+     {
+      "name": "answered",
+      "passed": true
+     },
+     {
+      "name": "numbers",
+      "passed": true
+     },
+     {
+      "name": "states 7 months",
+      "passed": false
+     },
+     {
+      "name": "doesn't recommend account:emergency-fund ₱0.00, debt:credit-card ₱25,050.00, goal:house-fund ₱0.00",
+      "passed": true
+     },
+     {
+      "name": "cites fact:preference.debt_vs_flexibility",
+      "passed": false
+     }
+    ]
+   }
+  ]
+ }
+}
