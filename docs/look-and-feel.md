@@ -67,6 +67,12 @@ Gold dust (tiny 1 to 1.4px radial dots) uses `dust` = `rgba(252,211,77,.55)` dar
 
 Orange and rose are kept apart on purpose, so a pay raise never looks like a warning.
 
+Comparing an option with today's plan (Pim, Nov 25) uses two of these for the change: emerald when
+the option is better for the household (paid off sooner, less interest, a target reached), rose when
+it is worse (later, more, never reached), and a plain chip when nothing changes. Each chip carries
+its words ("38 months sooner", "never reached"), so the colour never stands alone. What is left
+unplanned gets no chip: it is the household's to plan, neither better nor worse.
+
 ## Charts
 
 The money screen's donut (where each peso of the pay goes) has a palette of its own, so a part of the

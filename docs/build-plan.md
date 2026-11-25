@@ -388,6 +388,30 @@ reads, never what Kako works out.
    at desktop and phone width, by keyboard, and loading and error.
    Later, not built: year-end projections of net worth, a one-off what-if such as a bonus, paydays
    (which pay covers which bills), and a card's use against its limit.
+5. **Before and after each option (Nov 25).** When Kako answers with options, the household sees
+   what each one changes instead of only reading it ("Card paid off in 9 months" is abstract): each
+   option's card shows its before → after against today's plan, a table below the options sets
+   today's plan and every option side by side, and each option opens its months one by one in the
+   money screen's amortization style, so option B's full schedule is there to see.
+   Done when: Pim has approved a mockup, and the session and plan screens built from it show, for
+   every turn with options, each option against today's plan with every number and every change
+   worked out in code (docs/data-model.md, "Before and after an option"), in both themes, at phone
+   width, by keyboard, and in its loading and error states.
+   Approved Nov 25, with Pim's choices on the mockup: keep both the per-card "Before → after" and
+   the "Compare the options" table; a change that is worse for the household is rose with its
+   words, better is emerald, the same is plain; the same pieces on the plan screen.
+   Built Nov 25: `engine/compare.py` (C-1 to C-3, pure), `planning/compare.py` (in words, every
+   change written by code), `db/compare_read.py` and `GET /api/v1/plans/{id}/compare`. Today's plan
+   is the turn's own run: its snapshot taken again, checked against the stored hash, and each option
+   is that snapshot with its allocations as overrides, the what-if the agents ran; nothing is stored,
+   so every turn kept before this has its comparison too. `components/compare-view.tsx` with
+   `lib/compare.ts`, used by the session screen's answer and the plan screen. Agents see none of
+   it, so the recordings and the number check are unchanged. Checked on the demo story's sessions 2
+   and 4 (session 2 to the centavo against the worked example: option A pays the card off Jun 15,
+   2027, 38 months sooner, with ₱119,627.44 less interest on both debts, and its ₱11,600.00 rolls
+   into the car loan in Jul 2027; option B reaches the emergency fund's ₱210,000.00 on Sep 15,
+   2027), in both themes, at desktop and phone width, by keyboard, and loading and error.
+   Later, not built: a what-if the household sets itself beside the options (an amount of its own).
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 

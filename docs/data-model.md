@@ -1,4 +1,4 @@
-# Kako data model v0.17
+# Kako data model v0.18
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -51,7 +51,10 @@ in the same change once agreed.
   cost also names its brief's size and budget; no schema change. v0.17 (Nov 25) is the money screen
 (Phase 5a, item 4): formulas M-1 to M-6 under "The money screen", worked out from a run and its
 snapshot without changing any figure; F-DEBT-2's months also keep each debt's scheduled payment, so
-a schedule can show the month a freed payment rolls in; no schema change.
+a schedule can show the month a freed payment rolls in; no schema change. v0.18 (Nov 25) is before
+and after an option (Phase 5a, item 5): formulas C-1 to C-3 under "Before and after an option",
+each option worked out again from its turn's own snapshot and set beside today's plan; no schema
+change, nothing stored.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -849,6 +852,32 @@ The screen also shows the household's four headline numbers (F-INC-1, F-CF-1, F-
 worth), 13th-month pay (`income.thirteenth_month`, in December of the as-of year), the facts that
 take effect after the as-of date, and the decisions in force with how many of their assumptions are
 to revisit.
+
+### Before and after an option
+
+`GET /api/v1/plans/{id}/compare` sets each of a plan's options beside today's plan, so the
+household sees what an option changes instead of reading it (`kako/engine/compare.py`, pure, then
+`kako/planning/compare.py` writes it in words; `kako/db/compare_read.py` reads it). Like the money
+screen, these are not figures: nothing is stored and no agent sees them.
+
+**Today's plan** is the turn's own run: the snapshot the turn read (its `calc_run.as_of_date` and
+`known_at`), taken again. Facts are never overwritten, so it is the same snapshot; its hash must be
+the stored run's `snapshot_hash`, or the options are not compared (409) rather than compared on
+other facts. **Each option** is that snapshot with the option's allocations (each
+`recommendation.allocation` with its entity) as `plan.allocation` overrides from the as-of date,
+exactly the what-if the agents ran; any allocation the option doesn't name stays as today's plan
+has it. For a replan, today's plan is the plan as it stands after the change the household
+approved, so each option is set beside what happens if nothing else changes.
+
+| Id | What | Definition |
+| --- | --- | --- |
+| `C-1` | What each run reaches | Read from the run's figures, in a fixed order: each open debt in strategy order, paid off (F-DEBT-2's months and `debt.payoff_date`) then its interest (`debt.total_interest`); with more than one debt, the interest on every debt (their sum, unknown when any one is); the emergency fund at its target (F-SAV-3, its date the as-of date + its months); each goal reached (F-GOAL-1), by name; and what is left unplanned (F-ALLOC-1). A payoff or target with no months is **never** reached when its flag is `never_pays_off` or `no_allocation`, and **unknown** for any other reason (a missing fact) |
+| `C-2` | What the option changes | Each outcome of C-1 against the same outcome in today's plan. A payoff or target: today's months − the option's, **sooner** when above 0 and **later** when below (better and worse), **reached** where today's plan never gets there (better), **never** where today's plan does (worse), **the same** when equal or both never. Interest: today's − the option's, **less** (better) or **more** (worse). Unknown on either side: nothing to compare. What is left unplanned changes but is neither better nor worse: it is the household's to plan |
+| `C-3` | Month by month | Each open debt's schedule with the option (M-3), each month beside its balance in today's plan that month (0 once today's plan has paid it off; none past the first 12 months of a debt today's plan never pays off), and what today's plan still owes in the option's last month. The emergency fund's climb with the option: for each month *k* to F-SAV-3's months (at most 120), the liquid balance (F-SAV-1's) + *k* × the fund's allocation, and what is still short of the target; none when the option puts nothing into the fund, the fund is already there, or there is not exactly one emergency fund |
+
+The session screen shows each option's dates and the interest on every debt (a single debt's own
+interest when there is one debt) on its card; a row no run can tell (every value unknown) stays off
+the card and in the table.
 
 ## Validation rules
 
