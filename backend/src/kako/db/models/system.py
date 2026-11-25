@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, Numeric, Text, Uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, Numeric, Text, Uuid, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,6 +40,9 @@ class LlmCall(Base):
     outcome: Mapped[str] = mapped_column(Text)
     recorded_replay: Mapped[bool] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    prompts: Mapped[dict[str, Any]] = mapped_column(  # last: added by migration 0008
+        JSONB, server_default=text("'{}'::jsonb"), default=dict
+    )
 
 
 class MekoCall(Base):

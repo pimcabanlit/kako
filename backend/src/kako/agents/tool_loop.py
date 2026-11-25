@@ -30,6 +30,7 @@ from typing import Any
 
 from kako.agents.chat import ChatRequest, Message, Tier, ToolCall, ToolSpec
 from kako.agents.model_manager import ModelManager
+from kako.agents.prompt_registry import SystemPrompt
 from kako.agents.turn import StepAgent, StepOutcome, StepRecord, TurnContext, short
 
 
@@ -94,7 +95,7 @@ async def run_agent(
     agent: StepAgent,
     path: str,
     tier: Tier,
-    system: str,
+    system: SystemPrompt,
     user: str,
     tools: Sequence[Tool],
     max_output_tokens: int,
@@ -102,12 +103,14 @@ async def run_agent(
     between_rounds: Callable[[], str | None] | None = None,
 ) -> AgentRun:
     """Run one agent to its answer. `path` names it within the turn (such as `debt#1`), so each
-    of its model calls has a stable key: `<turn seed>/<path>/<n>`."""
+    of its model calls has a stable key: `<turn seed>/<path>/<n>`. Each call logs the versions of
+    the prompts `system` was built from, and the turn keeps them for its Meko trace."""
     by_name = {t.spec.name: t for t in tools}
     if len(by_name) != len(tools):
         raise ValueError(f"{path}: two tools share a name")
     finals = [t for t in tools if t.final]
-    messages = [Message("system", system), Message("user", user)]
+    turn.prompts.update({p.name: p for p in system.prompts})
+    messages = [Message("system", system.text), Message("user", user)]
     counted = model_calls = 0
     text = ""
     sent_back = False  # an empty reply was sent back once
@@ -121,6 +124,7 @@ async def run_agent(
             max_output_tokens=max_output_tokens,
             tools=tuple(t.spec for t in offered),
             tool_choice="required" if at_limit and finals else "auto",
+            prompts=system.prompts,
         )
         model_calls += 1
         reply = await manager.chat(

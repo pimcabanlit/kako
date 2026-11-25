@@ -10,6 +10,7 @@ import pytest
 
 from kako.agents.chat import ToolSpec
 from kako.agents.model_manager import ModelManager
+from kako.agents.prompt_registry import SystemPrompt, load_prompt
 from kako.agents.spend import MemoryLlmLog
 from kako.agents.tool_loop import AgentRun, Tool, ToolInputError, ToolResult, run_agent
 from kako.agents.turn import MemoryStepLog, TurnContext
@@ -73,7 +74,7 @@ async def run(
         agent="debt",
         path="debt#1",
         tier="fast",
-        system="You are the debt specialist.",
+        system=SystemPrompt("You are the debt specialist.", (load_prompt("debt").version,)),
         user="Brief.",
         tools=tools(seen if seen is not None else []),
         max_output_tokens=800,
@@ -114,6 +115,10 @@ async def test_tools_run_and_the_final_tool_answers(make_settings: MakeSettings)
     second = backend.requests[1][2]
     assert [m.role for m in second.messages] == ["system", "user", "assistant", "tool", "tool"]
     assert [m.tool_call_id for m in second.messages[3:]] == ["call_1", "call_2"]
+    # Every call carries the prompt versions, and the turn keeps them for its Meko trace.
+    debt = load_prompt("debt").version
+    assert [r.prompts for _, _, r in backend.requests] == [(debt,), (debt,)]
+    assert turn.prompts == {"debt": debt}
 
 
 async def test_a_plain_answer_ends_the_loop_without_an_answer(make_settings: MakeSettings) -> None:
@@ -245,7 +250,7 @@ async def test_a_tool_failure_stops_the_turn(make_settings: MakeSettings) -> Non
             agent="budget",
             path="x",
             tier="fast",
-            system="s",
+            system=SystemPrompt("s"),
             user="u",
             tools=[figures_tool(seen), Tool(ToolSpec("broken", "b", OBJECT), broken)],
             max_output_tokens=100,
@@ -262,7 +267,7 @@ async def test_tool_names_must_be_unique(make_settings: MakeSettings) -> None:
             agent="budget",
             path="x",
             tier="fast",
-            system="s",
+            system=SystemPrompt("s"),
             user="u",
             tools=[figures_tool([]), figures_tool([])],
             max_output_tokens=100,

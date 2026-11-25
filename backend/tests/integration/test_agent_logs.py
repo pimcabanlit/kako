@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from kako.agents.chat import ToolSpec
 from kako.agents.model_manager import ModelManager, SpendRefused
+from kako.agents.prompt_registry import SystemPrompt, load_prompt
 from kako.agents.spend import LlmCallRecord
 from kako.agents.tool_loop import Tool, ToolResult, run_agent
 from kako.agents.turn import StepRecord
@@ -115,7 +116,7 @@ async def test_a_turn_writes_its_calls_and_steps(
         agent="debt",
         path="debt#1",
         tier="fast",
-        system="s",
+        system=SystemPrompt("s", (load_prompt("common").version, load_prompt("debt").version)),
         user="u",
         tools=[Tool(ToolSpec("get_figures", "Read.", OBJECT), get_figures)],
         max_output_tokens=500,
@@ -131,6 +132,13 @@ async def test_a_turn_writes_its_calls_and_steps(
         ("debt", "ok", session, seed),
     ]
     assert rows[1]["cost_usd"] == Decimal("0.000350")  # 1,000 x 0.25 + 50 x 2.00 per million
+    # Each call names the prompts it ran with, by name, with the SHA-256 of each text.
+    assert [r["prompts"] for r in rows] == [
+        {
+            "common": {"source": "repo", "sha256": load_prompt("common").version.sha256},
+            "debt": {"source": "repo", "sha256": load_prompt("debt").version.sha256},
+        }
+    ] * 2
     assert [(s["seq"], s["agent"], s["tool"], s["outcome"]) for s in steps] == [
         (1, "debt", "get_figures", "ok")
     ]
@@ -152,7 +160,7 @@ async def test_a_refused_call_is_logged(migrated: AsyncEngine, make_settings: Ma
             agent="budget",
             path="x",
             tier="fast",
-            system="s",
+            system=SystemPrompt("s"),
             user="u",
             tools=[],
             max_output_tokens=1_000,

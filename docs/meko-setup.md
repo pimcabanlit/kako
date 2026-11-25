@@ -92,7 +92,8 @@ Meko's own log, not a tool call, so no allowance is spent and it isn't counted i
 **Each turn Kako keeps** (Phase 3, task 6): `input` the household's message, `output` the reply,
 `plan` the steps taken (2 to 4), `reasoning` the specialists' summaries and the resolution's reason,
 and `metadata` the turn seed, session, household and date, the turn's run, each what-if's run, and
-the plan, recommendation and reconciliation ids, and `kako_flagged` (the numbers the check could not
+the plan, recommendation and reconciliation ids, `kako_prompts` (each prompt the turn's agents ran
+with, by name, with its source and SHA-256: docs/architecture.md, "Prompt versions"), and `kako_flagged` (the numbers the check could not
 match, by text) when there are any, since Meko keeps the texts as shown. `conversation_get` with `include_messages: true`
 reads them back (`Meko.read_turns`, counted like any call). Meko makes a turn's `message_id` from its
 `seed` alone (the same seed in two conversations gave the same id, verified Nov 24), so Kako's seed

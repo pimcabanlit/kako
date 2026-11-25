@@ -15,7 +15,6 @@ last. The household's message and the orchestrator's question are wrapped as dat
 from __future__ import annotations
 
 from functools import cache
-from importlib.resources import files
 from typing import Any, Final
 
 from kako.agents.answers import Specialist, SpecialistProposal
@@ -25,6 +24,7 @@ from kako.agents.checks import record
 from kako.agents.model_manager import ModelManager
 from kako.agents.numbers import check_texts, mismatch
 from kako.agents.present import GLOSSARY
+from kako.agents.prompt_registry import PromptName, SystemPrompt, load_prompt
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult, run_agent
 from kako.agents.tools import (
     MESSAGE_CHARS,
@@ -43,20 +43,19 @@ MAX_SUMMARY: Final = 1_500
 
 
 @cache
-def _prompt_file(name: str) -> str:
-    return (files("kako.agents") / "prompts" / f"{name}.md").read_text(encoding="utf-8").strip()
-
-
-@cache
 def shared_rules() -> str:
     """The rules every agent shares, with the glossary of figure keys."""
     glossary = "\n".join(f"- `{key}`: {meaning}" for key, meaning in GLOSSARY.items())
-    return _prompt_file("common").replace("{glossary}", glossary)
+    return load_prompt("common").text.replace("{glossary}", glossary)
 
 
-def system_prompt(role: str, brief: Brief) -> str:
-    """The shared rules, the turn's brief, then the role: the stable part first, for caching."""
-    return f"{shared_rules()}\n\n{brief.text}\n\n{_prompt_file(role)}"
+def system_prompt(role: PromptName, brief: Brief) -> SystemPrompt:
+    """The shared rules, the turn's brief, then the role: the stable part first, for caching.
+    It names the versions of both prompts it is built from."""
+    common, own = load_prompt("common"), load_prompt(role)
+    return SystemPrompt(
+        f"{shared_rules()}\n\n{brief.text}\n\n{own.text}", (common.version, own.version)
+    )
 
 
 def proposal_tool(state: TurnState, specialist: Specialist, path: str, prefix: str) -> Tool:

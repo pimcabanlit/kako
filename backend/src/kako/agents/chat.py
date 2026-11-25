@@ -12,6 +12,8 @@ import json
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
+from kako.agents.prompt_registry import PromptVersion
+
 Tier = Literal["strong", "fast"]
 # Who made a call: the values of llm_call.agent (docs/data-model.md; kako.db.enums).
 CallAgent = Literal["orchestrator", "budget", "debt", "savings", "goals", "dreaming", "system"]
@@ -77,6 +79,9 @@ class ChatRequest:
     max_output_tokens: int  # GPT-5 models spend hidden reasoning from this too
     tools: tuple[ToolSpec, ...] = ()
     tool_choice: ToolChoice = "auto"
+    # The versions of the prompts the system message was built from: logged on `llm_call`, never
+    # sent and not in the digest (the system message's text already is).
+    prompts: tuple[PromptVersion, ...] = ()
 
     def __post_init__(self) -> None:
         if self.max_output_tokens < 1:

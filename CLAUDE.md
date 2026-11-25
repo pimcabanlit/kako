@@ -336,7 +336,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   revisit, as the agents and the household read them) with `replan_store.py` (the changes a person
   approved from this session's turns, and the run the household last decided on) and
   `prompts/` (the shared rules, then one file per role; every system prompt is the shared rules,
-  the brief, then the role), and `single.py` (`answer_alone`, the single-agent baseline: one agent on
+  the brief, then the role) with `prompt_registry.py` (the only loader of `prompts/`: each prompt with
+  its version, source and SHA-256, logged on `llm_call.prompts` and named in the Meko turn's
+  `kako_prompts`), and `single.py` (`answer_alone`, the single-agent baseline: one agent on
   the strong deployment with every read tool, its own what-ifs and search, and the same
   `submit_answer`, prompt `prompts/single.md`). Tool output lists figures in the engine's key order,
   then the debts' payoff order, never by database id (`in_order`), so a recording replays on any

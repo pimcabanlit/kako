@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal, Protocol
 
 from kako.agents.chat import CallAgent
+from kako.agents.prompt_registry import PromptVersion
 
 Outcome = Literal["ok", "error", "budget_exceeded"]
 MILLION = Decimal(1_000_000)
@@ -49,6 +50,7 @@ class LlmCallRecord:
     cost_usd: Decimal
     outcome: Outcome
     recorded_replay: bool
+    prompts: tuple[PromptVersion, ...] = ()  # the system message's prompts, as `llm_call.prompts`
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
