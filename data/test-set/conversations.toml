@@ -1,0 +1,106 @@
+# Kako's conversation test set: sessions where a turn only makes sense with the turns before it.
+#
+# Each conversation is one new session on the demo household (data/demo-household/, loaded through
+# Dec 1, 2026), as of `on` and as known at `known_at`; each turn is written by `by` (a person's key in
+# people.csv). `kako conversations` plays them and scores each turn in code
+# (backend/src/kako/evals/conversations.py).
+#
+# Always checked, on what the orchestrator was sent (so a scripted model checks them too):
+#   writer        the brief says who wrote the message
+#   conversation  every earlier turn of the session reached it: word for word, as a line of the
+#                 digest, or left out with read_turns to fetch it; and the history sent is the
+#                 one the turn kept
+#   asked         when the last reply asked something, the brief carries the question
+#   options       when an earlier turn offered options, the brief lists them with their moves
+# Always checked, on the answer (a recorded or live run):
+#   answered      the turn ended with an answer
+#   numbers       every number the household reads passed the number check (V-10)
+# Checked when given, on the answer:
+#   proposes  false: files no change for a yes; or words each change filed must hold, together
+#   words     words the reply must use, each a whole word in any case
+#   any       at least one of these words
+#   lacks     words the reply must not use
+#   options   how many options: [min, max]
+#
+# A turn's score is the share of its checks passed; a conversation's is the mean of its turns, and the
+# set's the mean of its conversations. The long case (60 turns, the 55th about the 3rd) is a scripted
+# test in tests/integration/test_conversations.py: no recording, no spend.
+
+version = 1
+
+# --- Pim's sandbox, Nov 25: Jun's what-if ---------------------------------------------------------
+# Jun asked "what if i lose my job", was asked "Jun's or Mara's?", answered "Jun", and the next turn
+# answered "just give me the simulation" with a greeting. Kako can't run an income what-if yet: it
+# shows the runway (how many months the emergency fund covers) and files nothing.
+
+[[conversation]]
+id = "c01"
+title = "Jun's what-if"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "jun"
+message = "what if i lose my job"
+proposes = false
+any = ["emergency fund", "runway"]
+lacks = ["Jun's or Mara's", "Mara's or Jun's", "whose job"]
+
+[[conversation.turn]]
+by = "jun"
+message = "Jun"
+proposes = false
+any = ["job", "emergency fund", "runway"]
+lacks = ["Hi Jun", "Hello"]
+
+[[conversation.turn]]
+by = "jun"
+message = "just give me the simulation"
+proposes = false
+any = ["emergency fund", "runway"]
+lacks = ["Hi Jun", "Hello", "Jun's or Mara's"]
+
+# --- "my salary" is the writer's ------------------------------------------------------------------
+# Mara writes about her own salary; then Jun writes in the same session and "my" means Jun.
+
+[[conversation]]
+id = "c02"
+title = "Whose salary"
+on = 2026-12-01
+known_at = 2026-12-01T12:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "My salary goes up to ₱72,000 a month from Feb 1."
+proposes = ["Mara's salary"]
+words = ["Mara"]
+lacks = ["Jun's salary", "whose salary"]
+
+[[conversation.turn]]
+by = "jun"
+message = "Mine stays the same. What does her raise change for us?"
+proposes = false
+lacks = ["whose salary", "Jun's or Mara's"]
+
+# --- "go with B" ----------------------------------------------------------------------------------
+# Session 2's question, then the choice. Kako has no "accept an option" step yet: it says what B
+# does, from the moves kept with it, and how the household accepts it; it doesn't offer two new ones.
+
+[[conversation]]
+id = "c03"
+title = "Go with B"
+on = 2026-09-15
+known_at = 2026-09-15T09:00:00+08:00
+
+[[conversation.turn]]
+by = "mara"
+message = "Mara here. How hard should we pay down the credit card? Jun thinks ₱4,000 extra a month is enough and the rest can go to the emergency fund, but I'd rather clear the card fast."
+options = [2, 3]
+
+[[conversation.turn]]
+by = "jun"
+message = "OK, let's go with B."
+proposes = false
+options = [0, 1]
+any = ["B"]
+lacks = ["which option"]

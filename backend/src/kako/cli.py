@@ -158,6 +158,26 @@ def main(argv: list[str] | None = None) -> int:
         help="write the report to data/test-set/results/<architecture>.json (whole set only)",
     )
 
+    conversations = commands.add_parser(
+        "conversations",
+        help="the conversation test set: each conversation a session on the demo household, each "
+        "turn scored in code. It replays data/recorded/conversations-<architecture>.json; only "
+        "KAKO_MODEL_MODE=record calls Foundry (and records)",
+    )
+    conversations.add_argument(
+        "--architecture",
+        choices=("specialists", "single"),
+        default="specialists",
+        help="the orchestrator with its specialists, or the single-agent baseline",
+    )
+    conversations.add_argument("--only", help="conversation ids, such as c01,c03")
+    conversations.add_argument("--household", type=uuid.UUID, help="needed when there are several")
+    conversations.add_argument(
+        "--save",
+        action="store_true",
+        help="write the report to data/test-set/results/conversations-<architecture>.json",
+    )
+
     dream = commands.add_parser(
         "dream",
         help="dreaming: after a session ends, propose what the household stated that Kako "
@@ -384,6 +404,12 @@ def main(argv: list[str] | None = None) -> int:
                 household_id=args.household,
                 save=args.save,
                 without_preference=args.without_preference,
+            )
+        )
+    if args.command == "conversations":
+        return asyncio.run(
+            _conversations(
+                args.architecture, args.only, household_id=args.household, save=args.save
             )
         )
     if args.command == "dream":
@@ -1271,6 +1297,102 @@ async def _demo_record(name: str) -> int:
         return 1
     finally:
         await engine.dispose()
+
+
+async def _conversations(
+    architecture: str, only: str | None, *, household_id: uuid.UUID | None, save: bool
+) -> int:
+    import json
+
+    from kako.agents.chat import ModelError
+    from kako.agents.model_manager import chat_backend
+    from kako.db.engine import make_engine
+    from kako.evals.conversations import (
+        ConversationOutcome,
+        ConversationSetError,
+        read_conversations,
+        render_conversations,
+        run_conversations,
+    )
+    from kako.evals.questions import TEST_SET
+
+    settings = get_settings()
+    database_url = settings.database_url
+    if database_url is None:
+        print("KAKO_DATABASE_URL is not set.", file=sys.stderr)
+        return 1
+    if settings.meko_target != "local":
+        print("The conversation set runs on local Meko only (MEKO_MCP_URL).", file=sys.stderr)
+        return 1
+    # It replays unless asked to record, as the test set does: only record calls Foundry.
+    settings = settings.model_copy(
+        update={
+            "model_mode": "record" if settings.model_mode == "record" else "replay",
+            "recorded_responses": settings.recorded_responses
+            or TEST_SET.parent.parent / "recorded" / f"conversations-{architecture}.json",
+        }
+    )
+    recording = settings.recorded_responses
+    if settings.model_mode == "replay" and (recording is None or not recording.exists()):
+        print(
+            f"No recording yet ({recording}): KAKO_MODEL_MODE=record makes one on Foundry "
+            "(it spends: log a prediction in docs/tuning-log.md first).",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        conversations = read_conversations()
+    except ConversationSetError as exc:
+        print(f"The conversation set can't be read: {exc}", file=sys.stderr)
+        return 1
+    if only:
+        wanted = {c.strip() for c in only.split(",") if c.strip()}
+        unknown = wanted - {c.id for c in conversations}
+        if unknown:
+            print(f"No such conversations: {', '.join(sorted(unknown))}", file=sys.stderr)
+            return 1
+        if save:
+            print("--save writes a whole run: leave out --only.", file=sys.stderr)
+            return 1
+        conversations = tuple(c for c in conversations if c.id in wanted)
+    try:
+        backend = chat_backend(settings)
+    except ModelError as exc:
+        print(f"No model to answer with: {exc}", file=sys.stderr)
+        return 1
+    engine = make_engine(database_url)
+    try:
+        async with engine.connect() as conn:
+            chosen = await _household(conn, household_id)
+        if chosen is None:
+            return 1
+
+        def progress(o: ConversationOutcome) -> None:
+            print(f"{o.conversation.id}: {o.score:.0%}", file=sys.stderr, flush=True)
+
+        report = await run_conversations(
+            engine,
+            settings,
+            backend,
+            conversations,
+            household_id=chosen,
+            architecture="single" if architecture == "single" else "specialists",
+            progress=progress,
+        )
+    except ConversationSetError as exc:
+        print(f"The conversation set can't run: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        await engine.dispose()
+    print(render_conversations(report))
+    if save:
+        path = TEST_SET.parent / "results" / f"conversations-{architecture}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(report.as_json(), indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        print(f"Saved {path}")
+    return 0
 
 
 def settings_for_test_set(settings: Settings, architecture: str) -> Settings:

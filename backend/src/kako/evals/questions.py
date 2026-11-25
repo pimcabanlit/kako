@@ -24,7 +24,7 @@ SOURCE: Final = re.compile(r"^(said|memory|doc|(fact|decision):\S+)$")
 # Each question is asked in a session of its own, titled so the metrics can tell it apart from the
 # household's own sessions (and the architecture that answered it).
 SESSION_TITLE: Final = TEST_SET_TITLE
-_SESSION_TITLE: Final = re.compile(r"^Agent test set q\d{2} \((specialists|single)\)$")
+_SESSION_TITLE: Final = re.compile(r"^Agent test set [qc]\d{2} \((specialists|single)\)$")
 EXPECT_KEYS: Final = frozenset(
     {
         "states",
