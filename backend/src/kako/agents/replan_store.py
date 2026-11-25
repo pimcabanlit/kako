@@ -72,7 +72,7 @@ async def session_changes(
     return SessionChanges(on, min(r.decided_at for r in rows))
 
 
-async def _last_decision(
+async def last_decision(
     conn: AsyncConnection, household_id: uuid.UUID, on: date, known_at: datetime | None
 ) -> tuple[uuid.UUID, date, datetime, str] | None:
     """The household's latest decision on or before `on`, as known then: its id, date, when it
@@ -116,7 +116,7 @@ async def gather_replan(
     """What the session's changes touch: the turn's `run` against the one the household last
     decided on, and the `decisions` in force whose assumptions changed."""
     facts = await load_facts(conn, household_id)
-    last = await _last_decision(conn, household_id, run.as_of, known_at)
+    last = await last_decision(conn, household_id, run.as_of, known_at)
     if last is not None:
         decision_id, on, decided_at, since = last
     else:

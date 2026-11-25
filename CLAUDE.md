@@ -186,7 +186,7 @@ uv run pytest                             # unit tests; integration tests skip u
 KAKO_TEST_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/kako_test \
 KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against local Postgres and local Meko (never Meko Cloud)
 uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
-uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback only: no sign-in yet); /api/v1/health, /api/v1/sessions (turns, trace), docs at /api/v1/docs
+uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback only: no sign-in yet); /api/v1/health, /api/v1/sessions (turns, trace), /api/v1/plans (each with its why), docs at /api/v1/docs
 uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
@@ -273,7 +273,10 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `data/demo-household/`, `load.py` loads it through the fact store, each change as an approved
   proposal and then its write). `planning/reconcile.py` holds the reconciliation rules: the
   specialists' asks together through the engine, over-allocation, opposite moves and missed goal
-  dates, and the same rules on one split. `facts/`, `engine/` and `planning/` use no database,
+  dates, and the same rules on one split; `planning/why.py` how the plan screen explains a plan in
+  words: each formula of docs/data-model.md "Calculations" in plain words (held to the doc by
+  `tests/test_plan_why.py`), figure and fact names, what the number check's match strings matched,
+  and what changed (F-DIFF-1 as rows, the headline figures first). `facts/`, `engine/` and `planning/` use no database,
   clock or randomness, which `tests/test_purity.py` checks; `meko/` the only package that talks to Meko
   (`client.py`, a small MCP client over Streamable HTTP whose sessions count tool calls and refuse
   any past their `max_tool_calls` ceiling, 0 by default; `adapter.py`, the one interface for every
@@ -367,6 +370,13 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `db/llm_log.py`, `db/agent_steps.py` and `db/number_checks.py` write those three tables, each row
   committed on its own. `db/turn_store.py` keeps each turn as shown (`session_turn`, once per seed, its
   writer joined to the session) and reads the sessions list and a session's turns with their steps.
+  `db/plan_read.py` reads a plan for the plan screen (`list_plans`, `read_plan`), only the household's:
+  its options and allocations, each option's why (the cited figures and every figure and fact they
+  were built from, each fact's source in words, the decisions with their rejected options, Meko's
+  memories and the fact each is kept for, the household's words), the final number checks, the
+  reconciliations, the turn that proposed it with its Meko calls, and what changed against the
+  previous version or, for a first plan, the household's last decision as known then (its run
+  recomputed), with the decisions to revisit; `api/plans.py` is `/api/v1/plans`.
 - `backend/tests/`: unit tests need nothing running; `tests/integration/` runs only when
   `KAKO_TEST_DATABASE_URL` or `KAKO_TEST_MEKO_URL` is set, and refuses a Meko URL that isn't local.
   `tests/support/data_model.py` reads the tables out of `docs/data-model.md`: `test_schema_doc.py`
@@ -386,7 +396,12 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   a turn kept and read back as the API answered it, its steps, the running turn, 404s); and
   `tests/integration/test_session_api.py` is task 6's done-when: a turn through the API on Postgres
   and local Meko leaves the conversation's turn, a plan, recommendations with sources and the
-  session's Meko calls as spans.
+  session's Meko calls as spans. `test_plan_why.py` holds the formula words to the doc and the
+  engine, the names, the number check's matches in words and what changed on the worked example;
+  `tests/integration/test_plans_api.py` reads session 4's plan through the API (every cited figure,
+  input and fact present, each figure's formula as stored, the facts' sources, the checks, the
+  turn, what changed since the Oct 18 decision with three to revisit, a later version compared
+  with it, and the 404s).
   `test_facts_*.py` test the fact rules on rows in memory (`tests/support/facts.py` builds them);
   `test_engine_worked_example.py` checks every worked-example figure to the centavo
   (`tests/support/villanueva.py` builds that household's history in memory from the demo files), `test_engine_rules.py` the flags,
@@ -463,22 +478,26 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   adapter on local Meko with every call counted in Postgres (documents go to a throwaway datapack),
   the ceiling, two callers racing for the last call, and `kako demo upload`.
 - `web/`: Next.js 16 App Router, TypeScript strict, Tailwind 4, Lucide icons, laid out like ChatGPT,
-  Claude and Gemini (docs/architecture.md, "The session screen"). `next.config.ts` passes `/api/v1/*`
+  Claude and Gemini (docs/architecture.md, "The session screen" and "The plan screen"). `next.config.ts` passes `/api/v1/*`
   to the backend; `src/proxy.ts` refuses any Host but loopback (`src/lib/hosts.ts`), as the backend
   does, and `dev` and `start` listen on 127.0.0.1 only. `src/app/`: `globals.css` (the tokens of `docs/look-and-feel.md`, dark and light,
   and the shared classes: panel, edge, chip, btn), `layout.tsx` (the fonts, the theme set before the
-  first paint, the app shell), `page.tsx` (a new session), `sessions/[id]/page.tsx` (a session) and
-  `system/page.tsx` (the system check). `src/components/`: `app-shell.tsx` (the frame, and what every
+  first paint, the app shell), `page.tsx` (a new session), `sessions/[id]/page.tsx` (a session),
+  `plans/page.tsx` (the newest plan), `plans/[id]/page.tsx` (one version) and `system/page.tsx` (the
+  system check). `src/components/`: `app-shell.tsx` (the frame, and what every
   screen shares: the household, who is writing, the sessions, the one turn that can run),
   `sidebar.tsx`, `top-bar.tsx`, `theme-toggle.tsx`, `composer.tsx` (Enter sends, "Writing as", the
   "synthetic data, not financial advice" line every screen keeps), `new-session.tsx`,
   `session-view.tsx` (the conversation, polled only while a turn runs), `turn.tsx` (a message and
   Kako's answer: options, replan, resolution), `approval-card.tsx` (a turn's changes, approved or
   rejected inline by an adult), `working.tsx` ("Show the working": the agents' steps, live while a
-  turn runs) and `health-panel.tsx`. `src/lib/`: `api.ts` (every call, and `ApiError`), `types.ts`
-  (the API's shapes, kept in step with `api/sessions.py`, `api/proposals.py` and
-  `api/household.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
-  that ran them), `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
+  turn runs), `plan-view.tsx` (the plan screen: what changed, each option's why down to the facts,
+  the number check, the turn's Meko calls; docs/architecture.md, "The plan screen") and
+  `health-panel.tsx`. `src/lib/`: `api.ts` (every call, and `ApiError`), `types.ts`
+  (the API's shapes, kept in step with `api/sessions.py`, `api/proposals.py`, `api/household.py`
+  and `api/plans.py`), `health.ts`, and the pure helpers `working.ts` (steps grouped under the ask
+  that ran them), `plan.ts` (a plan's status, the facts behind its figures, the number check's
+  tally), `text.ts`, `words.ts` and `hosts.ts`, each with a `*.test.ts`. `web/AGENTS.md` is written by `next dev`: this Next.js differs from older versions,
   so read `web/node_modules/next/dist/docs/` before writing Next.js code. shadcn/ui is added when
   its registry (`ui.shadcn.com`) is reachable from the session; it is blocked today.
 - Ruff bans model SDK imports (`openai`, `azure.identity`, `azure.ai`) everywhere except

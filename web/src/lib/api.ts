@@ -3,6 +3,8 @@
 
 import type {
   Household,
+  Plan,
+  PlanSummary,
   Proposal,
   SessionSummary,
   SessionTurns,
@@ -99,6 +101,9 @@ export const api = {
       `/sessions/${encodeURIComponent(sessionId)}/end`,
       { method: "POST" },
     ),
+  plans: (signal?: AbortSignal) => call<PlanSummary[]>("/plans", { signal }),
+  plan: (planId: string, signal?: AbortSignal) =>
+    call<Plan>(`/plans/${encodeURIComponent(planId)}`, { signal }),
   proposals: (signal?: AbortSignal) =>
     call<Proposal[]>("/proposals?status=all", { signal }),
   decide: (

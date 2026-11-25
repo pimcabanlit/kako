@@ -239,6 +239,16 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
    and at phone width.
 2. **Plan screen** with "why" on each recommendation (figures with their formula and facts, memories,
    decisions, documents, the Meko trace) and "what changed" against the last plan.
+   Built Nov 25: `GET /plans` and `GET /plans/{id}` (`db/plan_read.py`, the words in
+   `planning/why.py`), the screen at `/plans` and `/plans/{id}` with a version picker, linked from
+   the sidebar and from each answer that made a plan. Each option's why goes down to the facts:
+   every cited figure with its formula in words, the figures and facts it was built from, each fact
+   with where it came from and who approved it, the decisions, Meko's memories and documents, the
+   household's words, and what the number check matched; the turn's Meko calls and trace link.
+   What changed is F-DIFF-1 against the previous version, or for a first plan the last decision as
+   known then, with the decisions to revisit. Checked on the demo story (plan v1 from Session 2,
+   v2 from Session 4) in both themes, at phone width, and in its loading, empty, error and missing
+   states.
 3. **Timeline and decisions.** Facts over time with their windows, replaced and retracted values, life
    events; decisions with rejected options and "to revisit".
 4. **Metrics page.** Meko `datapack_metrics`, tokens, cost and seconds per turn (average and worst

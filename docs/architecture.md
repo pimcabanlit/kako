@@ -300,7 +300,7 @@ real run's misses are the model's.
 | Conversations | One per planning session, turns stored with `plan` and `reasoning` | Session history; dreaming's input |
 | Decision traces | The conversation id is the trace id; every Meko call in the session is a span under it | "Open trace" on each recommendation (Meko Cloud's Observe for the demo) |
 | Memory | One sentence per approved fact, decision and preference, with Kako's ids in its metadata; replaced facts rewritten in the past tense. Sentences name people and things in full ("Mara Villanueva's take-home pay…"), because Meko's search boosts named entities. Meko's own extracted memories are candidates for dreaming | Specialists' context; the timeline |
-| Learning (promotion) | Dreaming reads Meko's Learnings and extracted memories, proposes, the household approves; a preference is promoted to collective memory, a decision record to shared knowledge | "Learned on Oct 18 from the October session" in the why panel |
+| Learning (promotion) | Dreaming reads Meko's Learnings and extracted memories, proposes, the household approves; a preference is promoted to collective memory, a decision record to shared knowledge | "Learned by dreaming from Session 3, approved by Mara on Oct 20, 2026" and "Shared with every agent in Meko" on the fact in the plan screen's why |
 | Knowledge base | Synthetic statements (CSV), planning rules and Philippine reference documents (Markdown) | Cited excerpts in the why panel |
 | Artifacts | Each plan report | Download on the plan screen |
 | Postgres in the datapack (AMP) | The household's structured data, if the Phase 1 test passes; a scenario kept as an AMP branch (Should) | Architecture slide; what-if screen |
@@ -343,12 +343,54 @@ steps, and the running turn's steps so far) and polls it only while a turn runs.
 loading, empty and error states, with a way to try again. The look follows the tokens in
 [look-and-feel.md](look-and-feel.md): dark by default with a light theme, one meaning per colour.
 
+## The plan screen
+
+`/plans` opens the household's newest plan and `/plans/{id}` any version, with a picker for the
+others. "Plan" in the sidebar leads there, and every answer that made a plan links to it ("Plan v2:
+why, down to the facts, and the number check"). It answers "why this advice?" and "why is this
+different from before?" from the rows, never from a model:
+
+- **The top bar**: the version, its status (gold "Proposed", emerald "Current" once a decision
+  accepts it, muted "Replaced"), the household date it plans from, and the version picker.
+- **The plan**: the session that proposed it (linked) and who asked, then Kako's reply as the
+  household read it.
+- **What changed** (orange edge), against the household's previous plan version or, for the first
+  plan, the decision the household last made, with that run recomputed as Kako knew it then
+  (F-DIFF-1): the figures that moved, the headline ones first and the rest under "more", the old
+  value struck through; the facts behind them, each labelled (replaced, corrected, new, ended, the
+  plan's amount) with the day it took effect; and the decisions to revisit with the facts they
+  rested on. With nothing earlier to compare, it says so.
+- **Each option**: its monthly amounts and specialists, then "Why", open on the recommended option.
+  The figures it cites, each with its value, the option's what-if amounts and "How it's worked
+  out": the formula in words with its id from [data-model.md](data-model.md#calculations), the
+  figures it was built from (each openable the same way) and the facts it read. The facts it cites,
+  each with where it came from and who approved it ("From a statement, approved by Jun on Nov 16,
+  2026", "Learned by dreaming from Session 3, approved by Mara on Oct 20, 2026"), the value it
+  replaced struck through, and a violet chip once it is shared with every agent in Meko. The
+  decisions it rests on with the options not chosen; what Meko gave (memories and knowledge-base
+  excerpts, violet) and the fact each is kept for; the household's own words. And the number check:
+  each number in the option's texts and what it matched, or that it matched nothing and was
+  flagged. The check proves each number is one the engine, a fact, the option's amount or the
+  household's words produced, not that the sentence uses it rightly, and the screen says so.
+- **How Kako weighed the specialists**: a reconciliation's conflict, the splits tried and the
+  option rejected.
+- **The turn that proposed it**: who asked and their words, the turn's Meko calls (tool, agent,
+  results, milliseconds) and the link to its trace in Meko Cloud's Observe hub when it ran there.
+  On local Meko it says the turn was kept in Meko; with Meko off, that it was kept only in Kako.
+  "Show the working in the session" opens the agents' steps.
+
+The words are written by code (`planning/why.py`: formulas, names, the number check's matches,
+what changed) from the rows `db/plan_read.py` reads, only the household's. The screen has loading,
+empty ("No plan yet"), error (try again) and missing ("No such plan") states. It shows a plan's
+status and never changes it: accepting a plan is a decision the household approves. Plan reports
+(Meko artifacts) are not built yet.
+
 ## Components
 
 | Component | Where | What it does |
 | --- | --- | --- |
-| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1), see "The session screen" below |
-| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans, why, diff, facts timeline, decisions, what-ifs, metrics |
+| Web app | `web/` | Next.js App Router, TypeScript strict, Tailwind and Lucide icons (shadcn/ui once its registry is reachable). Rewrites `/api/v1/*` to the backend. Never sees database rows, only response schemas. Until there is sign-in it listens on loopback only and refuses any Host but `localhost`, `127.0.0.1` or `[::1]` (`src/proxy.ts`): the rewrite reaches the backend with the backend's own Host, so without this a rebound name could reach the backend through the web app. Laid out like the chat apps people already know (ChatGPT, Claude, Gemini): the sessions down the left (a drawer on a phone), the conversation in the middle, the composer at the bottom with who is writing in it. Built: the session screen (Phase 5, task 1) and the plan screen (task 2), see "The session screen" and "The plan screen" above |
+| API | `backend/src/kako/api/` | FastAPI routes under `/api/v1`: sessions and turns (built: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}`, `GET /sessions/{id}/turns`, `POST /sessions/{id}/turns`, `GET /sessions/{id}/trace`; one turn at a time; until there is sign-in, `kako api` listens on loopback only and the app refuses any other Host header, which stops DNS rebinding), proposals and approvals (built: `GET /proposals`, `POST /proposals/approve`, `POST /proposals/reject`, JSON only, the deciding adult named in the request until there is sign-in), the household and its people (built: `GET /household`, adults first), Context Gaps (built: `GET /gaps`, `POST /gaps/sync`, `POST /gaps/{id}/answer`, `POST /gaps/{id}/dismiss`, JSON only), plans and their why (built: `GET /plans`, newest version first, and `GET /plans/{id}`: the options, each one's why down to the facts with where each came from, the number check's matches, the turn's Meko calls and trace link, and what changed against the last plan or decision, with the decisions to revisit; read-only, the household's rows only), facts timeline, decisions, what-ifs, metrics |
 | Engine | `backend/src/kako/engine/` | Pure functions from a snapshot (and optional hypothetical allocations or overrides) to figures, each citing the facts and figures it read, and the diff between two runs (F-DIFF-1, with the decisions to revisit). No database, network, clock or randomness; `tests/test_purity.py` enforces it |
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |
