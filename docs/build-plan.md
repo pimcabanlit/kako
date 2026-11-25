@@ -412,6 +412,23 @@ reads, never what Kako works out.
    into the car loan in Jul 2027; option B reaches the emergency fund's ₱210,000.00 on Sep 15,
    2027), in both themes, at desktop and phone width, by keyboard, and loading and error.
    Later, not built: a what-if the household sets itself beside the options (an amount of its own).
+6. **Kako with Meko off, to try it on the laptop (Nov 25).** Pim wants to try Kako in the app with
+   their own questions, to feel how it answers, without touching the demo. Local Meko doesn't run
+   on Windows and Meko Cloud is kept for the demo datapack, so the app gets a switch to run without
+   Meko (`KAKO_MEKO_OFF=true`), chosen by Pim over a terminal-only try.
+   Done when: with Meko off, the API makes no Meko call, a new session is kept in Kako only, a turn
+   runs (no Meko search) and its plan and comparison show, an approval writes with no Meko upkeep,
+   the health check says Meko is off, Meko's own screens say so as a note, and a session kept in
+   Meko is refused a turn with a plain reason.
+   Built Nov 25: the setting (`settings.py`), the real services opening no Meko when it is set
+   (`api/sessions.py`), the Meko probe (`meko/health.py`) and the 503s of `GET /metrics/meko` and
+   `POST /gaps/sync`. Every route already went on without Meko (tests run that way); this only lets
+   a real run choose it. `tests/integration/test_meko_off.py` runs session 4 through the API with
+   it, with Meko's address a closed port and not one row in `meko_call`.
+   The try itself, on the laptop: a database of its own (`kako_sandbox`) with the demo household
+   loaded through Dec 1, the backend on port 8001 with Meko off and live Foundry models (about
+   US$0.03 a question, under the US$3 daily cap), and the web app on port 3001. The demo's database,
+   its recordings and Meko Cloud are untouched; live mode never writes a recording.
 
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 

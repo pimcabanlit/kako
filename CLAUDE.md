@@ -239,7 +239,8 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
 ## Code layout
 
 - `backend/`: the FastAPI backend (uv project `kako`, Python 3.12). `src/kako/settings.py` holds every
-  setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`); `cli.py` is the `kako` command;
+  setting (`KAKO_*`, plus `MEKO_MCP_URL` and `MEKO_API_KEY`; `KAKO_MEKO_OFF=true` runs the API with no
+  Meko, as on a Windows laptop: docs/architecture.md, "Meko off"); `cli.py` is the `kako` command;
   `health.py` the health report and `safe_error` (no secret reaches a response or a log);
   `api/app.py` the app and `/api/v1/health` (it answers only to a loopback Host); `api/sessions.py` the session API (the sessions list, start a session, a
   turn in it, one at a time, its kept turns with their steps and the running turn's steps so far, and its trace);
@@ -456,6 +457,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `tests/integration/test_compare_api.py` reads it through the API for session 4's plan (the
   options in order, each month in words, read twice the same, 404s, and 409 once the stored run's
   snapshot hash no longer matches);
+  `tests/integration/test_meko_off.py` runs session 4 through the API with `KAKO_MEKO_OFF` (a session
+  kept in Kako only, the turn, the approval with no upkeep, the comparison, Meko's screens' 503s, a
+  session kept in Meko refused, and no `meko_call` row); `test_api_health.py` the probe saying off;
   `test_demo_files.py` the demo files and each mistake they can hold (the three decisions of
   Sessions 1 to 3 among them);
   `tests/integration/test_demo_load.py` the demo loaded into Postgres: every rule passes, its figures

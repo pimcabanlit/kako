@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 async def probe_meko(http: httpx.AsyncClient, settings: Settings) -> MekoStatus:
     """Open and close one MCP session with Meko. Never raises."""
     target = settings.meko_target
+    if settings.meko_off:
+        return MekoStatus(
+            ok=True,
+            detail="off here (KAKO_MEKO_OFF): sessions are kept in Kako only",
+            target=target,
+        )
     started = time.perf_counter()
     try:
         async with asyncio.timeout(settings.health_timeout_seconds):

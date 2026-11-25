@@ -603,6 +603,16 @@ Sessions 1 to 3; no model call), Mara approves the preference, Jun confirms the 
 Session 1's decision record, and both are shared in Meko. So session 4's brief marks the preference
 promoted, and the debt specialist cites it though nobody in the session mentions it.
 
+**Meko off** (`KAKO_MEKO_OFF=true`, Phase 5a, item 6). For a machine with no Meko to reach, such as
+the Windows laptop when Pim tries Kako with their own questions: the API opens no Meko at all. A new
+session is kept in Kako only (no Meko conversation, no trace), a turn's brief has no Meko search and
+its agents no `search_memory` results, an approval writes its facts with no Meko upkeep (`kako meko
+sync` catches up later where Meko runs), the health check reports Meko as off, and Meko's own screens
+(its metrics, Context Gaps) say so as a note. A session already kept in Meko is refused a turn with a
+plain reason rather than split between the two. Everything the household decides is in Postgres, so
+the plan, the decisions, the learned preference, the comparison and the money screen are unchanged.
+The CLI keeps its own `--no-meko`.
+
 **Recorded responses** (`agents/recorded.py`). A recording is a JSON file of model replies, each under
 the key of the call it answered: `<turn seed>/<agent path>/<n>`, such as `session-2:turn-1/debt#1/2`.
 Keys, not request hashes, so a turn replays in the same order on any machine, whatever ids its local

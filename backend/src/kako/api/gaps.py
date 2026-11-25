@@ -105,7 +105,9 @@ async def sync_gaps(body: Household, request: Request) -> Synced:
     try:
         async with services.open_meko(DbCallLog(services.engine), COLLECT_CALLS) as meko:
             if meko is None:
-                raise HTTPException(503, "Meko isn't configured")
+                raise HTTPException(
+                    503, "Meko is off here (KAKO_MEKO_OFF): its search log can't be read"
+                )
             made = await collect_gaps(services.engine, meko, household)
     except SelfLearningUnavailable as exc:
         raise HTTPException(503, str(exc)) from None
