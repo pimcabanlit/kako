@@ -16,14 +16,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from functools import cache
-from importlib.resources import files
 from typing import Any, Final
 
 from kako.agents.brief import data, plain
 from kako.agents.chat import ToolSpec
 from kako.agents.model_manager import ModelManager
 from kako.agents.present import Refs, day, fact_value
+from kako.agents.prompt_registry import SystemPrompt, load_prompt
 from kako.agents.tool_loop import Tool, ToolInputError, ToolResult, run_agent
 from kako.agents.tools import MESSAGE_CHARS, object_schema
 from kako.agents.turn import TurnContext, short
@@ -61,11 +60,6 @@ class DreamInputs:
     @property
     def refs(self) -> Refs:
         return Refs.of(self.entities)
-
-
-@cache
-def _prompt() -> str:
-    return (files("kako.agents") / "prompts" / "dreaming.md").read_text(encoding="utf-8").strip()
 
 
 def _attribute(attr: Attribute) -> str:
@@ -203,13 +197,14 @@ class Extraction:
 
 async def extract(manager: ModelManager, turn: TurnContext, inputs: DreamInputs) -> Extraction:
     """One extraction over a session's turns: the claims, checked for shape only."""
+    prompt = load_prompt("dreaming")
     run = await run_agent(
         manager,
         turn,
         agent="dreaming",
         path=PATH,
         tier="strong",
-        system=f"{_prompt()}\n\n{render_dream_brief(inputs)}",
+        system=SystemPrompt(f"{prompt.text}\n\n{render_dream_brief(inputs)}", (prompt.version,)),
         user="Read the session's turns in the brief and call submit_claims once.",
         tools=[claims_tool()],
         max_output_tokens=manager.settings.orchestrator_max_output_tokens,

@@ -22,6 +22,7 @@ from kako.agents.brief import BriefInputs, render_brief
 from kako.agents.chat import ChatRequest
 from kako.agents.model_manager import ModelManager
 from kako.agents.orchestrator import answer_turn
+from kako.agents.prompt_registry import load_prompt
 from kako.agents.recorded import RecordingBackend, ReplayBackend
 from kako.agents.specialists import shared_rules, system_prompt
 from kako.agents.spend import MemoryLlmLog
@@ -275,7 +276,8 @@ async def test_session_2_gives_options_a_and_b_with_the_worked_examples_figures(
 async def test_what_each_agent_was_sent(house: Villanueva, make_settings: MakeSettings) -> None:
     state = _state(house)
     manager, backend = _manager(make_settings, _session_2_script())
-    await answer_turn(manager, manager.turn(SEED), state)
+    turn = manager.turn(SEED)
+    await answer_turn(manager, turn, state)
 
     deployments = {k.split("/")[1]: d for k, d, _ in backend.requests}
     assert deployments == {
@@ -289,7 +291,15 @@ async def test_what_each_agent_was_sent(house: Villanueva, make_settings: MakeSe
     for key in (f"{SEED}/orchestrator/1", f"{SEED}/debt#1/1", f"{SEED}/savings#1/1"):
         system = _request(backend, key).messages[0].content or ""
         assert system.startswith(prefix)
-    assert "Your role: the debt specialist" in system_prompt("debt", state.brief)
+    assert "Your role: the debt specialist" in system_prompt("debt", state.brief).text
+
+    # Each request names the prompts its system message was built from; the turn keeps them all.
+    for key, role in ((f"{SEED}/orchestrator/1", "orchestrator"), (f"{SEED}/debt#1/1", "debt")):
+        assert _request(backend, key).prompts == (
+            load_prompt("common").version,
+            load_prompt(role).version,
+        )
+    assert sorted(turn.prompts) == ["common", "debt", "orchestrator", "savings"]
     assert "{glossary}" not in shared_rules()
     assert "- `debt.payoff_months`: months until the debt is paid off" in shared_rules()
 

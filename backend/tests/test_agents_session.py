@@ -11,6 +11,7 @@ import pytest
 from kako.agents.ask import Started, trace_turn
 from kako.agents.checks import Number, TextCheck
 from kako.agents.orchestrator import answer_turn
+from kako.agents.prompt_registry import load_prompt
 from kako.db.plan_store import SavedAnswer
 from tests.conftest import MakeSettings
 from tests.support.villanueva import SEP_15, Villanueva, build
@@ -67,6 +68,19 @@ async def test_the_trace_has_the_steps_the_reasons_and_the_ids(
     mara = uuid.uuid4()
     said = trace_turn(SESSION_2, answer, saved, state, calc, session, SEED, speaker=mara)
     assert said.metadata == {**turn.metadata, "kako_said_by": str(mara)}
+    # The prompts the turn's agents ran with, by name in order, whatever order they ran in.
+    common, debt = load_prompt("common").version, load_prompt("debt").version
+    versioned = trace_turn(
+        SESSION_2, answer, saved, state, calc, session, SEED, prompts=[debt, common]
+    )
+    assert versioned.metadata == {
+        **turn.metadata,
+        "kako_prompts": {
+            "common": {"source": "repo", "sha256": common.sha256},
+            "debt": {"source": "repo", "sha256": debt.sha256},
+        },
+    }
+    assert list(versioned.metadata["kako_prompts"]) == ["common", "debt"]
 
     # Each final check names what it checked: the plan, an option's first row, the conflict.
     by_label = {c.label: saved.subject_id(c) for c in answer.checks}

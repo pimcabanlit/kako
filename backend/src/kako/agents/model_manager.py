@@ -54,6 +54,7 @@ from kako.agents.chat import (
     ToolCall,
     ToolSpec,
 )
+from kako.agents.prompt_registry import PromptVersion
 from kako.agents.recorded import ChatBackend, RecordingBackend, ReplayBackend
 from kako.agents.spend import LlmCallRecord, LlmLog, Outcome, cost_usd
 from kako.agents.turn import MemoryStepLog, StepLog, TurnContext
@@ -430,6 +431,7 @@ class ModelManager:
         latency_ms: int = 0,
         prices: tuple[Decimal, Decimal, Decimal] | None = None,
         charge: tuple[int, Decimal] | None = None,
+        prompts: tuple[PromptVersion, ...] = (),
     ) -> Decimal:
         """Log one attempt; a reply is priced at the tier's prices (a replay too, for the
         metrics; the daily cap counts real calls only). `charge` is the worst case (tokens,
@@ -455,6 +457,7 @@ class ModelManager:
                 cost_usd=cost,
                 outcome=outcome,
                 recorded_replay=self.replays,
+                prompts=prompts,
                 created_at=self._now(),
             )
         )
@@ -479,7 +482,7 @@ class ModelManager:
         is logged and raises `SpendRefused`."""
         worst_tokens = request.estimated_input_tokens() + request.max_output_tokens
         if worst_tokens > turn.tokens_left():
-            await self._record(turn, agent, deployment, "budget_exceeded")
+            await self._record(turn, agent, deployment, "budget_exceeded", prompts=request.prompts)
             raise SpendRefused(
                 f"the turn's token budget ({turn.token_budget:,}) has {turn.tokens_left():,} "
                 f"tokens left; this call could use {worst_tokens:,} (KAKO_TURN_TOKEN_BUDGET)"
@@ -498,7 +501,7 @@ class ModelManager:
         cap = self._settings.daily_spend_cap_usd
         if spent + self._cost_in_flight + worst_cost > cap:
             turn.tokens_reserved -= worst_tokens
-            await self._record(turn, agent, deployment, "budget_exceeded")
+            await self._record(turn, agent, deployment, "budget_exceeded", prompts=request.prompts)
             raise SpendRefused(
                 f"today's model spend is US${spent:.4f} of the US${cap} cap, with "
                 f"US${self._cost_in_flight:.4f} in calls still running, and this call could "
@@ -537,6 +540,7 @@ class ModelManager:
                         "error",
                         latency_ms=round((time.perf_counter() - started) * 1000),
                         charge=(tokens, self._worst_cost(request)) if billed else None,
+                        prompts=request.prompts,
                     )
                 finally:
                     self._release(turn, tokens, cost)
@@ -550,7 +554,9 @@ class ModelManager:
                 self._release(turn, tokens, cost)
                 raise
             try:
-                await self._record(turn, agent, deployment, "ok", reply, prices=prices)
+                await self._record(
+                    turn, agent, deployment, "ok", reply, prices=prices, prompts=request.prompts
+                )
             finally:
                 self._release(turn, tokens, cost)
                 turn.tokens_used += reply.total_tokens

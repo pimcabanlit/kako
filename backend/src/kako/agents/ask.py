@@ -15,7 +15,7 @@ Which model answers is `KAKO_MODEL_MODE`'s choice: live Foundry, recording a liv
 from __future__ import annotations
 
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -30,6 +30,7 @@ from kako.agents.checks import record
 from kako.agents.model_manager import ModelManager
 from kako.agents.orchestrator import answer_turn
 from kako.agents.present import money
+from kako.agents.prompt_registry import PromptVersion, versions_json
 from kako.agents.reconciling import LABELS, render_resolution
 from kako.agents.recorded import ChatBackend
 from kako.agents.replan import Replan, changes_lines, why_lines
@@ -263,6 +264,7 @@ async def run_turn(
             proposed,
             before_run_id,
             speaker,
+            turn.prompts.values(),
         )
         try:
             message_id = await meko.add_turn(conversation, meko_turn, agent_id=AGENT)
@@ -375,6 +377,7 @@ def trace_turn(
     proposed: Sequence[StoredProposal] = (),
     before_run_id: uuid.UUID | None = None,
     speaker: uuid.UUID | None = None,
+    prompts: Iterable[PromptVersion] = (),
 ) -> Turn:
     """The turn as Meko keeps it: the household's words and the reply, the steps taken, why, and
     the ids of what Kako stored, so the trace and the tables can be read side by side. Built by
@@ -423,6 +426,8 @@ def trace_turn(
         "kako_calc_run_id": str(calc_run_id),
         "kako_what_if_runs": {ref: str(run) for ref, run in state.stored.items()},
     }
+    if versions := versions_json(prompts):  # the prompt texts behind the turn, by name
+        metadata["kako_prompts"] = versions
     if speaker is not None:  # who wrote the message: dreaming names them on what it proposes
         metadata["kako_said_by"] = str(speaker)
     # Numbers the check couldn't match, by text: Meko keeps the texts as shown, so a reader of the
