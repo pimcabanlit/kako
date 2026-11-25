@@ -296,6 +296,38 @@ Each task has a **Done when** line: the check that proves it. A phase is done wh
 Done when (for 1 to 4): each screen has empty, loading and error states and works on the seeded
 household without demo-only code paths.
 
+#### Phase 5a: Interface refinements (Pim's feedback, from Nov 25)
+
+Pim's changes to the screens built in tasks 1 to 4, made before the demo datapack (task 5) and the
+video, so the rehearsal and the recording use the screens as they will ship. Each item is one of
+Pim's requests; more are added here as they come. They change how a screen shows what it already
+reads, never what Kako works out.
+
+1. **Timeline (Nov 25).** The title placed like a page heading (Claude's Artifacts page), with
+   "What happened" and "Each thing" as chips under it (like "Yours" and "Templates"). What happened
+   as a clean list in the style of Claude's Plugins list: each event a headline ("Mara got a new
+   job") with a short line under it (the date, what kind of event, who approved or decided it), and
+   its details (the facts it changed, where they came from, the plan, session or decision it opens)
+   only when it is opened. Each thing as overview cards in the style of Claude's Scheduled tasks:
+   each card its name, what it holds now and when it last changed, with its full history only when
+   it is opened.
+   Done when: both views show one line or one card per item, everything the screen showed before is
+   one click away, the details open and close by keyboard and pointer, and the screen still has its
+   loading, empty and error states, in both themes and at phone width.
+   Built Nov 25: `PageHeader` and `ViewChips` (`components/page-header.tsx`, the title and the view
+   chips, arrow keys between them) and `DetailSheet` (`components/detail-sheet.tsx`, a native modal
+   dialog) are shared, so the other screens can take the same shape. Each event now names who
+   approved it or decided (`by` on `GET /timeline`). Checked on the demo story through Dec 1 and on
+   a household loaded through Nov 20 (the new job ahead, Mara's salary "Changes Dec 1, 2026"), in
+   both themes, at phone width, by keyboard, and loading, empty and error.
+2. **Meko not reachable (Nov 25).** On the metrics screen, a Meko that can't be reached reads as a
+   plain note ("Meko isn't running here"), not a red error; a real error from Meko stays red.
+   Done when: the metrics screen with Meko stopped shows the note, and with Meko failing shows the
+   error.
+   Built Nov 25: the Meko client tells "nothing answered" (`MekoUnreachable`) from an error, and
+   `GET /metrics/meko` answers it with 503 and "Meko isn't running here, so its own figures can't
+   be shown".
+
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 
 1. **Video** under 5 minutes, following the storyboard.
