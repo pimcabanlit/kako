@@ -133,7 +133,9 @@ Sizes used in the preview: body 15px / line-height 1.55; chat bubble 14.5px; pan
 4. The swirl art (Pim's title card) only on big moments: the video's first frame, empty states, the first screen.
 5. Violet means Meko, nowhere else.
 6. Pesos line up: tabular figures, two decimals in tables, whole pesos in sentences, ₱ before the number.
-7. Every screen keeps the line "Synthetic data. Not financial advice."
+7. The money, plan, timeline, decisions and metrics screens and the system check keep the line "Synthetic data.
+   Not financial advice." at their foot. The chat screens (a new session, a session) leave it out, so nothing sits
+   under the composer (Pim, Nov 25).
 
 ## Open
 

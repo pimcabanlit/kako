@@ -18,7 +18,7 @@ import type { Loaded } from "@/components/app-shell";
 import { BeforeAfter, ComparePanels, type MonthsOpen, useCompare, useMonthsOpen } from "@/components/compare-view";
 import { Disclaimer } from "@/components/composer";
 import { TopBar } from "@/components/top-bar";
-import { KakoMark, PersonMessage, Text } from "@/components/turn";
+import { PersonMessage, Text } from "@/components/turn";
 import { api, ApiError } from "@/lib/api";
 import {
   builtFrom,
@@ -188,10 +188,7 @@ function Summary({ plan }: { plan: Plan }) {
         </Link>
         , for the household&rsquo;s figures from <span className="num">{formatDay(head.as_of)}</span>.
       </p>
-      <div className="flex gap-3">
-        <KakoMark />
-        <Text text={plan.summary} className="min-w-0 flex-1 text-[15px] leading-7" />
-      </div>
+      <Text text={plan.summary} className="text-[15px] leading-7" />
     </section>
   );
 }

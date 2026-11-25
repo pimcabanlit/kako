@@ -39,18 +39,6 @@ export function PersonMessage({ name, text }: { name: string | null; text: strin
   );
 }
 
-export function KakoMark() {
-  return (
-    <span
-      className="wordmark grid size-7 shrink-0 place-items-center rounded-full text-[13px] text-on-accent"
-      style={{ background: "var(--btn)" }}
-      aria-hidden
-    >
-      k
-    </span>
-  );
-}
-
 export function Text({ text, className = "" }: { text: string; className?: string }) {
   return (
     <div className={`space-y-3 ${className}`}>
@@ -263,10 +251,10 @@ export function KakoAnswer({
   const compared = useCompare(answer.options.length > 0 ? (answer.plan?.id ?? null) : null);
   const months = useMonthsOpen();
   return (
-    <div className="flex gap-3">
-      <KakoMark />
+    <div className="flex">
       <div className="min-w-0 flex-1 space-y-4">
-        <p className="text-xs font-semibold text-muted">Kako</p>
+        {/* No avatar or name over an answer, as in ChatGPT (Pim, Nov 25): said for screen readers only. */}
+        <p className="sr-only">Kako:</p>
         <Text text={answer.reply} className="text-[15px] leading-7" />
         {answer.flagged.length > 0 && (
           <div role="note" className="flex gap-2 rounded-xl border border-rose/40 bg-rose-soft px-3 py-2 text-[13.5px] text-rose">
@@ -361,10 +349,9 @@ export function PendingTurnView({
   return (
     <div className="space-y-6">
       <PersonMessage name={name} text={message} />
-      <div className="flex gap-3">
-        <KakoMark />
+      <div className="flex">
         <div className="min-w-0 flex-1 space-y-3">
-          <p className="text-xs font-semibold text-muted">Kako</p>
+          <p className="sr-only">Kako:</p>
           {error ? (
             <div role="alert" className="panel edge edge-rose space-y-3 text-sm">
               <p className="flex items-start gap-2 text-rose">

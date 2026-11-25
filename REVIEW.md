@@ -63,8 +63,9 @@ These are the failures that matter here. Any instance is **Important**, never a 
     that calls the real API instead of the recorded fake.
 11. **Real or unsafe data.** A real person, bank, employer, account number or statement in demo data,
     tests, docs or screenshots; amounts sampled from someone's real finances; investment product
-    picks or tax calculations (tax is knowledge-base reference only); a screen or README that drops
-    the "synthetic data, not financial advice" line.
+    picks or tax calculations (tax is knowledge-base reference only); the README, or a money, plan,
+    timeline, decisions, metrics or system check screen, that drops the "synthetic data, not
+    financial advice" line (the chat screens leave it out: Pim, Nov 25).
 12. **Demo-only code paths.** A household, person or entity ID, a name like "Mara", a peso amount or a
     date written into logic instead of read from data or settings; code that branches on the demo
     household; a screen that works only with the seeded data. Seed data itself is fine, inside

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { type Loaded, useShell } from "@/components/app-shell";
-import { Composer, Disclaimer } from "@/components/composer";
+import { Composer } from "@/components/composer";
 import { TopBar } from "@/components/top-bar";
 import { KeptTurnView, PendingTurnView } from "@/components/turn";
 import { api, ApiError } from "@/lib/api";
@@ -172,16 +172,13 @@ export function SessionView({ id }: { id: string }) {
       </main>
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
         {ended ? (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/70 px-4 py-3 text-sm">
-              <p className="text-muted">This session has ended. Its dreaming run looks for what to remember.</p>
-              <Link href="/" className="btn btn-primary px-3 py-1.5 text-sm">
-                <Plus className="size-4" aria-hidden />
-                New session
-              </Link>
-            </div>
-            <Disclaimer />
-          </>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/70 px-4 py-3 text-sm">
+            <p className="text-muted">This session has ended. Its dreaming run looks for what to remember.</p>
+            <Link href="/" className="btn btn-primary px-3 py-1.5 text-sm">
+              <Plus className="size-4" aria-hidden />
+              New session
+            </Link>
+          </div>
         ) : (
           <Composer
             onSend={(message) => sendTurn(id, message)}
@@ -297,9 +294,6 @@ function Missing() {
           </Link>
         </div>
       </main>
-      <div className="px-4 pb-4">
-        <Disclaimer />
-      </div>
     </>
   );
 }
