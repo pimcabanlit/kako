@@ -493,6 +493,23 @@ reads, never what Kako works out.
    tool definition changed, so the test set's recordings stand. Recorded: docs/tuning-log.md
    entry 14.
 
+9. **A context strategy for the chat (Nov 25).** Pim: "last 4 turns only? … it's not realistic." A
+   session can run long, and any turn may depend on any earlier one. Plan agreed with Pim on Nov 25
+   (the four changes: code compacts, not a model; the conversation goes in as chat turns before the
+   brief, for caching; specialists get the session state and a self-contained question, never the
+   transcript; session recaps are written by code and kept in Postgres and Meko).
+   Done when: the orchestrator reads the session's earlier turns as chat messages, word for word
+   within a budget and compacted by code beyond it, with `read_turns` for what was left out; the
+   brief carries the session state (writer, topic, last question, options with their moves, changes
+   filed) and recaps of earlier sessions; an ended session's recap is kept in Meko; each turn's
+   context is logged; the conversation test set's checks on what the orchestrator was sent pass on a
+   scripted model, including turn 55 of a 60-turn session reaching turn 3; then, with Pim's yes, the
+   sessions, test sets and the conversation set recorded again on Foundry.
+   Built Nov 25 (docs/architecture.md, "The conversation"): `agents/conversation.py` (the history and
+   the recaps, pure), `agents/kept.py`, the session state in `agents/brief.py`, `read_turns` in
+   `agents/tools.py`, `turn_context` (migration 0009), `upkeep/recaps.py`, and
+   `evals/conversations.py` with `data/test-set/conversations.toml`. Recording waits for Pim's yes.
+
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 
 1. **Video** under 5 minutes, following the storyboard.

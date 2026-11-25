@@ -41,7 +41,21 @@ export const AGENTS: DocPage = {
       blocks: [
         {
           kind: "p",
-          text: "Before any agent runs, code writes one brief of about 3,000 tokens: the key figures, the decisions in force with their reasons, approved preferences, pending proposals, recent life events, in a replan what changed, who is writing (so \"I\" and \"my\" have an owner), the session so far (its last few turns, from Postgres, so a short reply like \"Jun\" answers the question before it, with Meko on or off), and the results of **one** Meko search on the household's message. Every agent starts from it, so answers stay grounded and Meko calls stay few. Agents see stable refs (`debt:credit-card`, `M1`), never database ids.",
+          text: "Before any agent runs, code writes one brief of about 3,000 tokens: the key figures, the decisions in force with their reasons, approved preferences, pending proposals, recent life events, in a replan what changed, this session's state, recaps of the household's earlier sessions, and the results of **one** Meko search on what the conversation is about. Every agent starts from it, so answers stay grounded and Meko calls stay few. Agents see stable refs (`debt:credit-card`, `M1`), never database ids.",
+        },
+      ],
+    },
+    {
+      id: "conversation",
+      title: "The conversation",
+      blocks: [
+        {
+          kind: "p",
+          text: "A household writes the way people chat: \"Jun\", \"go with B\", \"just give me the simulation\". Each only makes sense with the turns before it, so the orchestrator reads the session's earlier turns as a real conversation before the brief and the new message. **Code compacts it, never a model:** turns stay word for word within a budget (about 12,000 tokens, the last 8 always), older ones become one line each, and the oldest can be read again in full with `read_turns`. Nothing a person said is reworded by a model.",
+        },
+        {
+          kind: "p",
+          text: "The brief's session state, kept by code, holds the thread of a long conversation: who wrote this message (so \"I\" and \"my\" have an owner and Kako never asks \"whose?\"), who else wrote, what the conversation is about, the question Kako last asked (so a short reply answers it), the options on the table with the moves behind each (so \"go with B\" can run B again), and the changes filed for a yes. The specialists get this state and a question that stands on its own, never the transcript. Once a session ends, a recap written by code is kept in Meko, so a later session can find it.",
         },
       ],
     },

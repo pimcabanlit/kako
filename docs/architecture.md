@@ -99,30 +99,30 @@ flowchart LR
    figures, the active decisions with their reasons, approved preferences and constraints, pending
    proposals, the household's last 5 life events, in a replan what changed (see "How a life event
    replans"), and the results of **one** `context_search` on the household's message (memories, shared
-   knowledge and documents, past conversations). Two parts follow the conversation itself, from
-   Postgres so they hold with Meko on or off (Pim's laptop try, Nov 25): **who is writing** (the
-   person "Writing as" names, so "I" and "my" have an owner and no agent asks "whose?"), and **this
-   session so far**, its last 4 turns as the household saw them (`session_turn`: each message and
-   its writer, Kako's reply, the options offered and the changes filed for a yes), so a short
-   message such as "Jun" or "no, just the simulation" reads as a reply to the turn before. Kako's
-   earlier replies are data like any other words, and their figures are not cited: agents cite
-   today's from the tools. Meko's search stays for older sessions, memories and documents. A turn as known at a time (demo mode, the test set)
+   knowledge and documents, past conversations), searched on what the conversation is about as well
+   as the new message. From the second turn on, the brief also carries **this session's state** and
+   **recaps of the household's earlier sessions**, both kept by code from Postgres so they hold with
+   Meko on or off (see "The conversation"). Kako's earlier replies are data like any other words, and
+   their figures are not cited: agents cite today's from the tools.
    sees the decisions, proposals and life events as Kako knew them then. Specialists start from this brief instead of searching
    on their own, which keeps the answer grounded and the Meko call count low. Agents see stable refs, never
    database ids (`debt:credit-card`, `figure:debt.payoff_months@debt:credit-card`, `M1` for a
    memory), so a recorded turn replays anywhere. Approved preferences come from the fact store, with
    who approved them and when, and are marked promoted once Meko holds them as collective memory.
    Over budget, code drops what agents can fetch again: Meko results (lowest ranked first), the
-   rejected options of decisions, older pending proposals, then the facts list.
-4. **The orchestrator** reads the brief and calls the specialists it needs as tools, in parallel. It can
-   also propose a fact or a life event the household just stated (see the next section).
+   rejected options of decisions, older pending proposals, the earlier sessions' recaps (oldest
+   first), then the facts list.
+4. **The orchestrator** reads the session's earlier turns, then the brief and the new message, and
+   calls the specialists it needs as tools, in parallel, each with a question that stands on its own.
+   It can also propose a fact or a life event the household just stated (see "How a life event
+   replans").
 5. **Each specialist** is a short, bounded loop (at most 4 tool calls) over read-only tools:
    `get_figures`, `get_facts`, `get_decisions`, `search_memory` (one extra Meko search at most) and
    `run_what_if` (the engine with hypothetical allocations). It returns a structured proposal: the
    allocation it wants (an entity and an amount), its recommendation text, and the sources it cites.
    **Amounts are specs, never numbers a model worked out:** `none`, `rest` (the rest of the surplus,
    subtracted in code), `figure:<ref>`, `fact:<ref>`, or `said:<amount>`, an amount the household wrote
-   in this turn's message, which code finds there. A proposal rests on one of the specialist's own
+   in this session's messages, which code finds there. A proposal rests on one of the specialist's own
    what-ifs, so its allocations are ones the engine has run; code refuses a what-if over the surplus or
    outside the specialist's area, and a proposal that cites no figure of its what-if or no other source
    (V-11). The orchestrator's options are checked the same way: each is one what-if of the turn, cited.
@@ -170,6 +170,75 @@ flowchart LR
    sources say the same thing. The session's Meko calls are its trace: spans in Meko Cloud's Observe
    hub, or local Meko's call log (`GET /api/v1/sessions/{id}/trace`). The plan is `proposed` until the
    household accepts one option; accepting writes its `plan.allocation` facts (Phase 4).
+
+
+## The conversation
+
+A session is a conversation, and a household writes the way people chat: "Jun", "go with B", "just
+give me the simulation". Each of those only makes sense with the turns before it. Kako's context for a
+turn follows Anthropic's guidance on context engineering for agents (the smallest set of high-signal
+tokens, compaction, structured notes kept outside the window, and just-in-time retrieval by tool), with
+one difference: **code compacts, not a model.** A model summary could drop a figure, a name or a
+"no", and nothing would show it; code keeps the household's words and only shortens them in a way a
+test can check.
+
+**What the orchestrator reads**, in this order, so the stable part comes first and the provider's
+prompt cache serves it from turn to turn:
+
+1. **The system prompt:** the shared rules and the orchestrator's role, the same every turn.
+2. **The session's earlier turns, as chat messages:** each household message as a user message
+   ("Jun wrote (turn 2): …", wrapped as data) and Kako's reply as an assistant message (the reply,
+   the options offered with the what-if moves behind each, and what it filed for a yes). Code
+   (`agents/conversation.py`) keeps them word for word while they fit `KAKO_HISTORY_TOKEN_BUDGET`
+   (12,000 tokens). The last 8 turns are always word for word. Older turns move, 10 at a time, into a
+   digest at the head: one line a turn (who wrote, the message cut to 240 characters, what Kako
+   offered or filed). Blocks only move forward, so the start of the conversation stays the same from
+   turn to turn and stays cached. When the digest passes its own 3,000 tokens, its oldest lines are left
+   out, and the head says which turns and that `read_turns` reads them in full.
+3. **The turn's message:** the brief (fresh each turn), then "The new message (turn N)" with who wrote
+   it.
+
+**The session state** is a short section of the brief, kept by code from the session's turns and the
+orchestrator's notes, so a long conversation still has its thread: the session's title and the turn's
+number; who wrote this message ("I", "me" and "my" mean them, so no agent asks "whose?") and who else
+wrote in the session; what the conversation is about; the question Kako's last reply asked, so a
+short message reads as its answer; the options on the table, each with its moves (so "go with B" can
+run B again); and the changes filed for a yes, with where each stands. The topic and the question are
+the orchestrator's own notes: `submit_answer` takes `topic` (what the conversation is about now) and
+`asks` (the question the reply ends on, word for word), both number-checked, and code keeps them.
+
+**Earlier sessions.** The brief recaps the household's three newest earlier sessions, each written by
+code from its kept turns: what it was about, the household's own words, the options offered, the
+changes filed with where they stand, what it decided, and Kako's last question. `read_turns` reads
+an earlier session's turns in full (`S1`, `S2`, …). Once a session has ended, Meko upkeep keeps its
+recap as one of Kako's own memories (`kako_source: "session_recap"`, linked to the session), so a
+later session's `context_search` can find a session older than the three; the brief marks it as
+Kako's recap, what was said, never a fact.
+
+**Specialists** never read the transcript. Each gets the brief with the session state and a question
+from the orchestrator that stands on its own (the amounts, names and choices it needs, in words), so
+the specialists' requests stay small and their answers stay about their area. The orchestrator is the
+one agent that reads the whole conversation.
+
+**The search.** The brief's one `context_search` looks for the topic, the message and, when the
+message is short (under 6 words), the message before it, so "Jun" searches for what the conversation
+is about rather than for a name.
+
+**What was sent is kept.** Each turn's `turn_context` row holds the brief exactly as sent, which
+earlier turns went word for word, into the digest or were left out, the search, and the orchestrator's
+topic and question, so any answer can be explained from what the model saw.
+
+**What Kako can't test yet.** The engine's what-ifs move allocations; they can't change income or
+spending. The prompts say so: "what if I lose my job" shows the runway (how many months the emergency
+fund covers) and is never filed as a change for a yes.
+
+**The conversation test set** (`data/test-set/conversations.toml`, `kako conversations`) plays
+multi-turn sessions where a turn depends on the ones before: Pim's own "what if i lose my job" → "Jun"
+→ "just give me the simulation", "my salary" meaning the writer's, and "go with B". Each turn is
+scored in code on what the orchestrator was sent (the writer, every earlier turn reached, the last
+question, the options) and on the answer (files nothing or the right change, words it must and must
+not use, how many options). A 60-turn scripted case checks that turn 55 reaches turn 3 through
+`read_turns`.
 
 ## How a life event replans
 
@@ -583,7 +652,7 @@ never import the database, Meko or the model SDK.
 
 | Agent | Job | Tools | Writes |
 | --- | --- | --- | --- |
-| Orchestrator | Reads the brief, decides which specialists to ask, resolves conflicts, writes the answer, proposes facts and events the household stated | The four specialists, `get_figures`, `get_facts`, `get_decisions`, `propose_change` (a life event and the facts it changes), `propose_decision` | Pending proposals only |
+| Orchestrator | Reads the conversation and the brief, decides which specialists to ask, resolves conflicts, writes the answer, proposes facts and events the household stated | The four specialists, `get_figures`, `get_facts`, `get_decisions`, `read_turns` (earlier turns in full), `propose_change` (a life event and the facts it changes), `propose_decision` | Pending proposals only |
 | Budget | Spending against income; where the surplus comes from | Read tools, `run_what_if` | Nothing |
 | Debt | Payoff order and extra payments, respecting preferences | Read tools, `run_what_if` | Nothing |
 | Savings | Emergency runway and target | Read tools, `run_what_if` | Nothing |
@@ -620,9 +689,11 @@ both scores as they are, and the baseline is run again when a prompt changes (`k
 --architecture single`). Details in `docs/tuning-log.md` entries 8 and 12; results in
 `data/test-set/results/`.
 
-**Prompts and context.** Every agent's system prompt starts with the same two parts, the shared rules
-and the turn's brief, so the provider's prompt cache serves them to every agent of the turn; each
-specialist's slice is its role and scope, which come last (`backend/src/kako/agents/prompts/`). Each
+**Prompts and context.** Every specialist's system prompt starts with the same two parts, the shared
+rules and the turn's brief, so the provider's prompt cache serves them to every specialist of the
+turn; each specialist's slice is its role and scope, which come last
+(`backend/src/kako/agents/prompts/`). The orchestrator's system prompt is the shared rules and its role
+alone, then the conversation, then the brief and the new message (see "The conversation"). Each
 prompt is short and sectioned: the role, the one rule (the engine
 calculates, agents explain and propose, the household decides), a glossary of figure keys, the tool
 contract and one worked example. Stable parts come first so prompt caching applies. Conversation text,
