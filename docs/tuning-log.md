@@ -904,3 +904,32 @@ it led to.
   questions (q03, q07, q09, q10, q22) failed to replay without it, a recorded reply's tool call
   taking another path against a Meko without Kako's memories. `test_metrics.py`,
   `test_metrics_api.py` and `test_demo_mode.py` read the new results and labels.
+- **Change made for q06, q12 and q17 (Pim's go, Nov 27):** `orchestrator.md` says a what-if that only
+  moves the surplus is a move the household could choose, so a `plan`, not a `simulate`: the
+  orchestrator runs the move they named itself (no proposals to put together, so no specialists)
+  and offers it as an option with `said:`, alone or beside a second option when that helps.
+  `simulate` stays for their life: a raise, a lost job, a loan.
+- **Prediction for the three (written before the run):** each a `plan` with 1 or 2 options and its
+  figures as before (q06 12 months, q12 8 months for the card and naming the flexibility preference,
+  q17 5 months), all checks passing on q06 and q17; q12 the likeliest miss, on citing
+  `fact:preference.debt_vs_flexibility` in its option. 2 calls each, about **US$0.13** in all.
+- **Run and result for the three:** `KAKO_MODEL_MODE=record uv run kako test-set --only
+  q06,q12,q17` on the test set's household, its six calls then put in `test-set-specialists.json` in
+  place of the three questions' earlier calls (the other 19 were recorded with the prompt before this
+  change; demo mode replays them by key). **All three 100%** (21 of 21 checks), each a `plan` with the
+  household's move as an option, 2 calls each, **US$0.2079**, over the predicted US$0.13 (q06's
+  first call wrote the changed prompt to the cache). The test set's saved score is now **100%** (102
+  of 102). q12 cited the flexibility preference, against the prediction's likeliest miss.
+- **Session 2 again on this prompt** (kept as `session-2-run17c.json`, US$0.0709, 7 calls): the
+  debt and savings specialists still asked, but this time both proposed Jun's split, so no
+  over-allocation came up and the options were the same as before. `session-2.json` stays the
+  recording before it, which shows the conflict caught in code: the change only touches a plan where
+  the household names one move, which session 2 isn't (Mara and Jun name two).
+- **Conversation set** (`kako conversations`, specialists, on a household `kako demo run` set up;
+  `conversations-specialists.json`): **100%** (58 of 58 checks over 3 conversations, 7 turns), above
+  the predicted 80% to 92%; c01 turn 1 ("what if i lose my job") a `simulate` with no question back,
+  as entry 16 predicted. 22 calls, 330,319 tokens, **US$0.4540**, over the predicted about US$0.30.
+  Replayed with `--save` on a fresh database (a replay on the recording's own database scores lower:
+  its sessions now sit in the brief as earlier sessions).
+- **Spent today:** about **US$2.95** in all, under the daily cap of US$3. The single agent and the
+  open set (about US$2.10) are tomorrow's, as Pim chose.

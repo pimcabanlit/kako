@@ -346,7 +346,7 @@ async def test_the_metrics_from_stored_rows(
     assert calls["memory_add"]["free"] == 10_000
     assert "datapack_metrics" not in calls
 
-    assert found["test_set"]["specialists"]["score_pct"] == "92.2"
+    assert found["test_set"]["specialists"]["score_pct"] == "100.0"
     assert found["test_set"]["single"]["score_pct"] == "90.7"
     preference = found["preference"]
     assert preference["measured"] is True
