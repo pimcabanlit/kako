@@ -16,7 +16,7 @@ data. Many rules below exist for that reason.
 
 These are the failures that matter here. Any instance is **Important**, never a nit.
 
-1. **Secrets.** `MEKO_API_KEY`, an Azure client secret, Foundry key or access token, a database URL
+1. **Secrets.** `MEKO_API_KEY`, `KAKO_ANTHROPIC_API_KEY`, an Azure client secret, Foundry key or access token, a database URL
    with a password, a Meko token or any other key in code, config, tests, demo data, docs, screenshots or workflow files;
    `.gitignore` loosened for `.env*`; a secret, a full request header or a Meko token written to a
    log.
@@ -56,9 +56,10 @@ These are the failures that matter here. Any instance is **Important**, never a 
    a loop or retry that can call Meko without a bound. Meko Free-tier allowances (1,000
    conversations and 1,000 of each search) are lifetime and account-wide: using them up loses the
    demo.
-10. **Model spend.** A provider SDK (OpenAI, Azure AI or Azure identity for models) imported anywhere
-    except `agents/model_manager.py`; a deployment name written outside settings; key-based auth to
-    Foundry instead of Entra ID; a model call with no token budget, in an unbounded loop, or with an
+10. **Model spend.** A provider SDK (Anthropic, OpenAI, Azure AI or Azure identity for models) imported
+    anywhere except `agents/model_manager.py`; a model or deployment name written outside settings;
+    key-based auth to Foundry instead of Entra ID; Claude's key read from anything but
+    `KAKO_ANTHROPIC_API_KEY`, or the SDK left to find a key or base URL in the environment; a model call with no token budget, in an unbounded loop, or with an
     uncapped retry; the per-turn budget or daily cap removed or raised without saying so; a unit test
     that calls the real API instead of the recorded fake.
 11. **Real or unsafe data.** A real person, bank, employer, account number or statement in demo data,

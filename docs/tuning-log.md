@@ -2,7 +2,8 @@
 
 A short record of each real model run that changes a prompt, a tool or a bound: what we expected,
 what happened, and why. **The prediction is written before the run**, so a surprise is visible as a
-surprise and not explained after the fact. Scripted-model tests don't go here; real Foundry runs do.
+surprise and not explained after the fact. Scripted-model tests don't go here; real model runs
+(Foundry up to Nov 26, Claude from Nov 27) do.
 
 Each entry: the date (Manila time), the change being tested, the prediction, the run (command,
 deployments, tokens, cost from `llm_call`), the result, the root cause of any miss, and the change
@@ -765,3 +766,43 @@ it led to.
     - o26 a `plan` with 2 to 4 options; o27 a `record` proposing Mara's salary; o28 small talk.
     - About 70 to 100 calls, **US$0.30 to US$0.60**. Score: 80% to 92% of checks; no flat "can't"
       anywhere; nothing filed except o27.
+
+### 17. Claude as the models: check-models, then every recording again on Claude (Nov 27, 2026)
+
+- **Change tested:** the provider. Pim chose Claude from now on (Nov 27), with the tests run on Claude
+  only: Claude Opus 5.5 for the strong tier (orchestrator, single agent, dreaming) and Claude Haiku
+  5.5 for the fast one (specialists), both at effort `low` to start (Foundry ran reasoning effort
+  low), the system prompt cached, thinking blocks sent back within a loop, tool choice `auto`
+  (Claude refuses forced tool use, so the loop's "only the final tool" is the offer and its refusals).
+  The prompts are entry 16's, unchanged: written for GPT-5, not yet tuned for Claude. Entry 16's runs
+  are done here instead, on Claude, with dreaming's labelled set added. Waiting for the key
+  (`KAKO_ANTHROPIC_API_KEY` in the cloud environment) and Pim's yes. The Foundry recordings stay in
+  git history, and the results keep their run dates.
+- **Order, stopping after each to read it:** `kako check-models` (two tiny calls, under US$0.01);
+  session 2 alone as a pilot; then session 4, the test set (both architectures, and without the
+  preference), the conversation set, the open set and dreaming's labelled set.
+- **Prediction (written before the runs):**
+  - **check-models:** both lines pass. If the account refuses the thinking-binding beta on Haiku,
+    the fast line fails with a 400 naming it, and the fix is in the model manager before anything
+    else runs.
+  - **Session 2 pilot:** a `plan` answer with A (9 months) and B (17 months, the fund's target in 12),
+    as entry 14; 6 to 10 calls. Cache reads on every orchestrator call after the first (the system
+    prompt and brief, about 4,000 tokens). Cost **US$0.04 to US$0.10**: Opus's input is dearer than
+    gpt-5.4's, but most of it is read from the cache. Likeliest misses: a Haiku specialist writing an
+    amount as a number instead of a spec (refused, then fixed), or answering in words at its limit
+    instead of calling `submit_proposal` (sent back once).
+  - **Session 4:** as entry 16 predicted: turn 1 a `record` with one `propose_change`, turn 2 the
+    replan against Oct 18 with A recommended on the preference. **US$0.10 to US$0.20.**
+  - **Test set:** specialists 85% to 95%, single 85% to 93%, within a few points of entry 12 (93.3%
+    and 90.7%) and lower rather than higher, since the prompts were tuned on GPT-5. About **US$0.60 to
+    US$1.00** for both architectures, about US$0.15 without the preference.
+  - **Conversation set:** 80% to 92%. **Open set:** 78% to 90% of checks, no flat "can't", nothing
+    filed except o27; about **US$0.40 to US$0.80**. **Dreaming:** 13 to 15 of 15 found, nothing
+    unquoted, about US$0.05.
+  - **Where Claude may differ:** fewer empty replies than Foundry's one; more words beside tool calls
+    (harmless); an orchestrator reply cut at its 6,000-token cap by thinking (`finish_reason`
+    "length"), which would mean raising the cap or keeping effort low; Haiku's specialists weaker on
+    the amount-spec rules than gpt-5-mini, which would show as refused tool calls in `agent_step`, and
+    the first thing to try is Sonnet 5.5 for the fast tier.
+  - **In all:** about **US$1.50 to US$2.50** of the month's US$100 credit, under the daily cap of
+    US$3 if run in one day, otherwise over two.

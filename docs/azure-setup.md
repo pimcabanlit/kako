@@ -7,6 +7,10 @@ Kako uses Azure for one thing: model calls to Azure AI Foundry, from `backend/sr
 only (REVIEW.md rule 10). It has its own resource group and budget, separate from every other
 project in the subscription.
 
+Since Nov 27, 2026, Kako's models run on Claude by default ([claude-setup.md](claude-setup.md)); Foundry
+stays in place behind `KAKO_MODEL_PROVIDER=foundry`, with OpenAI's prices set in `.env`
+(`.env.example` lists them). Everything below still holds for that setting.
+
 ## What is in place
 
 Status: **in place** (Nov 17, 2026). `check-models` passes from a cloud session and from the laptop.

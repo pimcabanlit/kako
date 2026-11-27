@@ -49,11 +49,11 @@ export function allowanceWords(name: string): string {
   return ALLOWANCES[name] ?? name;
 }
 
-/** What a run was: replayed from a recording, recorded on Foundry, or live. */
+/** What a run was: replayed from a recording, recorded from real model calls, or live. */
 export function modeWords(mode: string | null): string {
   if (mode === "replay") return "replayed from its recording";
-  if (mode === "record") return "recorded on Foundry";
-  if (mode === "live") return "live on Foundry";
+  if (mode === "record") return "recorded from real model calls";
+  if (mode === "live") return "live";
   return mode ?? "";
 }
 

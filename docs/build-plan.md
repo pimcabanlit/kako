@@ -32,11 +32,11 @@ Every table and formula is in [data-model.md](data-model.md). How each ContextCo
 | Household | One synthetic Philippine family (the Villanuevas), in pesos, explained in plain terms. No real data |
 | Areas | Budget, debt, savings, goals. Tax is knowledge-base reference only, never calculated |
 | Stack | FastAPI on Python 3.12 (uv, Pydantic v2, SQLAlchemy 2 async, Alembic, ruff, mypy, pytest); Next.js App Router with TypeScript strict, Tailwind and shadcn/ui |
-| Model | **Azure AI Foundry** (OpenAI model deployments), signed in with Entra ID, from one model-manager module; Kako's own resource group and budget. Deployment names live in settings only (Pim, Nov 17) |
+| Model | **Claude** on Anthropic's API (Opus 5.5 strong, Haiku 5.5 fast), with Kako's own key, from one model-manager module (Pim, Nov 27: "i want to use claude for now moving forward to save on costs.... maybe foundry can be for later but i prefer to just run the tests on claude"). Azure AI Foundry (OpenAI model deployments, signed in with Entra ID; Kako's own resource group and budget; Pim, Nov 17) stays behind `KAKO_MODEL_PROVIDER=foundry`. Model and deployment names live in settings only |
 | The honest line | "Kako's agents investigate, try what-ifs and propose. The engine checks every figure. The household decides." The orchestrator and specialists are agentic; dreaming is a fixed workflow with one model step |
 | Meko's own extraction | Meko Cloud extracts memories from what the household says. Dreaming treats them as candidates; each ends linked to an approved fact or deleted |
 | The laptop | Runs only the backend and web app, natively on Windows, for the video. No Docker or WSL; development and tests run in cloud sessions and CI |
-| Demo mode | One command, local Meko, recorded model responses: judges can run the scripted sessions with no Azure account. Live mode needs a Foundry deployment |
+| Demo mode | One command, local Meko, recorded model responses: judges can run the scripted sessions with no key or Azure account. Live mode needs a Claude key |
 | Pro access | Not pursued (Pim, Nov 17). Designed for Free; per-person privacy stays a stretch goal |
 | Agents | One orchestrator calls four specialists as tools and reconciles them in the open. No other agent framework |
 | History | Every fact carries `valid_from`, `valid_to` and `replaced_by`; changes replace, mistakes are retracted, nothing is deleted ([data-model.md](data-model.md)) |
@@ -534,11 +534,24 @@ reads, never what Kako works out.
     recordings replay leniently until they are recorded again; recording waits for Pim's yes
     (docs/tuning-log.md entry 16 holds the prediction).
 
+11. **Claude as the models' provider (Nov 27).** Pim has Anthropic API credit (US$100 a month) and
+    chose Claude from now on to save on cost, Foundry maybe later, and the tests run on Claude only.
+    Done when: `KAKO_MODEL_PROVIDER` picks Claude (the default) or Foundry in the model manager alone;
+    Claude's calls use Kako's own key (`KAKO_ANTHROPIC_API_KEY`, never `ANTHROPIC_API_KEY`) and URL
+    whatever the environment says, cache the system prompt, send thinking blocks back unchanged, and
+    log and price cache reads and writes; `kako check-models` checks Claude; tests on a fake API pass
+    with no key; then, with the key in the environment and Pim's yes, `kako check-models` passes and the
+    sessions, the test sets, the conversation set and the open set are recorded on Claude (the
+    prediction first, docs/tuning-log.md entry 17), and the efforts tuned by those scores.
+    Built Nov 27 (docs/architecture.md, "Models"; docs/claude-setup.md): `ClaudeChat` and
+    `ClaudeBackend` in `agents/model_manager.py`, `ChatReply.blocks` and `cache_write_tokens` in
+    `agents/chat.py`, the settings, and `tests/test_claude_chat.py`. Recording waits for the key.
+
 ### Phase 6: Video and submission (Mon Jan 11 to Sat Jan 16)
 
 1. **Video** under 5 minutes, following the storyboard.
 2. **README** with setup instructions for demo mode (no Azure account; scripted sessions only) and live
-   mode (a Foundry deployment), architecture, how Kako uses Meko, the measured metrics, the test sets'
+   mode (a Claude key), architecture, how Kako uses Meko, the measured metrics, the test sets'
    scores with their run dates, and a plain privacy note: one shared household datapack today,
    per-person privacy as the production path (needs Meko Pro).
 3. **Final checks** against the submission checklist in [contextcon-2026.md](contextcon-2026.md), and

@@ -27,6 +27,9 @@ disagree, raise it, and update the doc in the same change once agreed.
   (traces, API keys, self-learning, extraction, AMP), each with what was run.
 - `docs/azure-setup.md`: Kako's Azure side (resource group, budget, Foundry deployments, app
   registration, role, settings), how to check it with `check-models`, and lessons learned. No secrets.
+- `docs/claude-setup.md`: Kako's Claude side (the key, its one variable name and why, the
+  models, efforts and prices, prompt caching, thinking blocks), how to check it with
+  `check-models`, and what has and hasn't been run on it. No secrets.
 - `docs/tuning-log.md`: each real model run that tunes a prompt or a tool, with its prediction
   written before the run.
 - `docs/look-and-feel.md`: the web app's colour tokens (one meaning per colour), type, shapes
@@ -50,9 +53,12 @@ Every peso figure comes from deterministic code; agents never do the maths.
 - Four areas: budget, debt, savings, goals. Tax is knowledge-base reference only,
   never calculated.
 - One orchestrator calls four specialists as tools and reconciles them. Dreaming runs
-  as a background job after each session. Models come from **Azure AI Foundry** (OpenAI
-  model deployments), signed in with Entra ID, through one model-manager module in the
-  FastAPI backend; Next.js frontend. Kako has its own Azure resource group and budget.
+  as a background job after each session. Models come from **Claude** on Anthropic's API
+  (Pim, Nov 27: Claude from now on, to save on cost; Foundry may come back later, behind
+  `KAKO_MODEL_PROVIDER=foundry`). Before that they came from **Azure AI Foundry** (OpenAI
+  model deployments, signed in with Entra ID; Kako has its own Azure resource group and
+  budget). Every model call goes through one model-manager module in the FastAPI backend;
+  Next.js frontend.
 - The honest line: Kako's agents investigate, try what-ifs and propose; the engine
   checks every figure; the household decides. Never say the agents "negotiate" or
   "learn" on their own.
@@ -187,7 +193,7 @@ KAKO_TEST_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/kako_test \
 KAKO_TEST_MEKO_URL=http://127.0.0.1:7777/mcp uv run pytest   # also against local Postgres and local Meko (never Meko Cloud)
 uv run kako migrate                       # Alembic upgrade to the latest schema (KAKO_DATABASE_URL)
 uv run kako api                           # /api/v1 on 127.0.0.1:8000 (loopback only: no sign-in yet); /api/v1/health, /api/v1/sessions (turns, trace), /api/v1/plans (each with its why, and /compare: its options beside today's plan), /api/v1/timeline, /api/v1/decisions, /api/v1/metrics (and /metrics/meko), /api/v1/money, docs at /api/v1/docs
-uv run kako check-models                  # Foundry settings, Entra ID sign-in, one tiny call per deployment; exit 1 on a FAIL
+uv run kako check-models                  # the provider's settings, sign-in (Claude: KAKO_ANTHROPIC_API_KEY; Foundry: Entra ID), one tiny call per model; exit 1 on a FAIL
 uv run kako demo load --through 2026-12-01T12:00+08:00   # the demo household: its seed, then each approved change up to then
 uv run kako validate                      # V-01 to V-08 and V-16 over the household's facts; exit 1 on any (--household)
 uv run kako proposals list                # what waits for the household (--status pending|approved|rejected|expired|all, --household)
@@ -195,14 +201,14 @@ uv run kako proposals approve <id>… --by Mara   # approve together and write w
 uv run kako figures --on 2026-09-15 --known-at 2026-09-15T18:00Z   # the engine's figures then (--household, --save)
 uv run kako demo upload                   # the demo's statements and reference documents into Meko's knowledge base (counted in meko_call)
 uv run kako ask "How hard should we pay down the card?" --on 2026-09-15 --seed s2:t1   # one planning turn (--title, --known-at, --household, --no-meko, --by Mara: who says it)
-KAKO_MODEL_MODE=replay KAKO_RECORDED_RESPONSES=../data/recorded/session-2.json uv run kako ask …   # the same turn from a recording, no Foundry
+KAKO_MODEL_MODE=replay KAKO_RECORDED_RESPONSES=../data/recorded/session-2.json uv run kako ask …   # the same turn from a recording, no model call
 uv run kako demo run                      # demo mode: migrate, load the whole story, upload the documents, replay the scripted sessions, with dreaming over Session 3 before session 4 (local Meko, no Azure)
 uv run kako demo run --test-set           # … and replay the agent test set for each recorded architecture (--strict: refuse a request that differs from its recording)
 uv run kako demo run --without-learning   # … the household as if dreaming had learned nothing (no preference, sessions from then on left out), on an empty database
-KAKO_MODEL_MODE=record uv run kako demo record session-4   # record one scripted session on Foundry, on an empty database (spends; log a prediction in docs/tuning-log.md first)
+KAKO_MODEL_MODE=record uv run kako demo record session-4   # record one scripted session on the models, on an empty database (spends; log a prediction in docs/tuning-log.md first)
 uv run kako test-set                      # the agent test set's score, replayed from data/recorded/test-set-specialists.json (needs the household loaded through Dec 1)
 uv run kako test-set --architecture single --only q01,q07   # the single-agent baseline, some questions (--household, --save: data/test-set/results/)
-KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls Foundry: records a new run (spends; log a prediction in docs/tuning-log.md first)
+KAKO_MODEL_MODE=record uv run kako test-set   # the only way it calls the models: records a new run (spends; log a prediction in docs/tuning-log.md first)
 uv run kako test-set --without-preference    # the preference's four questions on the household without it, from test-set-specialists-without-preference.json (--save: data/test-set/results/preference.json)
 uv run kako conversations                 # the conversation test set: multi-turn sessions scored in code, replayed from data/recorded/conversations-<architecture>.json (--architecture, --only c01, --save; KAKO_MODEL_MODE=record spends)
 uv run kako conversations --set open      # the open-question set (data/test-set/open-questions.toml): 30 everyday questions, each answer's kind, sources and labels scored in code, from data/recorded/open-questions-<architecture>.json
@@ -305,7 +311,9 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `demo/kb.py` uploads the demo's documents to the knowledge base. `agents/` the agents' plumbing:
   `chat.py` (a model call's request and reply as plain values, the request digest, the token
   estimate), `model_manager.py` (the only module that imports a model SDK: `check_models`, the
-  live Foundry backend `FoundryChat`, and `ModelManager.chat`, which picks the tier's deployment,
+  live backends, `ClaudeChat` (the default, `KAKO_MODEL_PROVIDER=anthropic`: Claude with Kako's own
+  key, the system prompt cached, thinking blocks carried back unchanged) and `FoundryChat`, the Claude
+  check-models backend `ClaudeBackend`, and `ModelManager.chat`, which picks the tier's model,
   refuses a call past the turn's token budget or the daily spend cap, retries at most
   `KAKO_MODEL_MAX_RETRIES` times and logs every attempt with its cost), `recorded.py` (recorded
   responses: `RecordingBackend` saves replies by call key, `ReplayBackend` answers from the file
@@ -501,7 +509,11 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   `test_model_calls.py` (budgets, the cap, retries, cost and the log), `test_tool_loop.py` (the
   loop's bounds and steps), `test_recorded.py` (a two-agent turn recorded, then replayed with every
   socket refused) and `test_model_sdk_imports.py` (Ruff refuses a model SDK anywhere but the model
-  manager) use the scripted model in `tests/support/models.py`, never Foundry;
+  manager) use the scripted model in `tests/support/models.py`, never a real model;
+  `test_claude_chat.py` runs Claude's backend against a fake API (the request: cached system prompt,
+  strict tools, tool choice auto, thinking blocks sent back, tool results in one user turn, Kako's own
+  key and URL whatever the environment says; the reply; which errors may pass; cache writes priced;
+  check-models on Claude);
   `tests/integration/test_agent_logs.py` writes and reads `llm_call` and `agent_step`.
   `test_agent_tools.py` tests the tools on the worked example (amount specs, the rest, refusals,
   citations, one search, proposals), `test_agents_answering.py` the tools for any question (value
