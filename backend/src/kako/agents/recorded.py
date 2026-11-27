@@ -1,4 +1,4 @@
-"""Recorded model responses: tests, CI and demo mode replay them instead of calling Foundry.
+"""Recorded model responses: tests, CI and demo mode replay them instead of calling the models.
 
 A recording is one JSON file of calls, each under a **key** the caller names (such as
 `session-2:turn-1/debt#1/2`: the turn, the agent and which of its calls). Keys rather than request
@@ -7,8 +7,9 @@ request it answered, and a strict replay refuses a reply whose request has chang
 the brief moved on since it was recorded: record it again).
 
 `RecordingBackend` wraps a live backend and saves each reply; `ReplayBackend` answers from the file
-and never opens a connection. Recording calls Foundry and costs money: it needs the household's yes
-(Pim) first. Nothing secret is saved: requests are kept by digest only, replies are model text.
+and never opens a connection. Recording calls a model and costs money: it needs the household's yes
+(Pim) first. Nothing secret is saved: requests are kept by digest only, replies are model text
+(with Claude's thinking blocks, opaque and signed).
 """
 
 from __future__ import annotations

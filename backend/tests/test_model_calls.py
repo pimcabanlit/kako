@@ -21,6 +21,28 @@ from tests.support.models import ScriptedBackend, says
 NOW = datetime(2026, 11, 24, 6, 0, tzinfo=UTC)
 
 
+# These tests were written for Foundry: its provider, no default model names, OpenAI's prices.
+FOUNDRY = {
+    "model_provider": "foundry",
+    "model_strong": None,
+    "model_fast": None,
+    "price_strong_input": "2.50",
+    "price_strong_cached": "0.25",
+    "price_strong_output": "15.00",
+    "price_fast_input": "0.25",
+    "price_fast_cached": "0.025",
+    "price_fast_output": "2.00",
+}
+
+
+@pytest.fixture
+def make_settings(make_settings: MakeSettings) -> MakeSettings:
+    def make(**values: object) -> Settings:
+        return make_settings(**(FOUNDRY | values))
+
+    return make
+
+
 def ask(tier: str = "fast", text: str = "How hard should we pay down the card?") -> ChatRequest:
     return ChatRequest(tier=tier, messages=(Message("user", text),), max_output_tokens=500)  # type: ignore[arg-type]
 

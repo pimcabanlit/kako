@@ -26,12 +26,24 @@ def cost_usd(
     input_tokens: int,
     cached_tokens: int,
     output_tokens: int,
+    *,
+    cache_write_tokens: int = 0,
+    cache_write_price: Decimal | None = None,
 ) -> Decimal:
-    """US$ for one call: uncached input, cached input and output at their prices per million
-    tokens, rounded half up to a millionth of a dollar once, at the end."""
+    """US$ for one call: uncached input, cached input, input written to the prompt cache (Claude
+    bills it above the input price) and output, at their prices per million tokens, rounded half
+    up to a millionth of a dollar once, at the end. Cached and written tokens are part of
+    `input_tokens`."""
     price_in, price_cached, price_out = prices
     cached = min(cached_tokens, input_tokens)
-    total = (input_tokens - cached) * price_in + cached * price_cached + output_tokens * price_out
+    written = min(cache_write_tokens, input_tokens - cached)
+    price_write = price_in if cache_write_price is None else cache_write_price
+    total = (
+        (input_tokens - cached - written) * price_in
+        + cached * price_cached
+        + written * price_write
+        + output_tokens * price_out
+    )
     return (total / MILLION).quantize(MICRO_DOLLAR, rounding=ROUND_HALF_UP)
 
 

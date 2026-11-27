@@ -13,11 +13,13 @@ from typing import Literal
 from urllib.parse import urlencode, urlsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator
+from pydantic_core import PydanticUseDefault
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from kako.agents.chat import ReasoningEffort, Tier
+from kako.agents.chat import ClaudeEffort, ReasoningEffort, Tier
 
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+ANTHROPIC_API_URL = "https://api.anthropic.com"
 
 
 class Settings(BaseSettings):
@@ -61,15 +63,35 @@ class Settings(BaseSettings):
     meko_langfuse_project_id: str | None = None
     health_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 
-    # Azure AI Foundry. Deployment names live here and nowhere else (REVIEW.md rule 10).
+    # Where the agents' models run (docs/architecture.md, "Models"): `anthropic`, Claude on
+    # Anthropic's own API (the default), or `foundry`, OpenAI models on Azure AI Foundry. Model and
+    # deployment names live here and nowhere else (REVIEW.md rule 10).
+    model_provider: Literal["anthropic", "foundry"] = "anthropic"
+    model_strong: str | None = Field(
+        default="claude-opus-5-5",
+        description="Model (Claude) or deployment (Foundry) for the orchestrator and dreaming",
+    )
+    model_fast: str | None = Field(
+        default="claude-haiku-5-5",
+        description="Model (Claude) or deployment (Foundry) for the specialists",
+    )
+    # Claude's API key, from the Claude Console. Only this KAKO_ name is read, never
+    # ANTHROPIC_API_KEY: Claude Code signs itself in with that one, so a shared environment would
+    # mix the two. The key is passed to the SDK explicitly, so the SDK reads no credential itself.
+    anthropic_api_key: SecretStr | None = None
+    # Passed to the SDK explicitly, so an ANTHROPIC_BASE_URL meant for another tool (Claude Code
+    # sets one) never redirects Kako's calls, or its key.
+    anthropic_base_url: str = ANTHROPIC_API_URL
+    # How hard Claude thinks (output_config.effort): thinking is always on, and effort is its
+    # only control, for quality, time and cost. Tuned by the test sets (docs/tuning-log.md).
+    claude_effort_strong: ClaudeEffort = "low"
+    claude_effort_fast: ClaudeEffort = "low"
+
+    # Azure AI Foundry, when KAKO_MODEL_PROVIDER=foundry.
     foundry_endpoint: str | None = Field(
         default=None,
         description="The Foundry resource's endpoint, https://<resource>.openai.azure.com",
     )
-    model_strong: str | None = Field(
-        default=None, description="Deployment for the orchestrator and dreaming"
-    )
-    model_fast: str | None = Field(default=None, description="Deployment for the specialists")
     # Kako's own app registration. KAKO_-prefixed, so it can't be confused with another
     # project's AZURE_* variables in a shared environment. Without them, sign-in falls back to
     # the Azure CLI's `az login`, so no secret is needed where the CLI is signed in.
@@ -80,9 +102,9 @@ class Settings(BaseSettings):
     # reasoning tokens against this cap, and 64 can leave nothing for the answer.
     check_models_max_tokens: int = Field(default=256, ge=16, le=1024)
 
-    # How the model manager reaches a model (docs/architecture.md, "Demo mode"): `live` calls
-    # Foundry, `record` calls Foundry and saves each reply to `recorded_responses`, `replay` answers
-    # from that file with no network and no Azure settings.
+    # How the model manager reaches a model (docs/architecture.md, "Demo mode"): `live` calls the
+    # provider, `record` calls it and saves each reply to `recorded_responses`, `replay` answers
+    # from that file with no network, no key and no Azure settings.
     model_mode: Literal["live", "record", "replay"] = "live"
     recorded_responses: Path | None = Field(
         default=None, description="The recording file `record` writes and `replay` reads"
@@ -112,17 +134,22 @@ class Settings(BaseSettings):
     # Retries after a failed attempt that may pass next time (rate limit, timeout, server error).
     model_max_retries: int = Field(default=2, ge=0, le=3)
     model_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    # Foundry's reasoning effort (Claude's is claude_effort_*).
     reasoning_effort_strong: ReasoningEffort | None = "low"
     reasoning_effort_fast: ReasoningEffort | None = "low"
     # Per-token prices in US$ per million tokens, per tier, for `llm_call.cost_usd`. Defaults are
-    # OpenAI's list prices for gpt-5.4 and gpt-5-mini (Nov 2026); check Azure's pricing page for
-    # the deployment type in use (docs/azure-setup.md). Never 0: a free price turns the cap off.
-    price_strong_input: Decimal = Field(default=Decimal("2.50"), gt=0)
-    price_strong_cached: Decimal = Field(default=Decimal("0.25"), gt=0)
-    price_strong_output: Decimal = Field(default=Decimal("15.00"), gt=0)
-    price_fast_input: Decimal = Field(default=Decimal("0.25"), gt=0)
-    price_fast_cached: Decimal = Field(default=Decimal("0.025"), gt=0)
-    price_fast_output: Decimal = Field(default=Decimal("2.00"), gt=0)
+    # Anthropic's list prices for Claude Opus 5.5 and Claude Haiku 5.5 (Nov 2026): input, cache
+    # reads, cache writes (1.25 times input, the 5-minute cache) and output. For Foundry, set
+    # OpenAI's (docs/azure-setup.md; Foundry has no cache writes). Never 0: a free price turns the
+    # cap off.
+    price_strong_input: Decimal = Field(default=Decimal("4.00"), gt=0)
+    price_strong_cached: Decimal = Field(default=Decimal("0.20"), gt=0)
+    price_strong_cache_write: Decimal = Field(default=Decimal("5.00"), gt=0)
+    price_strong_output: Decimal = Field(default=Decimal("20.00"), gt=0)
+    price_fast_input: Decimal = Field(default=Decimal("0.10"), gt=0)
+    price_fast_cached: Decimal = Field(default=Decimal("0.01"), gt=0)
+    price_fast_cache_write: Decimal = Field(default=Decimal("0.125"), gt=0)
+    price_fast_output: Decimal = Field(default=Decimal("0.50"), gt=0)
 
     @field_validator("meko_mcp_url")
     @classmethod
@@ -136,8 +163,7 @@ class Settings(BaseSettings):
         return value
 
     @field_validator(
-        "model_strong",
-        "model_fast",
+        "anthropic_api_key",
         "meko_datapack_id",
         "meko_langfuse_project_id",
         "recorded_responses",
@@ -149,6 +175,25 @@ class Settings(BaseSettings):
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("model_strong", "model_fast", mode="before")
+    @classmethod
+    def _blank_is_default(cls, value: object) -> object:
+        """A blank name means the default model (Claude); a Foundry deployment must be named."""
+        if isinstance(value, str) and not value.strip():
+            raise PydanticUseDefault
+        return value
+
+    @field_validator("anthropic_base_url", mode="before")
+    @classmethod
+    def _anthropic_https(cls, value: object) -> object:
+        """HTTPS only, scheme and host only: the API key must never travel in clear text."""
+        if not isinstance(value, str) or not value.strip():
+            return ANTHROPIC_API_URL
+        parts = urlsplit(value.strip())
+        if parts.scheme != "https" or not parts.hostname:
+            raise ValueError("must be an https:// URL, such as https://api.anthropic.com")
+        return f"https://{parts.netloc}"
 
     @field_validator("foundry_endpoint", mode="before")
     @classmethod
@@ -169,8 +214,15 @@ class Settings(BaseSettings):
             return self.price_strong_input, self.price_strong_cached, self.price_strong_output
         return self.price_fast_input, self.price_fast_cached, self.price_fast_output
 
+    def cache_write_price(self, tier: Tier) -> Decimal:
+        """US$ per million input tokens written to the prompt cache (Claude only)."""
+        return self.price_strong_cache_write if tier == "strong" else self.price_fast_cache_write
+
     def reasoning_effort(self, tier: Tier) -> ReasoningEffort | None:
         return self.reasoning_effort_strong if tier == "strong" else self.reasoning_effort_fast
+
+    def claude_effort(self, tier: Tier) -> ClaudeEffort:
+        return self.claude_effort_strong if tier == "strong" else self.claude_effort_fast
 
     @property
     def deployments(self) -> dict[str, str]:

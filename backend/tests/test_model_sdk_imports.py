@@ -16,7 +16,7 @@ import pytest
 
 BACKEND = Path(__file__).resolve().parents[1]
 SOURCE = BACKEND / "src" / "kako"
-BANNED = ("openai", "azure.identity", "azure.ai")
+BANNED = ("anthropic", "openai", "azure.identity", "azure.ai")
 MANAGER = SOURCE / "agents" / "model_manager.py"
 
 
@@ -44,6 +44,8 @@ def _ruff(filename: str, code: str) -> subprocess.CompletedProcess[str]:
 @pytest.mark.parametrize(
     "code",
     [
+        "import anthropic\n",
+        "from anthropic import AsyncAnthropic\n",
         "import openai\n",
         "from openai import AsyncOpenAI\n",
         "from azure.identity import ClientSecretCredential\n",
@@ -60,7 +62,10 @@ def test_ruff_refuses_a_model_sdk_outside_the_model_manager(filename: str, code:
 
 
 def test_ruff_allows_it_in_the_model_manager() -> None:
-    result = _ruff("src/kako/agents/model_manager.py", "import openai\nimport azure.identity\n")
+    result = _ruff(
+        "src/kako/agents/model_manager.py",
+        "import anthropic\nimport openai\nimport azure.identity\n",
+    )
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -85,4 +90,4 @@ def test_no_other_module_imports_a_model_sdk() -> None:
         if path != MANAGER
     }
     assert {k: v for k, v in offenders.items() if v} == {}
-    assert "openai" in _imports(MANAGER)  # the scan does see imports
+    assert {"anthropic", "openai"} <= _imports(MANAGER)  # the scan does see imports

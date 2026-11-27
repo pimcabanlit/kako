@@ -7,6 +7,7 @@ license = "LicenseRef-All-Rights-Reserved"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.20.1",
+    "anthropic>=2.14.0",
     "asyncpg>=0.32.0",
     "azure-identity>=1.27.0",
     "fastapi>=0.163.1",
@@ -48,6 +49,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "ASYNC", "S", "TID", "RUF", "PT"
 "src/kako/agents/model_manager.py" = ["TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
+"anthropic".msg = "Model SDKs are imported only in kako/agents/model_manager.py (REVIEW.md rule 10)."
 "openai".msg = "Model SDKs are imported only in kako/agents/model_manager.py (REVIEW.md rule 10)."
 "azure.identity".msg = "Azure sign-in for models lives only in kako/agents/model_manager.py (REVIEW.md rule 10)."
 "azure.ai".msg = "Model SDKs are imported only in kako/agents/model_manager.py (REVIEW.md rule 10)."

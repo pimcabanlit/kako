@@ -100,9 +100,16 @@ def test_spend_controls_have_safe_defaults(make_settings: MakeSettings) -> None:
     assert settings.turn_token_budget == 200_000
     assert settings.daily_spend_cap_usd == Decimal(3)
     assert settings.model_max_retries == 2
-    assert settings.prices("strong") == (Decimal("2.50"), Decimal("0.25"), Decimal("15.00"))
-    assert settings.prices("fast") == (Decimal("0.25"), Decimal("0.025"), Decimal("2.00"))
-    assert settings.reasoning_effort("fast") == "low"
+    # Claude by default: Opus 5.5 and Haiku 5.5 at Anthropic's list prices.
+    assert settings.model_provider == "anthropic"
+    assert settings.deployments == {"strong": "claude-opus-5-5", "fast": "claude-haiku-5-5"}
+    assert settings.prices("strong") == (Decimal("4.00"), Decimal("0.20"), Decimal("20.00"))
+    assert settings.prices("fast") == (Decimal("0.10"), Decimal("0.01"), Decimal("0.50"))
+    assert settings.cache_write_price("strong") == Decimal("5.00")
+    assert settings.cache_write_price("fast") == Decimal("0.125")
+    assert settings.claude_effort("strong") == settings.claude_effort("fast") == "low"
+    assert settings.anthropic_base_url == "https://api.anthropic.com"
+    assert settings.reasoning_effort("fast") == "low"  # Foundry's
 
 
 @pytest.mark.parametrize(
@@ -116,6 +123,10 @@ def test_spend_controls_have_safe_defaults(make_settings: MakeSettings) -> None:
         {"price_fast_output": "-0.1"},
         {"price_strong_output": "0"},
         {"reasoning_effort_fast": "max"},
+        {"claude_effort_strong": "minimal"},
+        {"model_provider": "openai"},
+        {"anthropic_base_url": "http://api.anthropic.com"},
+        {"price_strong_cache_write": "0"},
     ],
 )
 def test_spend_controls_refuse_out_of_bounds_values(
@@ -150,3 +161,8 @@ def test_the_brief_budget_has_bounds(make_settings: MakeSettings) -> None:
         make_settings(brief_token_budget=100)
     with pytest.raises(ValidationError):
         make_settings(brief_search_limit=11)
+
+
+def test_a_blank_model_name_means_claudes_default(make_settings: MakeSettings) -> None:
+    settings = make_settings(model_strong="", model_fast="  ")
+    assert settings.deployments == {"strong": "claude-opus-5-5", "fast": "claude-haiku-5-5"}

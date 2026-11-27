@@ -142,7 +142,10 @@ async def run_agent(
             name = finals[0].spec.name
             messages.append(Message("user", f"Your reply was empty. Answer with {name}."))
             continue
-        messages.append(Message("assistant", reply.text or None, reply.tool_calls))
+        # The reply as the provider wrote it goes back too: Claude's thinking blocks with it.
+        messages.append(
+            Message("assistant", reply.text or None, reply.tool_calls, blocks=reply.blocks)
+        )
 
         # Decide in order which calls may run, then run them together.
         plan: list[tuple[ToolCall, Tool | None, str | None]] = []

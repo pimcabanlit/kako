@@ -1,30 +1,37 @@
 """The model manager: the only module that imports a model SDK (REVIEW.md rule 10).
 
-Models are Azure AI Foundry deployments, reached with the OpenAI SDK on Foundry's v1 endpoint
-(`<endpoint>/openai/v1/`) and signed in with Microsoft Entra ID: a bearer token for the Cognitive
-Services scope, never an API key. Deployment names come from settings only.
+Two providers, chosen by `KAKO_MODEL_PROVIDER` (docs/architecture.md, "Models"):
 
-Two parts:
+- `anthropic` (the default): Claude on Anthropic's own API, with the Anthropic SDK and Kako's own
+  key (`KAKO_ANTHROPIC_API_KEY`), passed explicitly with the API's URL, so the SDK reads no
+  credential or URL of its own from the environment. Thinking is always on; effort is set per tier.
+- `foundry`: OpenAI models as Azure AI Foundry deployments, with the OpenAI SDK on Foundry's v1
+  endpoint (`<endpoint>/openai/v1/`), signed in with Microsoft Entra ID: a bearer token for the
+  Cognitive Services scope, never an API key.
 
-- `check_models`: settings, sign-in and one tiny call per deployment (`kako check-models`).
-- `ModelManager.chat`: every agent's model call. It picks the deployment for the call's tier,
-  refuses a call past the turn's token budget or the day's spend cap, retries a failed attempt that
-  may pass next time (at most `KAKO_MODEL_MAX_RETRIES`), and logs every attempt in `llm_call` with
-  its cost. Its backend is `FoundryChat` (live), `RecordingBackend` (live, saving each reply) or
-  `ReplayBackend` (recorded replies, no network): see `kako.agents.recorded`.
+Model and deployment names come from settings only. Two parts:
+
+- `check_models`: settings, sign-in and one tiny call per model (`kako check-models`).
+- `ModelManager.chat`: every agent's model call. It picks the model for the call's tier, refuses a
+  call past the turn's token budget or the day's spend cap, retries a failed attempt that may pass
+  next time (at most `KAKO_MODEL_MAX_RETRIES`), and logs every attempt in `llm_call` with its cost.
+  Its backend is `ClaudeChat` or `FoundryChat` (live), `RecordingBackend` (live, saving each reply)
+  or `ReplayBackend` (recorded replies, no network): see `kako.agents.recorded`.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Protocol
+from typing import Any, Final, Protocol
 
+import anthropic
 import httpx2
 from azure.core.credentials import TokenCredential
 from azure.core.exceptions import ClientAuthenticationError
@@ -45,6 +52,7 @@ from openai import (
 )
 
 from kako.agents.chat import (
+    Block,
     CallAgent,
     ChatReply,
     ChatRequest,
@@ -63,6 +71,15 @@ from kako.settings import Settings
 
 COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
 CHECK_PROMPT = "Reply with the single word OK."
+# Claude's thinking-block controls (beta): a thinking block whose conversation prefix has changed
+# is dropped, not refused. The tool loop offers only the final tool at its limit, which changes the
+# request's tools, and Claude binds each thinking block to the tools it was written with.
+CLAUDE_BETAS: Final = ("thinking-binding-controls-2026-08-01",)
+CLAUDE_THINKING: Final[dict[str, Any]] = {
+    "type": "adaptive",
+    "block_binding": {"prefix_mismatch_behavior": "drop_block"},
+}
+CLAUDE_CACHE: Final[dict[str, Any]] = {"type": "ephemeral"}  # the 5-minute prompt cache
 
 
 class SpendRefused(ModelError):
@@ -171,11 +188,12 @@ def check_models(
     *,
     credential: TokenCredential | None = None,
     backend_factory: Callable[[Settings, TokenCredential | None], ModelBackend] = FoundryBackend,
+    claude_factory: Callable[[Settings], ClaudeCheckBackend] | None = None,
 ) -> list[CheckLine]:
-    """Settings, sign-in, then one tiny call per deployment. Prints nothing secret.
-
-    At most one call per distinct deployment name, each with at most one retry.
-    """
+    """Settings, sign-in, then one tiny call per model, on the provider settings name. Prints
+    nothing secret. At most one call per distinct model name, each with at most one retry."""
+    if settings.model_provider == "anthropic":
+        return _check_claude(settings, claude_factory or ClaudeBackend)
     lines: list[CheckLine] = []
     missing = [
         name
@@ -207,7 +225,13 @@ def check_models(
         return lines
     lines.append(CheckLine(True, "Sign-in", f"Entra ID token from {sign_in_method(settings)}"))
 
-    backend = backend_factory(settings, source)
+    lines.extend(_check_calls(settings, backend_factory(settings, source)))
+    return lines
+
+
+def _check_calls(settings: Settings, backend: ModelBackend) -> list[CheckLine]:
+    """One tiny call per distinct model name, each line saying what it answered."""
+    lines: list[CheckLine] = []
     for deployment in dict.fromkeys(settings.deployments.values()):  # each name once
         tiers = ", ".join(t for t, name in settings.deployments.items() if name == deployment)
         label = f"Model {deployment} ({tiers})"
@@ -228,6 +252,140 @@ def check_models(
                 f"{reply.input_tokens} tokens in, {reply.output_tokens} out",
             )
         )
+    return lines
+
+
+# ---------------------------------------------------------------------------------------------
+# Claude: the Messages API on Anthropic's own API.
+# ---------------------------------------------------------------------------------------------
+
+
+class ClaudeCheckBackend(ModelBackend, Protocol):
+    def sign_in(self, model: str) -> str:
+        """Check the key against one model, at no cost; returns the model's display name."""
+        ...
+
+
+def claude_models_problem(settings: Settings) -> str | None:
+    """Why the tiers' model names can't be Claude models, or None. A name left over from Foundry
+    (such as gpt-5.4) is refused before any call, with the way out."""
+    wrong = [
+        f"{setting}={name}"
+        for setting, name in (
+            ("KAKO_MODEL_STRONG", settings.model_strong),
+            ("KAKO_MODEL_FAST", settings.model_fast),
+        )
+        if name and not name.startswith("claude-")
+    ]
+    if not wrong:
+        return None
+    return (
+        f"{', '.join(wrong)} isn't a Claude model: set a claude-* model, or "
+        "KAKO_MODEL_PROVIDER=foundry for Azure AI Foundry"
+    )
+
+
+def _claude_key(settings: Settings) -> str:
+    key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else ""
+    if not key:
+        raise ModelError("KAKO_ANTHROPIC_API_KEY is not set")
+    return key
+
+
+def _claude_error(exc: anthropic.AnthropicError) -> ModelError:
+    """An SDK error as a `ModelError`, most specific first: which may pass next time, and which
+    may have reached the model before failing (so it is charged at its worst case)."""
+    if isinstance(exc, anthropic.APITimeoutError | anthropic.APIConnectionError):
+        return ModelError(safe_error(exc), retryable=True, maybe_billed=True)
+    if isinstance(exc, anthropic.RateLimitError | anthropic.InternalServerError):
+        return ModelError(safe_error(exc), retryable=True, retry_after=_retry_after(exc))
+    return ModelError(safe_error(exc))
+
+
+class ClaudeBackend:
+    """`kako check-models` on Claude: the key checked on a model (free), then a tiny call."""
+
+    def __init__(self, settings: Settings, *, http_client: httpx2.Client | None = None) -> None:
+        self._settings = settings
+        self._client = anthropic.Anthropic(
+            api_key=_claude_key(settings),
+            base_url=settings.anthropic_base_url,
+            max_retries=1,  # bounded: at most two attempts per call
+            timeout=30.0,
+            http_client=http_client,
+            open_telemetry=False,
+        )
+
+    def sign_in(self, model: str) -> str:
+        try:
+            info = self._client.models.retrieve(model)
+        except anthropic.AnthropicError as exc:
+            raise _claude_error(exc) from exc
+        return str(info.display_name or info.id)
+
+    def complete(self, deployment: str, prompt: str, max_output_tokens: int) -> ModelReply:
+        started = time.perf_counter()
+        try:
+            # The same thinking and beta as an agent's call, so a model or account that refuses
+            # them fails here first, with nothing spent on a turn.
+            params: dict[str, Any] = {
+                "model": deployment,
+                "max_tokens": max_output_tokens,
+                "messages": [{"role": "user", "content": prompt}],
+                "thinking": CLAUDE_THINKING,
+                "output_config": {"effort": "low"},
+                "betas": list(CLAUDE_BETAS),
+            }
+            response = self._client.beta.messages.create(**params)
+        except anthropic.AnthropicError as exc:
+            raise _claude_error(exc) from exc
+        latency_ms = round((time.perf_counter() - started) * 1000)
+        text = "".join(b.text for b in response.content if b.type == "text")
+        usage = response.usage
+        return ModelReply(
+            deployment=deployment,
+            text=text.strip(),
+            input_tokens=usage.input_tokens
+            + (usage.cache_creation_input_tokens or 0)
+            + (usage.cache_read_input_tokens or 0),
+            output_tokens=usage.output_tokens,
+            latency_ms=latency_ms,
+        )
+
+
+def _check_claude(
+    settings: Settings, factory: Callable[[Settings], ClaudeCheckBackend]
+) -> list[CheckLine]:
+    missing = [
+        name
+        for name, value in (
+            ("KAKO_ANTHROPIC_API_KEY", settings.anthropic_api_key),
+            ("KAKO_MODEL_STRONG", settings.model_strong),
+            ("KAKO_MODEL_FAST", settings.model_fast),
+        )
+        if not value
+    ]
+    problem = f"missing {', '.join(missing)}" if missing else claude_models_problem(settings)
+    lines = [
+        CheckLine(
+            ok=problem is None,
+            label="Settings",
+            detail=problem
+            or f"Claude at {settings.anthropic_base_url}; strong={settings.model_strong}, "
+            f"fast={settings.model_fast}",
+        )
+    ]
+    if problem is not None:
+        return lines
+    try:
+        backend = factory(settings)
+        name = backend.sign_in(settings.model_strong or "")
+    except Exception as exc:  # noqa: BLE001 - every sign-in failure becomes a FAIL line
+        detail = str(exc) if isinstance(exc, ModelError) else safe_error(exc)
+        lines.append(CheckLine(False, "Sign-in", f"KAKO_ANTHROPIC_API_KEY: {detail}"))
+        return lines
+    lines.append(CheckLine(True, "Sign-in", f"API key accepted ({name} is available)"))
+    lines.extend(_check_calls(settings, backend))
     return lines
 
 
@@ -260,7 +418,7 @@ def _tool_json(tool: ToolSpec) -> dict[str, Any]:
     }
 
 
-def _retry_after(exc: APIStatusError) -> float | None:
+def _retry_after(exc: APIStatusError | anthropic.APIStatusError) -> float | None:
     """Seconds the service asked us to wait, from `retry-after-ms` or `retry-after`."""
     headers = exc.response.headers
     for name, scale in (("retry-after-ms", 1000.0), ("retry-after", 1.0)):
@@ -354,15 +512,195 @@ class FoundryChat:
         )
 
 
+# Claude's stop reasons in the words `ChatReply.finish_reason` has used since Foundry.
+_CLAUDE_FINISH: Final = {"end_turn": "stop", "tool_use": "tool_calls", "max_tokens": "length"}
+
+
+def _claude_tool(tool: ToolSpec) -> dict[str, Any]:
+    return {
+        "name": tool.name,
+        "description": tool.description,
+        "input_schema": tool.parameters,
+        "strict": tool.strict,
+    }
+
+
+def _claude_assistant(message: Message) -> list[Block]:
+    """An assistant message's content blocks: as Claude wrote them when the reply came from this
+    loop (thinking blocks included, unchanged), otherwise its words and tool calls."""
+    if message.blocks:
+        return [dict(b) for b in message.blocks]
+    content: list[Block] = []
+    if message.content:
+        content.append({"type": "text", "text": message.content})
+    for call in message.tool_calls:
+        try:
+            arguments = json.loads(call.arguments or "{}")
+        except json.JSONDecodeError:
+            arguments = {}
+        content.append(
+            {
+                "type": "tool_use",
+                "id": call.id,
+                "name": call.name,
+                "input": arguments if isinstance(arguments, dict) else {},
+            }
+        )
+    return content
+
+
+def claude_messages(messages: tuple[Message, ...]) -> tuple[list[Block], list[dict[str, Any]]]:
+    """The system prompt as blocks, and the rest as Claude's turns: tool results go in a user
+    turn, and turns of the same role are joined, tool results first, as the API requires. The
+    system prompt carries a cache breakpoint, so every call of a turn reads it from the cache."""
+    system: list[Block] = []
+    turns: list[dict[str, Any]] = []
+
+    def add(role: str, blocks: list[Block]) -> None:
+        if not blocks:
+            return
+        if turns and turns[-1]["role"] == role:
+            turns[-1]["content"].extend(blocks)
+        else:
+            turns.append({"role": role, "content": blocks})
+
+    for index, message in enumerate(messages):
+        if message.role == "system":
+            if index != 0:
+                raise ModelError("a system message must come first")
+            if message.content:
+                system.append({"type": "text", "text": message.content})
+        elif message.role == "assistant":
+            add("assistant", _claude_assistant(message))
+        elif message.role == "tool":
+            add(
+                "user",
+                [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": message.tool_call_id or "",
+                        "content": message.content or "",
+                    }
+                ],
+            )
+        elif message.content:
+            add("user", [{"type": "text", "text": message.content}])
+    if system:
+        system[-1]["cache_control"] = dict(CLAUDE_CACHE)
+    return system, turns
+
+
+def _claude_block(block: Any) -> Block | None:
+    """One content block of a reply as the plain value to send back, or None for a kind Kako
+    never asks for."""
+    if block.type == "thinking":
+        return {"type": "thinking", "thinking": block.thinking, "signature": block.signature}
+    if block.type == "redacted_thinking":
+        return {"type": "redacted_thinking", "data": block.data}
+    if block.type == "text":
+        return {"type": "text", "text": block.text}
+    if block.type == "tool_use":
+        return {"type": "tool_use", "id": block.id, "name": block.name, "input": block.input}
+    return None
+
+
+class ClaudeChat:
+    """`ChatBackend` on Claude's Messages API, with Kako's own key. The SDK's own retries are off:
+    the model manager retries, so every attempt is logged.
+
+    Each request: the system prompt with a cache breakpoint, and automatic caching of the turns
+    after it; adaptive thinking (always on) at the tier's effort, its blocks sent back unchanged;
+    tool choice `auto`, since forced tool use is refused by Claude's current models (the tool loop
+    sends an empty reply back once and refuses a tool not on offer, so `required` stays enforced in
+    code); strict tools, so arguments match their schema. No server-side refusal fallback: a call
+    is answered by the model it names, or comes back refused (`finish_reason` "refusal")."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        http_client: httpx2.AsyncClient | None = None,
+    ) -> None:
+        problem = claude_models_problem(settings)
+        if problem is not None:
+            raise ModelError(problem)
+        self._settings = settings
+        self._client = anthropic.AsyncAnthropic(
+            api_key=_claude_key(settings),
+            base_url=settings.anthropic_base_url,
+            max_retries=0,
+            timeout=settings.model_timeout_seconds,
+            http_client=http_client,
+            open_telemetry=False,
+        )
+
+    @property
+    def replays(self) -> bool:
+        return False
+
+    async def chat(self, request: ChatRequest, *, deployment: str, key: str) -> ChatReply:
+        del key  # only recordings name calls
+        system, turns = claude_messages(request.messages)
+        params: dict[str, Any] = {
+            "model": deployment,
+            "max_tokens": request.max_output_tokens,
+            "messages": turns,
+            "thinking": CLAUDE_THINKING,
+            "output_config": {"effort": self._settings.claude_effort(request.tier)},
+            "cache_control": CLAUDE_CACHE,
+            "betas": list(CLAUDE_BETAS),
+        }
+        if system:
+            params["system"] = system
+        if request.tools and request.tool_choice != "none":
+            params["tools"] = [_claude_tool(t) for t in request.tools]
+            params["tool_choice"] = {"type": "auto"}
+        started = time.perf_counter()
+        try:
+            response = await self._client.beta.messages.create(**params)
+        except anthropic.AnthropicError as exc:
+            raise _claude_error(exc) from exc
+        latency_ms = round((time.perf_counter() - started) * 1000)
+        blocks = tuple(b for b in (_claude_block(c) for c in response.content) if b is not None)
+        calls = tuple(
+            ToolCall(id=b["id"], name=b["name"], arguments=json.dumps(b["input"]))
+            for b in blocks
+            if b["type"] == "tool_use"
+        )
+        text = "".join(b["text"] for b in blocks if b["type"] == "text")
+        usage = response.usage
+        written = usage.cache_creation_input_tokens or 0
+        cached = usage.cache_read_input_tokens or 0
+        stop = str(response.stop_reason)
+        return ChatReply(
+            deployment=str(response.model or deployment),
+            text=text.strip(),
+            tool_calls=calls,
+            input_tokens=usage.input_tokens + written + cached,
+            output_tokens=usage.output_tokens,
+            cached_tokens=cached,
+            cache_write_tokens=written,
+            finish_reason=_CLAUDE_FINISH.get(stop, stop),
+            latency_ms=latency_ms,
+            blocks=blocks,
+        )
+
+
 def chat_backend(settings: Settings) -> ChatBackend:
-    """The backend `KAKO_MODEL_MODE` asks for."""
-    if settings.model_mode == "live":
+    """The backend `KAKO_MODEL_MODE` and `KAKO_MODEL_PROVIDER` ask for."""
+
+    def live() -> ChatBackend:
+        if settings.model_provider == "anthropic":
+            return ClaudeChat(settings)
         return FoundryChat(settings)
+
+    if settings.model_mode == "live":
+        return live()
     if settings.recorded_responses is None:
         raise ModelError(f"KAKO_MODEL_MODE={settings.model_mode} needs KAKO_RECORDED_RESPONSES")
     if settings.model_mode == "replay":
         return ReplayBackend(settings.recorded_responses, strict=settings.replay_strict)
-    return RecordingBackend(FoundryChat(settings), settings.recorded_responses)
+    return RecordingBackend(live(), settings.recorded_responses)
 
 
 def utc_day_start(now: datetime) -> datetime:
@@ -430,6 +768,7 @@ class ModelManager:
         reply: ChatReply | None = None,
         latency_ms: int = 0,
         prices: tuple[Decimal, Decimal, Decimal] | None = None,
+        write_price: Decimal | None = None,
         charge: tuple[int, Decimal] | None = None,
         prompts: tuple[PromptVersion, ...] = (),
     ) -> Decimal:
@@ -443,6 +782,8 @@ class ModelManager:
                 reply.input_tokens,
                 reply.cached_tokens,
                 reply.output_tokens,
+                cache_write_tokens=reply.cache_write_tokens,
+                cache_write_price=write_price,
             )
         await self._log.write(
             LlmCallRecord(
@@ -464,8 +805,11 @@ class ModelManager:
         return cost
 
     def _worst_cost(self, request: ChatRequest) -> Decimal:
-        """The most a call could cost: its whole input uncached, its whole output cap used."""
+        """The most a call could cost: its whole input uncached (or written to the cache, which
+        costs more on Claude), its whole output cap used."""
         price_in, _, price_out = self._settings.prices(request.tier)
+        if self._settings.model_provider == "anthropic":
+            price_in = max(price_in, self._settings.cache_write_price(request.tier))
         return cost_usd(
             (price_in, price_in, price_out),
             request.estimated_input_tokens(),
@@ -522,6 +866,7 @@ class ModelManager:
         failed attempt."""
         deployment = self._deployment(request.tier)
         prices = self._settings.prices(request.tier)
+        write_price = self._settings.cache_write_price(request.tier)
         attempts = 1 + self._settings.model_max_retries
         for attempt in range(1, attempts + 1):
             tokens, cost = await self._reserve(request, turn, agent, deployment)
@@ -555,7 +900,14 @@ class ModelManager:
                 raise
             try:
                 await self._record(
-                    turn, agent, deployment, "ok", reply, prices=prices, prompts=request.prompts
+                    turn,
+                    agent,
+                    deployment,
+                    "ok",
+                    reply,
+                    prices=prices,
+                    write_price=write_price,
+                    prompts=request.prompts,
                 )
             finally:
                 self._release(turn, tokens, cost)

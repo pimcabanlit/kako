@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("migrate", help="bring the database to the latest schema (Alembic)")
     commands.add_parser(
         "check-models",
-        help="settings, Entra ID sign-in, and one tiny call per Foundry deployment",
+        help="settings, sign-in, and one tiny call per model (Claude, or Foundry deployments)",
     )
 
     demo = commands.add_parser("demo", help="the synthetic demo household")
@@ -84,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
 
     record = demo_commands.add_parser(
         "record",
-        help="record one scripted session on Foundry, on an empty database and local Meko "
+        help="record one scripted session on the models, on an empty database and local Meko "
         "(KAKO_MODEL_MODE=record: it spends; log a prediction in docs/tuning-log.md first)",
     )
     record.add_argument("session", help="the session file's name, such as session-4")
@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         "test-set",
         help="the agent test set: every question a turn on the demo household, scored in code. "
         "It replays data/recorded/test-set-<architecture>.json; only KAKO_MODEL_MODE=record calls "
-        "Foundry (and records)",
+        "the models (and records)",
     )
     test_set.add_argument(
         "--architecture",
@@ -162,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         "conversations",
         help="the conversation test set: each conversation a session on the demo household, each "
         "turn scored in code. It replays data/recorded/conversations-<architecture>.json; only "
-        "KAKO_MODEL_MODE=record calls Foundry (and records)",
+        "KAKO_MODEL_MODE=record calls the models (and records)",
     )
     conversations.add_argument(
         "--architecture",
@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     dream_eval = dream_commands.add_parser(
         "eval",
         help="dreaming's labelled set on the demo household, scored in code. It replays "
-        "data/recorded/dreaming.json; only KAKO_MODEL_MODE=record calls Foundry (and records)",
+        "data/recorded/dreaming.json; only KAKO_MODEL_MODE=record calls the models (and records)",
     )
     dream_eval.add_argument("--only", help="case ids, such as d01,d03")
     dream_eval.add_argument("--household", type=uuid.UUID, help="needed when there are several")
@@ -379,7 +379,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if settings.model_mode != "record":
             print(
-                "Recording calls Foundry and spends: set KAKO_MODEL_MODE=record.", file=sys.stderr
+                "Recording calls the models and spends: set KAKO_MODEL_MODE=record.",
+                file=sys.stderr,
             )
             return 1
         return _migrate() or asyncio.run(_demo_record(args.session))
@@ -728,7 +729,7 @@ async def _demo_run(*, test_set: bool, strict: bool, without_learning: bool = Fa
     print(
         f"\nDemo mode replayed {played} session(s) from recordings: no Azure settings, no model "
         "calls. Look around with `uv run kako api` and the web app; asking new questions needs "
-        "live mode with a Foundry deployment."
+        "live mode with a model key (KAKO_ANTHROPIC_API_KEY)."
     )
     return 0
 
@@ -1223,7 +1224,7 @@ async def _ask(
 
 
 async def _demo_record(name: str) -> int:
-    """One scripted session on Foundry, recorded: on an empty database, the story loaded without
+    """One scripted session on the models, recorded: on an empty database, the story loaded without
     the rows the sessions write, the sessions before it replayed from their recordings, then each
     of its turns and approvals as demo mode plays them."""
     from kako.agents.ask import render_answer
@@ -1345,7 +1346,7 @@ async def _conversations(
     if settings.meko_target != "local":
         print("The conversation set runs on local Meko only (MEKO_MCP_URL).", file=sys.stderr)
         return 1
-    # It replays unless asked to record, as the test set does: only record calls Foundry.
+    # It replays unless asked to record, as the test set does: only record calls the models.
     settings = settings.model_copy(
         update={
             "model_mode": "record" if settings.model_mode == "record" else "replay",
@@ -1356,7 +1357,7 @@ async def _conversations(
     recording = settings.recorded_responses
     if settings.model_mode == "replay" and (recording is None or not recording.exists()):
         print(
-            f"No recording yet ({recording}): KAKO_MODEL_MODE=record makes one on Foundry "
+            f"No recording yet ({recording}): KAKO_MODEL_MODE=record makes one on the models "
             "(it spends: log a prediction in docs/tuning-log.md first).",
             file=sys.stderr,
         )
@@ -1417,7 +1418,7 @@ async def _conversations(
 
 
 def settings_for_test_set(settings: Settings, architecture: str) -> Settings:
-    """The test set replays unless asked to record: a whole run on Foundry costs real money, so
+    """The test set replays unless asked to record: a whole run on the models costs real money, so
     `live` (the default mode) replays too, and only `KAKO_MODEL_MODE=record` calls the model."""
     from kako.evals.questions import TEST_SET
 

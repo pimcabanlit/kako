@@ -131,7 +131,7 @@ async def test_a_turn_writes_its_calls_and_steps(
         ("debt", "ok", session, seed),
         ("debt", "ok", session, seed),
     ]
-    assert rows[1]["cost_usd"] == Decimal("0.000350")  # 1,000 x 0.25 + 50 x 2.00 per million
+    assert rows[1]["cost_usd"] == Decimal("0.000125")  # 1,000 x 0.10 + 50 x 0.50 per million
     # Each call names the prompts it ran with, by name, with the SHA-256 of each text.
     assert [r["prompts"] for r in rows] == [
         {
@@ -149,7 +149,8 @@ async def test_a_refused_call_is_logged(migrated: AsyncEngine, make_settings: Ma
     log = DbLlmLog(migrated)
     await log.write(_record("0.999000", at=datetime.now(UTC)))
     models = ModelManager(
-        make_settings(model_fast="kako-fast", daily_spend_cap_usd="1"),
+        # gpt-5-mini's output price: at Haiku's, 1,000 tokens would still fit under the cap.
+        make_settings(model_fast="kako-fast", daily_spend_cap_usd="1", price_fast_output="2.00"),
         ScriptedBackend({"t/x/1": says("never")}),
         log,
     )

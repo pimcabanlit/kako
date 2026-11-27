@@ -40,7 +40,7 @@ PEOPLE = frozenset(p.key for p in read_demo().people)
 
 @pytest.fixture
 def demo_env(test_database_url: str, test_meko_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Only the database and local Meko: no Foundry endpoint, deployment or Azure sign-in."""
+    """Only the database and local Meko: no model key, Foundry endpoint or Azure sign-in."""
     for name in list(os.environ):
         if name.startswith("AZURE_"):
             monkeypatch.delenv(name)
@@ -48,9 +48,8 @@ def demo_env(test_database_url: str, test_meko_url: str, monkeypatch: pytest.Mon
     monkeypatch.setenv("MEKO_MCP_URL", test_meko_url)
     get_settings.cache_clear()
     settings = get_settings()
+    assert settings.anthropic_api_key is None
     assert settings.foundry_endpoint is None
-    assert settings.model_strong is None
-    assert settings.model_fast is None
 
 
 async def test_demo_run_replays_session_2_and_the_test_set(
@@ -314,7 +313,7 @@ async def test_demo_record_refuses_before_it_could_spend(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    """Recording calls Foundry, so it is asked for by name, never overwrites a past run, and needs
+    """Recording calls a model, so it is asked for by name, never overwrites a past run, and needs
     an empty database; none of these refusals reaches a model."""
     assert await asyncio.to_thread(_main, ["demo", "record", "session-4"]) == 1
     assert "set KAKO_MODEL_MODE=record" in capsys.readouterr().err
