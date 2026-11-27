@@ -163,8 +163,8 @@ def test_the_saved_test_set_runs() -> None:
     assert single is not None
     assert specialists.architecture == "specialists"
     assert specialists.questions == 22
-    assert specialists.score == Decimal("0.9329")
-    assert specialists.checks_passed == 95
+    assert specialists.score == Decimal("0.9221")
+    assert specialists.checks_passed == 90
     assert single.score == Decimal("0.9071")
     assert set(specialists.scores) == {f"q{n:02}" for n in range(1, 23)}
     assert read_dreaming_run() is not None
@@ -253,10 +253,10 @@ def test_the_saved_preference_effect_reads_back() -> None:
     assert effect is not None
     assert effect.preference == PREFERENCE
     assert [q.id for q in effect.questions] == ["q10", "q12", "q16", "q21"]
-    assert effect.with_side.score == Decimal("0.8143")
-    assert effect.without_side.score == Decimal("0.5929")
-    assert effect.with_side.behaviour == Decimal("0.8125")
-    assert effect.without_side.behaviour == Decimal("0.7292")
+    assert effect.with_side.score == Decimal("0.8572")
+    assert effect.without_side.score == Decimal("0.7072")
+    assert effect.with_side.behaviour == Decimal("0.8750")
+    assert effect.without_side.behaviour == Decimal("0.8750")
     assert all(q.cited_without is False for q in effect.questions)
 
 

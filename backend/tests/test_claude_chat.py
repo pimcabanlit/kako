@@ -524,3 +524,7 @@ def test_claude_tools_are_strict_only_where_structured() -> None:
     assert _claude_tool(ToolSpec("nested", "", nested))["strict"] is True
     assert _claude_tool(ToolSpec("enum", "", enum))["strict"] is True
     assert _claude_tool(ToolSpec("loose", "", enum, strict=False))["strict"] is False
+    capped = {**nested, "properties": {"items": {**nested["properties"]["items"], "maxItems": 3}}}
+    assert (
+        _claude_tool(ToolSpec("capped", "", capped))["strict"] is False
+    )  # Claude refuses maxItems

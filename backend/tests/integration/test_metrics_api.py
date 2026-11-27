@@ -346,15 +346,15 @@ async def test_the_metrics_from_stored_rows(
     assert calls["memory_add"]["free"] == 10_000
     assert "datapack_metrics" not in calls
 
-    assert found["test_set"]["specialists"]["score_pct"] == "93.3"
+    assert found["test_set"]["specialists"]["score_pct"] == "92.2"
     assert found["test_set"]["single"]["score_pct"] == "90.7"
     preference = found["preference"]
     assert preference["measured"] is True
     assert [q["id"] for q in preference["questions"]] == ["q10", "q12", "q16", "q21"]
     assert preference["questions"][0]["message"].startswith("Should we throw everything")
     assert (preference["with_side"]["score_pct"], preference["without_side"]["score_pct"]) == (
-        "81.4",
-        "59.3",
+        "85.7",
+        "70.7",
     )
 
 

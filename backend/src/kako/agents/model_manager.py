@@ -533,16 +533,47 @@ def _structured(schema: Any, *, top: bool = True) -> bool:
     return any(_structured(c, top=False) for c in children)
 
 
+# Schema keywords Claude's strict mode refuses (HTTP 400): a tool that uses one is sent loose.
+_CLAUDE_UNSTRICT: Final = frozenset(
+    {
+        "maxItems",
+        "minLength",
+        "maxLength",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "oneOf",
+    }
+)
+
+
+def _strict_unsupported(schema: Any) -> bool:
+    """Whether a schema uses a keyword Claude's strict mode refuses, or `minItems` above 1."""
+    if isinstance(schema, list):
+        return any(_strict_unsupported(s) for s in schema)
+    if not isinstance(schema, dict):
+        return False
+    if _CLAUDE_UNSTRICT & schema.keys() or schema.get("minItems", 0) > 1:
+        return True
+    return any(_strict_unsupported(v) for v in schema.values())
+
+
 def _claude_tool(tool: ToolSpec) -> dict[str, Any]:
     """A tool as Claude takes it. Strict only where the schema is structured: Claude compiles every
     strict schema of a request into one grammar and refuses one too large ("The compiled grammar
     is too large"), which the orchestrator's fifteen tools reach (tuning-log entry 17). A tool of
-    plain values gains little from it, and every tool checks its arguments in code anyway."""
+    plain values gains little from it, and a schema with a keyword strict mode refuses (dreaming's
+    `maxItems`) goes loose, unchanged; every tool checks its arguments in code anyway."""
+    strict = (
+        tool.strict and _structured(tool.parameters) and not _strict_unsupported(tool.parameters)
+    )
     return {
         "name": tool.name,
         "description": tool.description,
         "input_schema": tool.parameters,
-        "strict": tool.strict and _structured(tool.parameters),
+        "strict": strict,
     }
 
 

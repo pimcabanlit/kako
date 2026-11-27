@@ -673,6 +673,19 @@ async def _demo_run(*, test_set: bool, strict: bool, without_learning: bool = Fa
             print(_drift(session.title, replayed.calls, replayed.drifted))
             played += 1
         learned = await learning_step()
+        # After the sessions, so their turns replay against Meko as recorded, and before the test
+        # set, which is recorded on a household demo mode has set up, upkeep included: Kako's own
+        # memory of each fact, the replaced ones in the past tense (tuning-log entry 17).
+        kept = await keep_up_with(engine, settings, prepared.household_id, now=datetime.now(UTC))
+        print(
+            f"\nMeko upkeep: {kept.added} memories added, {kept.rewritten} rewritten, "
+            f"{kept.deleted} deleted"
+            + (f", {kept.shared} shared" if kept.shared else "")
+            + (f", {kept.recapped} session recaps added" if kept.recapped else "")
+            + (f", {kept.waiting} left for `kako meko sync`." if kept.waiting else ".")
+        )
+        for problem in kept.problems:
+            print(f"- {problem}", file=sys.stderr)
         if test_set:
             questions = read_test_set()
             for architecture in ("specialists", "single"):
@@ -700,18 +713,6 @@ async def _demo_run(*, test_set: bool, strict: bool, without_learning: bool = Fa
                 print(
                     _drift(f"Agent test set ({architecture})", data["model_calls"], backend.drifted)
                 )
-        # Last, so this run's turns replay against Meko as recorded: Kako's own memory of each
-        # fact, the replaced ones in the past tense.
-        kept = await keep_up_with(engine, settings, prepared.household_id, now=datetime.now(UTC))
-        print(
-            f"\nMeko upkeep: {kept.added} memories added, {kept.rewritten} rewritten, "
-            f"{kept.deleted} deleted"
-            + (f", {kept.shared} shared" if kept.shared else "")
-            + (f", {kept.recapped} session recaps added" if kept.recapped else "")
-            + (f", {kept.waiting} left for `kako meko sync`." if kept.waiting else ".")
-        )
-        for problem in kept.problems:
-            print(f"- {problem}", file=sys.stderr)
     except (
         DemoModeError,
         DemoLoadError,
