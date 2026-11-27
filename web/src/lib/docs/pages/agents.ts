@@ -31,7 +31,7 @@ export const AGENTS: DocPage = {
         },
         {
           kind: "p",
-          text: "The orchestrator and dreaming use the stronger model deployment; the specialists a faster one, both on Azure AI Foundry. Every model call goes through one door, the model manager, which checks the turn's budget and the day's cap first.",
+          text: "The orchestrator and dreaming use the stronger model deployment; the specialists a faster one, both Claude models on Anthropic's API (Azure AI Foundry stays a setting away). Every model call goes through one door, the model manager, which checks the turn's budget and the day's cap first.",
         },
       ],
     },
@@ -175,7 +175,7 @@ export const AGENTS: DocPage = {
       blocks: [
         {
           kind: "p",
-          text: "Demo mode replays recorded model replies, keyed by turn and agent, so judges need no Azure account; a strict replay refuses a reply whose prompt has changed since it was recorded. Asking new questions needs live models.",
+          text: "Demo mode replays recorded model replies, keyed by turn and agent, so judges need no key or Azure account; a strict replay refuses a reply whose prompt has changed since it was recorded. Asking new questions needs live models.",
         },
       ],
     },

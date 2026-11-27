@@ -21,7 +21,7 @@ savings, goals) as tools; they read the engine's figures and a context brief bui
 knowledge base and past conversations, and propose moves. Code checks the proposals against the surplus
 and against each other; the orchestrator tries other splits through the engine and resolves conflicts in
 the open, every agent step is logged for the screen, and a **number check** blocks any figure the engine
-did not produce. Models are **Azure AI Foundry** deployments, reached only through the model manager. After each session a **dreaming** job reviews the conversation and the
+did not produce. Models are **Claude** on Anthropic's API (Azure AI Foundry deployments stay behind a setting), reached only through the model manager. After each session a **dreaming** job reviews the conversation and the
 memories Meko extracted from it, reconciles what it heard with what is known, marks what has been replaced, spots patterns, and puts
 proposals in front of the household. Approved facts become Meko memories; approved preferences and
 decisions can be promoted to the datapack's **shared knowledge**, where every specialist finds them.
@@ -49,7 +49,7 @@ flowchart LR
   end
 
   PG[(Postgres<br/>local, then AMP or Neon)]
-  AF[Azure AI Foundry<br/>OpenAI deployments]
+  AF[Claude API<br/>or Azure AI Foundry]
 
   subgraph Meko["Meko datapack (local for dev, Meko Cloud for the demo)"]
     CONV[Conversations<br/>and traces]
@@ -130,7 +130,9 @@ flowchart LR
    what-ifs and searches (the orchestrator sees all of them), so parallel specialists send the same
    requests on every run and a recorded turn replays. A final tool runs only on its own in a reply, so
    an answer rests on results the agent has read. An empty reply (no words, no tool call; seen once on
-   Foundry) is sent back once with only the final tool offered.
+   Foundry) is sent back once with only the final tool offered. On Claude, whose current models refuse
+   forced tool use, "only the final tool" is the tools offered and the loop's refusal of any other,
+   not the request's tool choice.
    Every tool call by every agent is logged as an `agent_step` (the agent, the tool, a short input and
    result, the what-if run if any), which the "agents' steps" view shows.
 6. **Reconciliation in code.** Once two or more specialists propose a move, the engine runs once more
@@ -721,13 +723,13 @@ No API of its own.
 | Fact store | `backend/src/kako/facts/` (pure rules) and `backend/src/kako/db/fact_store.py` (the writes) | The attribute catalog, snapshots (`on`, `known_at`), the validation rules, replace and retract, what an event touches |
 | Planning | `backend/src/kako/planning/` | Plans, recommendations and sources, reconciliation rules (`reconcile.py`, pure like the engine), diff, what-ifs |
 | Decisions | `backend/src/kako/decisions/` (pure) and `backend/src/kako/db/proposal_store.py` (the writes) | The fixed list of option tags, the facts a decision rests on (`assumptions.py`), and decision records written on approval with their options and assumptions; "to revisit" is F-DIFF-1 |
-| Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), the tool loop with its bounds and the step log, recorded responses, orchestrator, the four specialists, brief builder, tools, number check, prompts |
+| Agents | `backend/src/kako/agents/` | `model_manager.py` (the only module that imports a model SDK: the Anthropic SDK for Claude, with Kako's own key, or the OpenAI SDK against Azure AI Foundry, signed in with Entra ID), the tool loop with its bounds and the step log, recorded responses, orchestrator, the four specialists, brief builder, tools, number check, prompts |
 | Dreaming | `backend/src/kako/dreaming/` | The job (`job.py`), extraction (`extract.py`), the claims and the checks and classification in code (`claims.py`, `classify.py`, pure), proposals; patterns with task 4 |
 | Meko upkeep | `backend/src/kako/upkeep/` | Kako's own memory of each fact: the sentence (`sentences.py`) and the steps owed (`plan.py`), both pure; carrying them out as `kako:upkeep` (`sync.py`: after every approval, at the end of demo mode, `kako meko sync`); sharing what was approved for it, a promoted preference or a decision record (`promote.py`, `records.py`); V-13 (`check.py`, `kako meko check`) |
 | Context Gaps | `backend/src/kako/gaps/` | Which weak searches to ask about and the question (`questions.py`, pure); collecting them from Meko's search log, tying an answer, dismissing, and replaying the search once the answer is in Meko (`store.py`); `kako gaps`, `/api/v1/gaps` |
 | Meko adapter | `backend/src/kako/meko/` | One interface for every Meko call, an MCP client implementation, an in-memory fake for unit tests, the call counter and quota guard |
 | Database | `backend/src/kako/db/` | SQLAlchemy 2 async models, repositories, Alembic migrations |
-| Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, the Foundry endpoint, deployment names and their prices, budgets, demo mode |
+| Settings | `backend/src/kako/settings.py` | `pydantic-settings`: database URL, Meko URL and key, the model provider, Claude's key and efforts, the Foundry endpoint, model and deployment names and their prices, budgets, demo mode |
 | Demo data | `data/demo-household/`, `backend/src/kako/demo/` | The synthetic household as files (the seed, the approved changes, statements, documents; session scripts later), read and checked by `demo/files.py` and loaded through the fact store by `demo/load.py` (`kako demo load`) |
 
 The backend is organised by domain, with `core → domain → infrastructure`: the engine and fact rules
@@ -806,13 +808,13 @@ is planned as a second step, opt-in by setting, with `source` then saying which 
 | --- | --- | --- |
 | Meko | Local Meko (`MEKO_MCP_URL=http://127.0.0.1:7777/mcp`); in CI, the same release installed from GitHub | Meko Cloud, one datapack for the demo household |
 | Postgres | Local Postgres in cloud sessions and a CI service, a fresh database per test run | AMP in the demo datapack if the Phase 1 test passes; otherwise a free managed Postgres (Neon) |
-| Model | Azure AI Foundry deployments with a small dev budget; unit tests use a recorded fake | Azure AI Foundry |
-| Backend and web | Cloud sessions and CI | The laptop, natively on Windows (`uvicorn` and `next dev`, no Docker or WSL): the video is recorded locally against Meko Cloud, cloud Postgres and Foundry. No hosted app (Pim, Nov 17) |
+| Model | Claude on Anthropic's API (Opus 5.5 and Haiku 5.5), with a Console spend limit; unit tests use a scripted model and a fake API | Claude (the demo replays recordings) |
+| Backend and web | Cloud sessions and CI | The laptop, natively on Windows (`uvicorn` and `next dev`, no Docker or WSL): the video is recorded locally against Meko Cloud, cloud Postgres and Claude. No hosted app (Pim, Nov 17) |
 
 **Demo mode** (for judges, Pim, Nov 17). One command starts Kako against local Meko and a local
 database with the demo household, and the model manager replays **recorded model responses** instead of
-calling Foundry, so no Azure account is needed. It replays the scripted sessions only; asking new
-questions needs live mode with a Foundry deployment. The README says both plainly and gives setup steps
+calling a model, so no key or Azure account is needed. It replays the scripted sessions only; asking
+new questions needs live mode with a Claude key (`KAKO_ANTHROPIC_API_KEY`). The README says both plainly and gives setup steps
 for each. Between sessions it also plays what dreaming learns in the story (`learning.toml`): before
 session 4 it ends Session 3 and dreams over it (code finds the pattern in the three decisions of
 Sessions 1 to 3; no model call), Mara approves the preference, Jun confirms the sharing of it and of
@@ -829,13 +831,37 @@ plain reason rather than split between the two. Everything the household decides
 the plan, the decisions, the learned preference, the comparison and the money screen are unchanged.
 The CLI keeps its own `--no-meko`.
 
+**Models** (Pim, Nov 27: Claude from now on, to save on cost; Foundry maybe later).
+`KAKO_MODEL_PROVIDER` picks where the agents' models run, and only `agents/model_manager.py` knows:
+
+- `anthropic` (the default): Claude on Anthropic's own API, Claude Opus 5.5 for the strong tier
+  (orchestrator, single agent, dreaming) and Claude Haiku 5.5 for the fast one (specialists), each a
+  setting. The key is `KAKO_ANTHROPIC_API_KEY` and nothing else: never `ANTHROPIC_API_KEY`, which
+  Claude Code signs itself in with, and the SDK is handed the key and `https://api.anthropic.com`
+  explicitly, so an `ANTHROPIC_BASE_URL` meant for another tool never redirects Kako's calls. Each
+  request: the system prompt with a cache breakpoint and automatic caching of the turns after it (a
+  turn's calls read the brief from the cache at a twentieth of the price); thinking always on, at the
+  tier's effort (`KAKO_CLAUDE_EFFORT_*`, low to start, tuned by the test sets); strict tools where the schema is structured; tool
+  choice `auto`. A reply's thinking blocks come back with it as opaque values (`ChatReply.blocks`), and
+  the tool loop sends them back unchanged with the next call of the same loop, as Claude requires; the
+  thinking-binding beta drops, rather than refuses, a block written before the loop narrowed its tools
+  to the final one. Cache reads and writes are logged and priced (writes at 1.25 times input). There is
+  no server-side refusal fallback: each call is answered by the model it names, or comes back refused.
+- `foundry`: OpenAI models as Azure AI Foundry deployments, signed in with Entra ID, as recorded up to
+  Nov 26 ([azure-setup.md](azure-setup.md)).
+
+`kako check-models` checks the provider in use: on Claude, the key against the strong model (a free
+read), then one tiny call per model with the agents' thinking settings. Recordings made on either
+replay the same way; they name the model that answered each call. [claude-setup.md](claude-setup.md)
+has the steps.
+
 **Recorded responses** (`agents/recorded.py`). A recording is a JSON file of model replies, each under
 the key of the call it answered: `<turn seed>/<agent path>/<n>`, such as `session-2:turn-1/debt#1/2`.
 Keys, not request hashes, so a turn replays in the same order on any machine, whatever ids its local
 database and local Meko gave things; each call also keeps its request's SHA-256, and a strict replay
 (the default) refuses a reply whose prompt has changed since it was recorded. `KAKO_MODEL_MODE` picks
 `live`, `record` (live, saving each reply; it costs money, so it needs Pim's yes first) or `replay`
-(no network, no Azure settings). Tests use a scripted model instead and never call Foundry.
+(no network, no key, no Azure settings). Tests use a scripted model instead and never call a model.
 
 **AMP constraints** (from Meko's AMP reference): a database is reached from outside Meko only through
 an `ingress_external` endpoint with an allow-list of `/32` source addresses chosen at create time, so the
@@ -866,7 +892,8 @@ not queried. A kept scenario branch is a record, not a second database.
 | --- | --- | --- |
 | Meko | Free tier; local Meko for development | None. The lifetime allowances below are the real limit |
 | Postgres | Local; AMP (Free) or Neon (free) for the demo | None expected |
-| Azure AI Foundry | Pay-per-token deployments (Standard or Global Standard, never Provisioned), in Kako's own resource group with a monthly budget and alerts; signed in with Entra ID, no keys; per-turn budget and daily cap; tests and demo mode use recorded responses | Usage only. The budget is set before Phase 3; cost per turn is on the metrics page |
+| Claude (Anthropic API) | Pim's monthly API credit (US$100, Nov 2026); a spend limit in the Claude Console; per-turn budget and daily cap in code; prompt caching; tests and demo mode use recorded responses | Usage only, within the credit; cost per turn is on the metrics page |
+| Azure AI Foundry | Kept behind `KAKO_MODEL_PROVIDER=foundry`: pay-per-token deployments (Standard or Global Standard, never Provisioned), in Kako's own resource group with a monthly budget and alerts; signed in with Entra ID, no keys | None while unused |
 | Hosting | None: the demo runs on the laptop for the video | None |
 | CI | GitHub Actions on a public repository | None |
 

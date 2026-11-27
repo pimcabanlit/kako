@@ -24,7 +24,7 @@ near-equal excerpts depend on the CPU), so by default the reply is replayed anyw
 whose request differed are counted and reported. `--strict` refuses them instead, as the tests on
 the recording machine do.
 
-Asking anything else needs live mode with a Foundry deployment (`kako ask`, `kako api`).
+Asking anything else needs live mode with a model key (`kako ask`, `kako api`).
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ class Prepared:
 
 
 def check_target(settings: Settings) -> None:
-    """Demo mode runs on local Meko and replays: it never spends Meko Cloud or Foundry."""
+    """Demo mode runs on local Meko and replays: it never spends Meko Cloud or a model call."""
     if settings.database_url is None:
         raise DemoModeError(
             "KAKO_DATABASE_URL is not set: point it at a local Postgres database for the demo"

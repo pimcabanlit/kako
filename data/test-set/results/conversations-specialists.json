@@ -1,0 +1,327 @@
+{
+ "architecture": "specialists",
+ "mode": "replay",
+ "run_at": "2026-11-27T03:26:02+00:00",
+ "conversations": 3,
+ "score": 1.0,
+ "checks_passed": 58,
+ "checks_total": 58,
+ "results": [
+  {
+   "id": "c01",
+   "title": "Jun's what-if",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "what if i lose my job",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'emergency fund', 'runway'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Jun's or Mara's\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Mara's or Jun's\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'whose job'",
+       "passed": true
+      }
+     ]
+    },
+    {
+     "turn": 2,
+     "by": "jun",
+     "message": "Jun",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "asked",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'job', 'emergency fund', 'runway'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'Hi Jun'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'Hello'",
+       "passed": true
+      }
+     ]
+    },
+    {
+     "turn": 3,
+     "by": "jun",
+     "message": "just give me the simulation",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "asked",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'emergency fund', 'runway'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'Hi Jun'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'Hello'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Jun's or Mara's\"",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c02",
+   "title": "Whose salary",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "My salary goes up to ₱72,000 a month from Feb 1.",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files Mara's salary",
+       "passed": true
+      },
+      {
+       "name": "says 'Mara'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Jun's salary\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'whose salary'",
+       "passed": true
+      }
+     ]
+    },
+    {
+     "turn": 2,
+     "by": "jun",
+     "message": "Mine stays the same. What does her raise change for us?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'whose salary'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Jun's or Mara's\"",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c03",
+   "title": "Go with B",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "Mara here. How hard should we pay down the credit card? Jun thinks ₱4,000 extra a month is enough and the rest can go to the emergency fund, but I'd rather clear the card fast.",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "2 to 3 options",
+       "passed": true
+      }
+     ]
+    },
+    {
+     "turn": 2,
+     "by": "jun",
+     "message": "OK, let's go with B.",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "asked",
+       "passed": true
+      },
+      {
+       "name": "options",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'B'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'which option'",
+       "passed": true
+      },
+      {
+       "name": "0 to 1 options",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

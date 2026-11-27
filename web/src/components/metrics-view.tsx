@@ -253,9 +253,10 @@ function Turns({ groups }: { groups: TurnGroup[] }) {
           </div>
           <p className="text-[12.5px] text-muted">
             {replayed > 0
-              ? `${plural(replayed, "turn")} replayed from recordings: their cost and seconds are the ones their recording took on Foundry. `
+              ? `${plural(replayed, "turn")} replayed from recordings: their cost and seconds are the ones their recording took on the model that answered it. `
               : ""}
-            Cached input tokens are billed at a tenth of the price
+            Cached input tokens are billed at a small part of the price (a tenth on Foundry, a twentieth on
+            Claude Opus)
             {household?.cached_pct ? `; ${household.cached_pct}% of the household's were cached` : ""}.
           </p>
         </>

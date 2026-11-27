@@ -28,6 +28,28 @@ from tests.conftest import MakeSettings
 ENDPOINT = "https://kako-test.openai.azure.com"
 
 
+# These tests were written for Foundry: its provider, no default model names, OpenAI's prices.
+FOUNDRY = {
+    "model_provider": "foundry",
+    "model_strong": None,
+    "model_fast": None,
+    "price_strong_input": "2.50",
+    "price_strong_cached": "0.25",
+    "price_strong_output": "15.00",
+    "price_fast_input": "0.25",
+    "price_fast_cached": "0.025",
+    "price_fast_output": "2.00",
+}
+
+
+@pytest.fixture
+def make_settings(make_settings: MakeSettings) -> MakeSettings:
+    def make(**values: object) -> Settings:
+        return make_settings(**(FOUNDRY | values))
+
+    return make
+
+
 class FakeCredential:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
@@ -135,8 +157,8 @@ def test_cli_exits_1_on_a_fail(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr("kako.cli.get_settings", lambda: Settings(_env_file=None))  # type: ignore[call-arg]
-    assert main(["check-models"]) == 1
-    assert "[FAIL] Settings: missing KAKO_FOUNDRY_ENDPOINT" in capsys.readouterr().out
+    assert main(["check-models"]) == 1  # Claude by default, and no key
+    assert "[FAIL] Settings: missing KAKO_ANTHROPIC_API_KEY" in capsys.readouterr().out
 
 
 def test_credential_for_kakos_app(make_settings: MakeSettings) -> None:

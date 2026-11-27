@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  MEKO_VERSION: 1.20261116.0
+  MEKO_VERSION: 1.20261126.1
 
 jobs:
   backend:

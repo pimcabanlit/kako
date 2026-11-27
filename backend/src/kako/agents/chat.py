@@ -1,8 +1,8 @@
 """What one model call sends and gets back, in plain values: no SDK types (REVIEW.md rule 10).
 
-The model manager turns these into a Chat Completions request on Azure AI Foundry, or replays them
-from a recording. Requests have a stable digest, so a recording can tell when the prompt it was
-made for has changed.
+The model manager turns these into a Messages API request on Claude (the default provider) or a
+Chat Completions request on Azure AI Foundry, or replays them from a recording. Requests have a
+stable digest, so a recording can tell when the prompt it was made for has changed.
 """
 
 from __future__ import annotations
@@ -20,6 +20,11 @@ CallAgent = Literal["orchestrator", "budget", "debt", "savings", "goals", "dream
 Role = Literal["system", "user", "assistant", "tool"]
 ToolChoice = Literal["auto", "required", "none"]
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
+ClaudeEffort = Literal["low", "medium", "high", "xhigh", "max"]
+# A reply's content as the provider wrote it, as JSON values: Claude's thinking blocks (opaque,
+# signed) with its text and tool calls in their order. Sent back unchanged with the next request
+# of the same loop, as Claude requires; never read or shown. Empty for Foundry.
+Block = dict[str, Any]
 
 TIERS: Final = ("strong", "fast")
 
@@ -70,13 +75,16 @@ class Message:
     content: str | None = None
     tool_calls: tuple[ToolCall, ...] = ()
     tool_call_id: str | None = None  # for role "tool": the call this answers
+    # An assistant message's content as the provider wrote it (`Block`), when it came from a
+    # reply in this loop: sent instead of content and tool_calls, which say the same.
+    blocks: tuple[Block, ...] = ()
 
 
 @dataclass(frozen=True)
 class ChatRequest:
     tier: Tier
     messages: tuple[Message, ...]
-    max_output_tokens: int  # GPT-5 models spend hidden reasoning from this too
+    max_output_tokens: int  # hidden reasoning (thinking) is spent from this too
     tools: tuple[ToolSpec, ...] = ()
     tool_choice: ToolChoice = "auto"
     # The versions of the prompts the system message was built from: logged on `llm_call`, never
@@ -92,10 +100,7 @@ class ChatRequest:
     def estimated_input_tokens(self) -> int:
         """A high estimate of the input tokens: every message and tool definition, in UTF-8
         bytes (so non-Latin text and emoji count more), plus a fixed overhead for each."""
-        size = sum(
-            _bytes(m.content or "") + sum(_bytes(c.name + c.arguments) for c in m.tool_calls)
-            for m in self.messages
-        )
+        size = sum(_message_bytes(m) for m in self.messages)
         size += sum(_bytes(t.name + t.description + json.dumps(t.parameters)) for t in self.tools)
         overhead = MESSAGE_OVERHEAD * len(self.messages) + TOOL_OVERHEAD * len(self.tools)
         return estimate_tokens(size) + overhead
@@ -115,6 +120,9 @@ class ChatReply:
     cached_tokens: int = 0  # part of input_tokens, billed at the cached price
     finish_reason: str = "stop"
     latency_ms: int = 0
+    # Part of input_tokens written to the prompt cache, billed at the cache-write price (Claude).
+    cache_write_tokens: int = 0
+    blocks: tuple[Block, ...] = ()  # the reply as the provider wrote it, to send back
 
     @property
     def total_tokens(self) -> int:
@@ -147,20 +155,24 @@ def request_to_json(request: ChatRequest) -> dict[str, Any]:
             }
             for t in request.tools
         ],
-        "messages": [
-            {
-                "role": m.role,
-                "content": m.content,
-                "tool_calls": [_call_json(c) for c in m.tool_calls],
-                "tool_call_id": m.tool_call_id,
-            }
-            for m in request.messages
-        ],
+        "messages": [_message_json(m) for m in request.messages],
     }
 
 
+def _message_json(message: Message) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "role": message.role,
+        "content": message.content,
+        "tool_calls": [_call_json(c) for c in message.tool_calls],
+        "tool_call_id": message.tool_call_id,
+    }
+    if message.blocks:  # only when present, so requests recorded before them keep their digest
+        out["blocks"] = list(message.blocks)
+    return out
+
+
 def reply_to_json(reply: ChatReply) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
         "deployment": reply.deployment,
         "text": reply.text,
         "tool_calls": [_call_json(c) for c in reply.tool_calls],
@@ -170,6 +182,11 @@ def reply_to_json(reply: ChatReply) -> dict[str, Any]:
         "finish_reason": reply.finish_reason,
         "latency_ms": reply.latency_ms,
     }
+    if reply.cache_write_tokens:
+        out["cache_write_tokens"] = reply.cache_write_tokens
+    if reply.blocks:
+        out["blocks"] = list(reply.blocks)
+    return out
 
 
 def reply_from_json(raw: dict[str, Any]) -> ChatReply:
@@ -182,7 +199,15 @@ def reply_from_json(raw: dict[str, Any]) -> ChatReply:
         cached_tokens=int(raw.get("cached_tokens", 0)),
         finish_reason=str(raw.get("finish_reason", "stop")),
         latency_ms=int(raw.get("latency_ms", 0)),
+        cache_write_tokens=int(raw.get("cache_write_tokens", 0)),
+        blocks=tuple(_block_from(b) for b in raw.get("blocks", [])),
     )
+
+
+def _block_from(raw: Any) -> Block:
+    if not isinstance(raw, dict) or not isinstance(raw.get("type"), str):
+        raise ValueError("a recorded content block must be an object with a type")
+    return dict(raw)
 
 
 MESSAGE_OVERHEAD: Final = 8  # tokens a message's role and framing take
@@ -191,6 +216,14 @@ TOOL_OVERHEAD: Final = 16  # and a tool definition's
 
 def _bytes(text: str) -> int:
     return len(text.encode("utf-8"))
+
+
+def _message_bytes(message: Message) -> int:
+    if message.blocks:  # the same words and calls, with the thinking blocks besides
+        return sum(_bytes(canonical_json(b)) for b in message.blocks)
+    return _bytes(message.content or "") + sum(
+        _bytes(c.name + c.arguments) for c in message.tool_calls
+    )
 
 
 def estimate_tokens(size: int) -> int:

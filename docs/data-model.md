@@ -1,4 +1,4 @@
-# Kako data model v0.21
+# Kako data model v0.22
 
 The data contract for Kako: every table the backend keeps in Postgres, what Kako keeps in Meko and how
 the two link, the calculations the engine makes, the rules that guard them, and a worked example.
@@ -65,7 +65,9 @@ item 10): a turn's what-if may change any fact for its run or add new items, kep
 `scenario_override` rows like its allocations (never facts; a new item has no entity, so it is named in
 the scenario's name and its own figures are left out of the stored run); and what the number check
 (V-10) also matches: a calculation, another date's figures, history lines and a cited document. No
-schema change.
+schema change. v0.22 (Nov 27) is Claude as the models' provider (Phase 5a, item 11): `llm_call` names
+the Claude model or the Foundry deployment that answered, its input counts what was read from and
+written to the prompt cache, and its cost prices cache writes at their own rate. No schema change.
 
 How the tables are used at run time is in [architecture.md](architecture.md); the order of work is in
 [build-plan.md](build-plan.md).
@@ -747,12 +749,12 @@ daily cap sums real calls only (`recorded_replay` false, `created_at` since midn
 | `session_id` | UUID FK, null | Null outside a session (such as `check-models`) |
 | `meko_turn_seed` | TEXT, null | The turn it served |
 | `agent` | TEXT | `orchestrator`, `budget`, `debt`, `savings`, `goals`, `dreaming`, `system` |
-| `deployment` | TEXT | The Foundry deployment name, from settings |
-| `input_tokens` | INT | |
+| `deployment` | TEXT | The model that answered (a Claude model, or a Foundry deployment name), as its reply names it; the tier's setting for a call that got no reply |
+| `input_tokens` | INT | All of the call's input: uncached, read from the prompt cache, and (Claude) written to it |
 | `output_tokens` | INT | |
-| `cached_tokens` | INT | |
+| `cached_tokens` | INT | Part of `input_tokens` read from the prompt cache |
 | `latency_ms` | INT | |
-| `cost_usd` | NUMERIC(12,6) | From the per-token prices in settings at the time of the call |
+| `cost_usd` | NUMERIC(12,6) | From the per-token prices in settings at the time of the call: input, cache reads, cache writes (Claude) and output |
 | `outcome` | TEXT | `ok`, `error`, `budget_exceeded` |
 | `recorded_replay` | BOOLEAN | A recorded response replayed (tests, demo mode), not a real call |
 | `created_at` | TIMESTAMPTZ | |

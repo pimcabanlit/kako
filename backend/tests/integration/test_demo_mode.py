@@ -40,7 +40,7 @@ PEOPLE = frozenset(p.key for p in read_demo().people)
 
 @pytest.fixture
 def demo_env(test_database_url: str, test_meko_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Only the database and local Meko: no Foundry endpoint, deployment or Azure sign-in."""
+    """Only the database and local Meko: no model key, Foundry endpoint or Azure sign-in."""
     for name in list(os.environ):
         if name.startswith("AZURE_"):
             monkeypatch.delenv(name)
@@ -48,9 +48,8 @@ def demo_env(test_database_url: str, test_meko_url: str, monkeypatch: pytest.Mon
     monkeypatch.setenv("MEKO_MCP_URL", test_meko_url)
     get_settings.cache_clear()
     settings = get_settings()
+    assert settings.anthropic_api_key is None
     assert settings.foundry_endpoint is None
-    assert settings.model_strong is None
-    assert settings.model_fast is None
 
 
 async def test_demo_run_replays_session_2_and_the_test_set(
@@ -73,8 +72,8 @@ async def _demo_run_twice(migrated: AsyncEngine, capsys: pytest.CaptureFixture[s
     out = capsys.readouterr().out
     assert "Villanueva household: loaded with its whole story; 16 documents" in out
     assert "== Session 2, turn s2:t1 ==" in out
-    assert "A: all extra on the card" in out
-    assert "B: Jun's split: Put ₱4,000.00 extra a month on the credit card" in out
+    assert "A: all surplus on the card: ₱9,050.00 a month on the card" in out
+    assert "B: ₱4,000 extra on the card, rest to the fund: Card paid off in 17 months" in out
     # Session 4: the new job proposed, approved by Mara in the story, then the three-part replan.
     assert "== Session 4, turn s4:t1 ==" in out
     assert "replace_fact: Mara's salary: income.monthly_net = ₱68,000.00 from Dec 1, 2026" in out
@@ -194,8 +193,8 @@ async def test_a_request_that_differs_is_reported_or_refused(
     replayed = await replay_session(migrated, settings, demo, session, household_id)
     # The planted call at least: on a machine whose Meko ranks the excerpts differently, more.
     assert "s2:t1/orchestrator/1" in replayed.drifted
-    assert replayed.calls == 6
-    assert [a.answer.options[0].label for a in replayed.asked] == ["A: all extra on the card"]
+    assert replayed.calls == 7
+    assert [a.answer.options[0].label for a in replayed.asked] == ["A: all surplus on the card"]
     with pytest.raises(RecordingError, match="'s2:t1/orchestrator/1' has changed"):
         await replay_session(migrated, settings, demo, session, household_id, strict=True)
 
@@ -314,7 +313,7 @@ async def test_demo_record_refuses_before_it_could_spend(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    """Recording calls Foundry, so it is asked for by name, never overwrites a past run, and needs
+    """Recording calls a model, so it is asked for by name, never overwrites a past run, and needs
     an empty database; none of these refusals reaches a model."""
     assert await asyncio.to_thread(_main, ["demo", "record", "session-4"]) == 1
     assert "set KAKO_MODEL_MODE=record" in capsys.readouterr().err

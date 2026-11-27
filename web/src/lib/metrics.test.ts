@@ -41,7 +41,8 @@ test("words for allowances, runs and gap outcomes", () => {
   assert.equal(allowanceWords("context_search"), "Context searches");
   assert.equal(allowanceWords("something_new"), "something_new");
   assert.equal(modeWords("replay"), "replayed from its recording");
-  assert.equal(modeWords("record"), "recorded on Foundry");
+  assert.equal(modeWords("record"), "recorded from real model calls");
+  assert.equal(modeWords("live"), "live");
   assert.deepEqual(outcomeWords("improved"), { label: "Improved", tone: "emerald" });
   assert.deepEqual(outcomeWords(null), { label: "Not replayed yet", tone: "plain" });
 });

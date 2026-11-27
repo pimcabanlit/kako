@@ -1,15 +1,15 @@
 {
- "mode": "record",
- "at": "2026-11-24T11:45:48.844855+00:00",
+ "mode": "replay",
+ "at": "2026-11-27T03:04:11.324355+00:00",
  "expected": 15,
  "found": 15,
  "score": "1.000",
  "wrong": 0,
  "unquoted": 0,
  "passed": true,
- "input_tokens": 34296,
- "output_tokens": 2029,
- "cost_usd": "0.074996",
+ "input_tokens": 53631,
+ "output_tokens": 2122,
+ "cost_usd": "0",
  "results": [
   {
    "id": "d01",
@@ -24,7 +24,7 @@
    "findings": [
     {
      "outcome": "new",
-     "shown": "Life event (new_job) on Dec 1, 2026: I got a new job",
+     "shown": "Life event (new_job) on Dec 1, 2026: Mara got a new job, starting Dec 1",
      "reason": ""
     },
     {
@@ -48,7 +48,7 @@
    "findings": [
     {
      "outcome": "new",
-     "shown": "Life event (raise) on Jan 1, 2027: my take-home pay goes up to ₱51,000 a month",
+     "shown": "Life event (raise) on Jan 1, 2027: take-home pay goes up to ₱51,000 a month",
      "reason": ""
     },
     {

@@ -8,7 +8,7 @@ check. Then the turn goes to Meko with the steps taken (`plan`), why (`reasoning
 what Kako stored (`metadata`), so Meko's trace and Kako's tables say the same thing. Every model
 call goes to `llm_call`, every tool call to `agent_step` and every Meko call to `meko_call`.
 
-Which model answers is `KAKO_MODEL_MODE`'s choice: live Foundry, recording a live run to
+Which model answers is `KAKO_MODEL_MODE`'s choice: live Claude (or Foundry), recording a live run to
 `KAKO_RECORDED_RESPONSES`, or replaying that file with no network.
 """
 

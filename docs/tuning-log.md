@@ -2,7 +2,8 @@
 
 A short record of each real model run that changes a prompt, a tool or a bound: what we expected,
 what happened, and why. **The prediction is written before the run**, so a surprise is visible as a
-surprise and not explained after the fact. Scripted-model tests don't go here; real Foundry runs do.
+surprise and not explained after the fact. Scripted-model tests don't go here; real model runs
+(Foundry up to Nov 26, Claude from Nov 27) do.
 
 Each entry: the date (Manila time), the change being tested, the prediction, the run (command,
 deployments, tokens, cost from `llm_call`), the result, the root cause of any miss, and the change
@@ -765,3 +766,170 @@ it led to.
     - o26 a `plan` with 2 to 4 options; o27 a `record` proposing Mara's salary; o28 small talk.
     - About 70 to 100 calls, **US$0.30 to US$0.60**. Score: 80% to 92% of checks; no flat "can't"
       anywhere; nothing filed except o27.
+
+### 17. Claude as the models: check-models, then every recording again on Claude (Nov 27, 2026)
+
+- **Change tested:** the provider. Pim chose Claude from now on (Nov 27), with the tests run on Claude
+  only: Claude Opus 5.5 for the strong tier (orchestrator, single agent, dreaming) and Claude Haiku
+  5.5 for the fast one (specialists), both at effort `low` to start (Foundry ran reasoning effort
+  low), the system prompt cached, thinking blocks sent back within a loop, tool choice `auto`
+  (Claude refuses forced tool use, so the loop's "only the final tool" is the offer and its refusals).
+  The prompts are entry 16's, unchanged: written for GPT-5, not yet tuned for Claude. Entry 16's runs
+  are done here instead, on Claude, with dreaming's labelled set added. Waiting for the key
+  (`KAKO_ANTHROPIC_API_KEY` in the cloud environment) and Pim's yes. The Foundry recordings stay in
+  git history, and the results keep their run dates.
+- **Order, stopping after each to read it:** `kako check-models` (two tiny calls, under US$0.01);
+  session 2 alone as a pilot; then session 4, the test set (both architectures, and without the
+  preference), the conversation set, the open set and dreaming's labelled set.
+- **Prediction (written before the runs):**
+  - **check-models:** both lines pass. If the account refuses the thinking-binding beta on Haiku,
+    the fast line fails with a 400 naming it, and the fix is in the model manager before anything
+    else runs.
+  - **Session 2 pilot:** a `plan` answer with A (9 months) and B (17 months, the fund's target in 12),
+    as entry 14; 6 to 10 calls. Cache reads on every orchestrator call after the first (the system
+    prompt and brief, about 4,000 tokens). Cost **US$0.04 to US$0.10**: Opus's input is dearer than
+    gpt-5.4's, but most of it is read from the cache. Likeliest misses: a Haiku specialist writing an
+    amount as a number instead of a spec (refused, then fixed), or answering in words at its limit
+    instead of calling `submit_proposal` (sent back once).
+  - **Session 4:** as entry 16 predicted: turn 1 a `record` with one `propose_change`, turn 2 the
+    replan against Oct 18 with A recommended on the preference. **US$0.10 to US$0.20.**
+  - **Test set:** specialists 85% to 95%, single 85% to 93%, within a few points of entry 12 (93.3%
+    and 90.7%) and lower rather than higher, since the prompts were tuned on GPT-5. About **US$0.60 to
+    US$1.00** for both architectures, about US$0.15 without the preference.
+  - **Conversation set:** 80% to 92%. **Open set:** 78% to 90% of checks, no flat "can't", nothing
+    filed except o27; about **US$0.40 to US$0.80**. **Dreaming:** 13 to 15 of 15 found, nothing
+    unquoted, about US$0.05.
+  - **Where Claude may differ:** fewer empty replies than Foundry's one; more words beside tool calls
+    (harmless); an orchestrator reply cut at its 6,000-token cap by thinking (`finish_reason`
+    "length"), which would mean raising the cap or keeping effort low; Haiku's specialists weaker on
+    the amount-spec rules than gpt-5-mini, which would show as refused tool calls in `agent_step`, and
+    the first thing to try is Sonnet 5.5 for the fast tier.
+  - **In all:** about **US$1.50 to US$2.50** of the month's US$100 credit, under the daily cap of
+    US$3 if run in one day, otherwise over two.
+- **Run so far (Nov 27, 2026):** on local Meko 1.20261126.1, a fresh database and a throwaway
+  datapack per run, Claude Opus 5.5 and Claude Haiku 5.5 at effort `low`.
+  - `kako check-models`: both models pass (Opus 879 ms, Haiku 467 ms), so the thinking-binding beta
+    is accepted on both. Under US$0.01.
+  - **Session 2, first try:** refused before any answer, US$0.00: "The compiled grammar is too large".
+    Claude compiles every strict tool schema of a request into one grammar, and the orchestrator's 15
+    strict tools together pass its internal limit (each on its own passes; a probe on Haiku with the
+    same tools found that `submit_answer` with `propose_change`, `run_what_if` and `calculate` passes,
+    and all 15 don't). **Change made:** the model manager sends a tool as strict to Claude only when
+    its schema is structured (a nested object, an enum, a const or a union): there, `calculate`,
+    `run_what_if`, `propose_change` and `submit_answer`. The eleven plain ones (string or list of
+    strings) go without; every tool checks its arguments in code anyway. Foundry is unchanged.
+  - **Session 2, pilot** (kept as `session-2-run17a.json`; `session-2.json` stays entry 14's until the
+    pilot is settled): 2 calls, 27,897 tokens in (13,409 read from the cache on the second call),
+    1,535 out, **US$0.1058**: the first call writes the cache at 1.25 times (US$0.073), the second
+    reads it at a twentieth (US$0.033).
+- **Pilot result against the prediction:**
+  - **Figures and reply as predicted:** a `plan` answer, Jun's split (₱4,000.00 on the card, card in
+    17 months with ₱24,303.62 of interest, the fund's target in 12) and all on the card (9 months,
+    ₱12,460.10), each citing its what-if and `said` or the avalanche preference, the choice left to
+    the household, nothing flagged, no question back. The letters are swapped (A is Jun's split).
+  - **Cost:** at the top of the predicted US$0.04 to US$0.10, from the cache write.
+  - **Off on behaviour:** 2 calls against 6 to 10. The orchestrator ran both what-ifs itself in one
+    round and answered, asking no specialist, so no reconciliation ran (0 rows) and the demo's
+    over-allocation, caught in code, never happens. `orchestrator.md` says both "a plan: ask the
+    specialists" and "answer in one go when you can", and Opus at `low` took the second. Recording
+    stopped here, as agreed, before session 4 and the sets.
+- **Change made after the pilot (Pim, Nov 27: "fix the orchestrator prompt to understand why it
+  [should] call the agents"):** `orchestrator.md` gains "Why a plan goes to the specialists": a plan
+  moves one surplus several areas want; each specialist reads its area against its own rules; the
+  reconciliation check runs only on their proposals, so a plan built from the orchestrator's own
+  what-ifs skips the conflict the household should see. For a plan it asks every specialist the plan
+  touches, in one round, and runs its own what-ifs only after them (a named amount none ran, or a
+  split while a conflict is open). "Answer in one go" now names every kind but `plan`.
+- **Prediction for the second pilot (written before the run):** a `plan` with `ask_debt` and
+  `ask_savings` in one round (perhaps `ask_budget` too), the over-allocation caught by the rules
+  (`rec-W1`), at most 3 splits, then options as before (Jun's split at 17 months and the fund's
+  target in 12; all on the card at 9 months and ₱12,460.10), `recommended` and the resolution empty
+  because Mara and Jun disagree. 6 to 10 calls (2 to 3 for the orchestrator, 2 to 3 per Haiku
+  specialist), **US$0.12 to US$0.20**: the orchestrator's cache write stays the largest part.
+- **Run (Nov 27, 2026), after the prompt change:** each on a fresh database and its own throwaway
+  local Meko datapack; the test sets on a household `kako demo run` set up (sessions replayed from
+  the new recordings, upkeep done), the one without the preference on `kako demo run
+  --without-learning`, dreaming on `kako demo load --through 2026-12-01T12:00+08:00`; each then
+  replayed with `--save`. The Foundry recordings stay in git history.
+
+  | | Model calls | Tokens | Cost |
+  | --- | --- | --- | --- |
+  | check-models and the strict-schema probes (Haiku) | 11 | about 44,000 | about US$0.006 |
+  | Session 2, first pilot (`session-2-run17a.json`) | 2 | 29,432 | US$0.1058 |
+  | Session 2 | 7 | 69,816 | US$0.1201 |
+  | Session 4 (s4:t1 and s4:t2) | 15 | 184,220 | US$0.1971 |
+  | Test set, specialists | 70 | 905,166 | US$1.0919 |
+  | Test set, specialists, without the preference | 32 | 388,997 | US$0.3876 |
+  | Dreaming's labelled set (a first try refused at once, US$0) | 13 | 55,753 | US$0.3105 |
+  | **In all** | | | **about US$2.22** |
+
+- **Result:**
+  - **Session 2** as predicted for the second pilot: `ask_debt` and `ask_savings` in one round, the
+    over-allocation caught by the rules (`rec-W1`: ₱5,050.00 a month more than the surplus), the
+    resolution left to the household ("Mara wants the card cleared fast and Jun wants ₱4,000.00 on
+    the card"), A all on the card (9 months, ₱12,460.10) and B Jun's split (17 months, the fund's
+    target in 12), each citing the specialist's what-if, nothing flagged. 7 calls, inside 6 to 10;
+    US$0.12, inside US$0.12 to US$0.20.
+  - **Session 4** as predicted: turn 1 a `record` with one `propose_change` (2 calls); turn 2 the
+    replan against Oct 18 with Sessions 1 to 3 to revisit, all three specialists asked, A (₱10,000
+    on the card, ₱15,050.00 to the fund: card in 7 months, ₱9,358.80; the fund's target in 4)
+    recommended on the preference and the three decisions (13 calls). US$0.20, at the top of the
+    range. Option B's summary says "all ₱16,000.00 on the card" but its allocation is ₱20,000.00 on
+    the card (the ₱4,000.00 already planned plus the ₱16,000.00 unallocated): the figures are the
+    engine's, the words are loose, as in entry 14.
+  - **Test set, specialists: 92.2%** (90 of 102 checks), inside 85% to 95%, against entry 12's 93.3%
+    on Foundry. The misses are the ones entry 16 predicted: q06, q12 and q17 ("what if we put ₱X
+    in", "should we throw everything at the card") answered as a `simulate` with no option, where the
+    set expects options. 15 questions took a single call: Opus answers a look-up or an explanation
+    in one go, as the prompt asks.
+  - **Without the preference: 70.7%** (with it, on the same four questions, 85.7%); leaving out the
+    check that cites it, 87.5% on both sides. So the preference's effect is now only its citation:
+    without it the specialists still don't recommend all on the card (the three decisions in the
+    brief point the same way), as entry 13 found to a lesser degree (72.9% against 81.3%).
+  - **Dreaming: 15 of 15 found, 0 wrong, 0 unquoted: PASS** (entry 11 on Foundry: 14 of 15). The
+    first try was refused before any call was answered (US$0): `submit_claims` caps its list with
+    `maxItems`, which Claude's strict mode refuses.
+  - **Cost against the prediction:** higher wherever Opus answers: the test set US$1.09 against
+    US$0.60 to US$1.00 for both architectures, without the preference US$0.39 against about
+    US$0.15, dreaming US$0.31 against about US$0.05 (13 calls of about 4,000 tokens each, none read
+    from the cache: each case's brief is its own). A turn's calls do read the cache (about 11,000
+    of each orchestrator call's 14,000 tokens), so most of the cost is Opus's output (US$20 a
+    million) and each turn's first cache write. Stopped there, at about US$2.22 of the US$2
+    approved, to ask before the single agent, the open set and the conversation set (about US$2.40
+    more).
+- **Changes made:** the model manager also sends a tool loose when its schema uses a keyword
+  Claude's strict mode refuses (`maxItems`, string lengths, number bounds, `oneOf`, `minItems`
+  above 1). Demo mode now runs Meko upkeep after the sessions and before the test set: the test set
+  is recorded on a household demo mode set up, upkeep included, and on a fresh datapack 5 of its
+  questions (q03, q07, q09, q10, q22) failed to replay without it, a recorded reply's tool call
+  taking another path against a Meko without Kako's memories. `test_metrics.py`,
+  `test_metrics_api.py` and `test_demo_mode.py` read the new results and labels.
+- **Change made for q06, q12 and q17 (Pim's go, Nov 27):** `orchestrator.md` says a what-if that only
+  moves the surplus is a move the household could choose, so a `plan`, not a `simulate`: the
+  orchestrator runs the move they named itself (no proposals to put together, so no specialists)
+  and offers it as an option with `said:`, alone or beside a second option when that helps.
+  `simulate` stays for their life: a raise, a lost job, a loan.
+- **Prediction for the three (written before the run):** each a `plan` with 1 or 2 options and its
+  figures as before (q06 12 months, q12 8 months for the card and naming the flexibility preference,
+  q17 5 months), all checks passing on q06 and q17; q12 the likeliest miss, on citing
+  `fact:preference.debt_vs_flexibility` in its option. 2 calls each, about **US$0.13** in all.
+- **Run and result for the three:** `KAKO_MODEL_MODE=record uv run kako test-set --only
+  q06,q12,q17` on the test set's household, its six calls then put in `test-set-specialists.json` in
+  place of the three questions' earlier calls (the other 19 were recorded with the prompt before this
+  change; demo mode replays them by key). **All three 100%** (21 of 21 checks), each a `plan` with the
+  household's move as an option, 2 calls each, **US$0.2079**, over the predicted US$0.13 (q06's
+  first call wrote the changed prompt to the cache). The test set's saved score is now **100%** (102
+  of 102). q12 cited the flexibility preference, against the prediction's likeliest miss.
+- **Session 2 again on this prompt** (kept as `session-2-run17c.json`, US$0.0709, 7 calls): the
+  debt and savings specialists still asked, but this time both proposed Jun's split, so no
+  over-allocation came up and the options were the same as before. `session-2.json` stays the
+  recording before it, which shows the conflict caught in code: the change only touches a plan where
+  the household names one move, which session 2 isn't (Mara and Jun name two).
+- **Conversation set** (`kako conversations`, specialists, on a household `kako demo run` set up;
+  `conversations-specialists.json`): **100%** (58 of 58 checks over 3 conversations, 7 turns), above
+  the predicted 80% to 92%; c01 turn 1 ("what if i lose my job") a `simulate` with no question back,
+  as entry 16 predicted. 22 calls, 330,319 tokens, **US$0.4540**, over the predicted about US$0.30.
+  Replayed with `--save` on a fresh database (a replay on the recording's own database scores lower:
+  its sessions now sit in the brief as earlier sessions).
+- **Spent today:** about **US$2.95** in all, under the daily cap of US$3. The single agent and the
+  open set (about US$2.10) are tomorrow's, as Pim chose.
