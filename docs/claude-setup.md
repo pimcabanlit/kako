@@ -58,7 +58,9 @@ call, with the way out: a Claude model, or `KAKO_MODEL_PROVIDER=foundry`.
   the next call of the same loop. When the loop offers only the final tool, the request's tools
   change, and the thinking-binding beta (`thinking-binding-controls-2026-08-01`, `drop_block`) drops
   the earlier blocks rather than refusing the request.
-- Strict tools (each schema already says `additionalProperties: false`) and tool choice `auto`:
+- Strict tools where the schema is structured (a nested object, an enum, a const or a union), and
+  plain ones without: Claude compiles every strict schema of a request into one grammar and refuses
+  one too large, which the orchestrator's fifteen tools reached (tuning-log entry 17). Tool choice `auto`:
   Claude's current models refuse forced tool use, so the loop keeps "only the final tool" by what it
   offers, and sends an empty reply back once.
 - Tool results go back in one user turn, before any note from code.
@@ -81,6 +83,6 @@ agent's call, so a model or account that refuses them fails here first. Exit 1 o
 ## What has been run
 
 - Nov 27: built and tested with a fake API (`tests/test_claude_chat.py`): no key, no call, no spend.
-- Not yet run on the real API. The first runs, in order, are in [tuning-log.md](tuning-log.md)
-  entry 17, with the prediction written first: `kako check-models`, session 2 as a pilot, then the
-  other recordings.
+- Nov 27: `kako check-models` passed on both models. Session 2's pilot ran (US$0.11, figures right,
+  but the orchestrator asked no specialist), after strict tools were cut to the structured ones.
+  The rest waits on the pilot: [tuning-log.md](tuning-log.md) entry 17.

@@ -516,12 +516,33 @@ class FoundryChat:
 _CLAUDE_FINISH: Final = {"end_turn": "stop", "tool_use": "tool_calls", "max_tokens": "length"}
 
 
+def _structured(schema: Any, *, top: bool = True) -> bool:
+    """Whether a schema holds more than plain values at its top: a nested object (an array of
+    objects included), an enum, a const or a union."""
+    if isinstance(schema, list):
+        return any(_structured(s, top=False) for s in schema)
+    if not isinstance(schema, dict):
+        return False
+    if any(k in schema for k in ("enum", "const", "anyOf", "allOf")):
+        return True
+    if not top and schema.get("type") == "object":
+        return True
+    children = list(schema.get("properties", {}).values())
+    if "items" in schema:
+        children.append(schema["items"])
+    return any(_structured(c, top=False) for c in children)
+
+
 def _claude_tool(tool: ToolSpec) -> dict[str, Any]:
+    """A tool as Claude takes it. Strict only where the schema is structured: Claude compiles every
+    strict schema of a request into one grammar and refuses one too large ("The compiled grammar
+    is too large"), which the orchestrator's fifteen tools reach (tuning-log entry 17). A tool of
+    plain values gains little from it, and every tool checks its arguments in code anyway."""
     return {
         "name": tool.name,
         "description": tool.description,
         "input_schema": tool.parameters,
-        "strict": tool.strict,
+        "strict": tool.strict and _structured(tool.parameters),
     }
 
 

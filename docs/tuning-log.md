@@ -806,3 +806,30 @@ it led to.
     the first thing to try is Sonnet 5.5 for the fast tier.
   - **In all:** about **US$1.50 to US$2.50** of the month's US$100 credit, under the daily cap of
     US$3 if run in one day, otherwise over two.
+- **Run so far (Nov 27, 2026):** on local Meko 1.20261126.1, a fresh database and a throwaway
+  datapack per run, Claude Opus 5.5 and Claude Haiku 5.5 at effort `low`.
+  - `kako check-models`: both models pass (Opus 879 ms, Haiku 467 ms), so the thinking-binding beta
+    is accepted on both. Under US$0.01.
+  - **Session 2, first try:** refused before any answer, US$0.00: "The compiled grammar is too large".
+    Claude compiles every strict tool schema of a request into one grammar, and the orchestrator's 15
+    strict tools together pass its internal limit (each on its own passes; a probe on Haiku with the
+    same tools found that `submit_answer` with `propose_change`, `run_what_if` and `calculate` passes,
+    and all 15 don't). **Change made:** the model manager sends a tool as strict to Claude only when
+    its schema is structured (a nested object, an enum, a const or a union): there, `calculate`,
+    `run_what_if`, `propose_change` and `submit_answer`. The eleven plain ones (string or list of
+    strings) go without; every tool checks its arguments in code anyway. Foundry is unchanged.
+  - **Session 2, pilot** (kept as `session-2-run17a.json`; `session-2.json` stays entry 14's until the
+    pilot is settled): 2 calls, 27,897 tokens in (13,409 read from the cache on the second call),
+    1,535 out, **US$0.1058**: the first call writes the cache at 1.25 times (US$0.073), the second
+    reads it at a twentieth (US$0.033).
+- **Pilot result against the prediction:**
+  - **Figures and reply as predicted:** a `plan` answer, Jun's split (₱4,000.00 on the card, card in
+    17 months with ₱24,303.62 of interest, the fund's target in 12) and all on the card (9 months,
+    ₱12,460.10), each citing its what-if and `said` or the avalanche preference, the choice left to
+    the household, nothing flagged, no question back. The letters are swapped (A is Jun's split).
+  - **Cost:** at the top of the predicted US$0.04 to US$0.10, from the cache write.
+  - **Off on behaviour:** 2 calls against 6 to 10. The orchestrator ran both what-ifs itself in one
+    round and answered, asking no specialist, so no reconciliation ran (0 rows) and the demo's
+    over-allocation, caught in code, never happens. `orchestrator.md` says both "a plan: ask the
+    specialists" and "answer in one go when you can", and Opus at `low` took the second. Recording
+    stopped here, as agreed, before session 4 and the sets.

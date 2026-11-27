@@ -841,7 +841,7 @@ The CLI keeps its own `--no-meko`.
   explicitly, so an `ANTHROPIC_BASE_URL` meant for another tool never redirects Kako's calls. Each
   request: the system prompt with a cache breakpoint and automatic caching of the turns after it (a
   turn's calls read the brief from the cache at a twentieth of the price); thinking always on, at the
-  tier's effort (`KAKO_CLAUDE_EFFORT_*`, low to start, tuned by the test sets); strict tools; tool
+  tier's effort (`KAKO_CLAUDE_EFFORT_*`, low to start, tuned by the test sets); strict tools where the schema is structured; tool
   choice `auto`. A reply's thinking blocks come back with it as opaque values (`ChatReply.blocks`), and
   the tool loop sends them back unchanged with the next call of the same loop, as Claude requires; the
   thinking-binding beta drops, rather than refuses, a block written before the loop narrowed its tools

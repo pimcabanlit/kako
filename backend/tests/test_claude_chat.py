@@ -1,9 +1,10 @@
 """Claude as the models' provider, with a fake Anthropic API: no network, no key spent.
 
 `ClaudeChat` (the agents' calls), `ClaudeBackend` and `check_models` on Claude, the request it
-sends (system prompt cached, strict tools, tool choice auto, thinking blocks sent back unchanged,
-tool results in one user turn), the reply it reads (tool calls, cache reads and writes, finish
-reason), which errors may pass next time, and the cost of a call that writes the cache.
+sends (system prompt cached, strict tools where structured, tool choice auto, thinking blocks
+sent back unchanged, tool results in one user turn), the reply it reads (tool calls, cache reads
+and writes, finish reason), which errors may pass next time, and the cost of a call that writes
+the cache.
 """
 
 from __future__ import annotations
@@ -164,7 +165,7 @@ async def test_claude_chat_sends_the_request_claude_expects(
             "name": "get_figures",
             "description": "Read figures.",
             "input_schema": OBJECT,
-            "strict": True,
+            "strict": False,  # plain values: not worth a share of the request's one grammar
         }
     ]
     assert body["messages"] == [
@@ -492,3 +493,34 @@ def test_claude_backend_signs_in_then_makes_a_tiny_call(claude: Settings) -> Non
     body = json.loads(seen[1].content)
     assert body["thinking"]["type"] == "adaptive"  # the same shape as an agent's call
     assert all(r.headers["authorization"] == f"Bearer {KEY}" for r in seen)
+
+
+def test_claude_tools_are_strict_only_where_structured() -> None:
+    from kako.agents.model_manager import _claude_tool
+
+    nested = {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"ref": {"type": "string"}},
+                    "required": ["ref"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["items"],
+        "additionalProperties": False,
+    }
+    enum = {
+        "type": "object",
+        "properties": {"kind": {"type": "string", "enum": ["plan", "inform"]}},
+        "required": ["kind"],
+        "additionalProperties": False,
+    }
+    assert _claude_tool(ToolSpec("plain", "", OBJECT))["strict"] is False
+    assert _claude_tool(ToolSpec("nested", "", nested))["strict"] is True
+    assert _claude_tool(ToolSpec("enum", "", enum))["strict"] is True
+    assert _claude_tool(ToolSpec("loose", "", enum, strict=False))["strict"] is False

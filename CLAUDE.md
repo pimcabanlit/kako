@@ -515,7 +515,7 @@ missing test variable fails instead of skipping. It never touches Meko Cloud and
   socket refused) and `test_model_sdk_imports.py` (Ruff refuses a model SDK anywhere but the model
   manager) use the scripted model in `tests/support/models.py`, never a real model;
   `test_claude_chat.py` runs Claude's backend against a fake API (the request: cached system prompt,
-  strict tools, tool choice auto, thinking blocks sent back, tool results in one user turn, Kako's own
+  strict tools only where structured, tool choice auto, thinking blocks sent back, tool results in one user turn, Kako's own
   key and URL whatever the environment says; the reply; which errors may pass; cache writes priced;
   check-models on Claude);
   `tests/integration/test_agent_logs.py` writes and reads `llm_call` and `agent_step`.
