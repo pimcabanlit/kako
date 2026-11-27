@@ -7,7 +7,7 @@ each with what was run. Keep it current when Meko changes or a fallback is chose
 
 | Where | Meko | URL | Key |
 | --- | --- | --- | --- |
-| Development, tests, CI | Local Meko 1.20261116.0 | `http://127.0.0.1:7777/mcp` | `meko token`, or none |
+| Development, tests, CI | Local Meko 1.20261126.1 (1.20261116.0 until Nov 27, when its release was taken down) | `http://127.0.0.1:7777/mcp` | `meko token`, or none |
 | The demo and the video | Meko Cloud, the demo datapack only | `https://mcp.mekodata.ai/mcp` | A `mko_tkn_` API key in `MEKO_API_KEY` |
 
 - One package talks to Meko: `backend/src/kako/meko/` (REVIEW.md rule 9). Kako calls it through one

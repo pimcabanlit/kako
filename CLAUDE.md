@@ -142,8 +142,8 @@ if [ -d kako ]; then
   MEKO_CMD="$MEKO_CMD"'"$HOME/.local/bin/meko" start >/dev/null 2>&1; '
   MEKO_CMD="$MEKO_CMD"'exec npx -y mcp-remote@0.16.6 http://127.0.0.1:7777/mcp --allow-http'
   claude mcp add --scope user meko -- sh -c "$MEKO_CMD" || true
-  curl -fsSL https://github.com/yugabyte/meko/releases/download/meko-v1.20261116.0/install.sh \
-    | sh -s -- --version 1.20261116.0 --no-service --non-interactive || true
+  curl -fsSL https://github.com/yugabyte/meko/releases/download/meko-v1.20261126.1/install.sh \
+    | sh -s -- --version 1.20261126.1 --no-service --non-interactive || true
   ~/.local/bin/meko start || true
   claude plugin marketplace add yugabyte/meko-skills || true
   claude plugin install meko-agent-skills@meko-agent-skills --scope user || true
@@ -160,6 +160,10 @@ Meko Cloud server fails to connect there (the network blocks `mcp.mekodata.ai`);
 expected and keeps build sessions off Meko Cloud. The environment's script was updated to this
 block on Nov 17, 2026; with Meko stopped by hand, opening the `meko` server started it again in
 about 3 seconds.
+
+Nov 27, 2026: Meko took the 1.20261116.0 release down (its install.sh answers 404), so CI
+and the block above moved to 1.20261126.1, the release `releases/latest` pointed to that day. The
+full test suite passed on it, unit and integration on local Meko.
 
 Rules:
 
