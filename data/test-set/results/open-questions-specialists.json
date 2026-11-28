@@ -1,0 +1,1728 @@
+{
+ "architecture": "specialists",
+ "mode": "replay",
+ "run_at": "2026-11-28T01:09:27+00:00",
+ "conversations": 30,
+ "score": 0.9967,
+ "checks_passed": 308,
+ "checks_total": 309,
+ "results": [
+  {
+   "id": "o01",
+   "title": "Salary up by 20k",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "what happens if my salary increases by 20000",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'surplus', 'left over', 'what-if'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a simulate answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      },
+      {
+       "name": "labelled 'Scenario, nothing saved'",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o02",
+   "title": "Job loss",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "what if i lose my job",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'emergency fund', 'runway', 'months'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a simulate or compute or explain answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o03",
+   "title": "Mara's raise from March",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "What if my pay goes up 10% from March?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a simulate answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      },
+      {
+       "name": "labelled 'Scenario, nothing saved'",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o04",
+   "title": "Car loan",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "We're thinking of a second car loan, ₱350,000 at 1% a month with a ₱12,000 monthly payment. What would that do to us?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a simulate or advise answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      },
+      {
+       "name": "labelled 'Scenario, nothing saved'",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o05",
+   "title": "Eating out cut",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "What if we cut eating out to ₱3,000 a month?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a simulate answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      },
+      {
+       "name": "labelled 'Scenario, nothing saved'",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o06",
+   "title": "Bonus to the card",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "If we put a ₱50,000 bonus on the credit card, when is it paid off?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a simulate answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      },
+      {
+       "name": "labelled 'Scenario, nothing saved'",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o07",
+   "title": "Rent goes up",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "Our landlord might raise rent and utilities by ₱5,000. How bad is that?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a simulate or advise answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o08",
+   "title": "Surplus lower than last month",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "Why is our surplus different from last month?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a explain or look_up answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o09",
+   "title": "How the surplus is worked out",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "How do you work out what's left over each month?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a explain answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o10",
+   "title": "Explain 13th-month pay",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "Explain how 13th-month pay works.",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of '13th-month', '13th month'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a inform answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o11",
+   "title": "What's SSS",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "What's SSS?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'SSS', 'Social Security'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a inform answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o12",
+   "title": "What's an emergency fund",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "what's an emergency fund and how big should ours be?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'emergency fund'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a inform or explain answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o13",
+   "title": "Card interest",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "How do credit card interest rates work?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'interest'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a inform answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o14",
+   "title": "Eating out a lot?",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "Is ₱6,000 on eating out a lot for us?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a advise or explain or compute answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o15",
+   "title": "Cashback card",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "Should we get a cashback credit card?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'BDO'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'BPI'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'Metrobank'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'Citi'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a advise answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o16",
+   "title": "Decisions this year",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "Summarise what we decided this year.",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a look_up answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o17",
+   "title": "Interest paid on the card",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "How much interest did we pay on the card last month?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a look_up or explain answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      },
+      {
+       "name": "labelled 'From your documents'",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o18",
+   "title": "When did Mara's salary change",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "When did Mara's salary change?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a look_up answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o19",
+   "title": "Yearly eating out",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "How much do we spend on eating out in a year?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a compute answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      },
+      {
+       "name": "labelled 'Calculated'",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o20",
+   "title": "Share of income to debt",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "What share of our income goes to debt payments?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a explain or compute answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o21",
+   "title": "Fund months without pay",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "If both of us stopped earning, how many months would the emergency fund last?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'month', 'months'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a explain or compute or simulate answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o22",
+   "title": "Card payoff date",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "When will the credit card be paid off?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a explain or look_up answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o23",
+   "title": "House fund on track",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "Are we on track for the house fund?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a explain answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o24",
+   "title": "Invest the savings",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "Should we invest our long-term savings? Which fund should we buy?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'you should buy'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a advise or inform answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o25",
+   "title": "Tax on 13th month",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "How much tax will I pay on my 13th-month pay?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'tax'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a inform or explain answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o26",
+   "title": "Pay down the card plan",
+   "score": 0.9,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "How hard should we pay down the card now?",
+     "score": 0.9,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "2 to 4 options",
+       "passed": false,
+       "detail": "1 offered"
+      },
+      {
+       "name": "a plan answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o27",
+   "title": "New job news",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "I got promoted! My take-home pay is ₱75,000 a month from Jan 1, 2027.",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files Mara's salary",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a record answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o28",
+   "title": "Small talk",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "thanks, that helps a lot",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "0 to 0 options",
+       "passed": true
+      },
+      {
+       "name": "a small_talk answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o29",
+   "title": "Snowball or avalanche",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "mara",
+     "message": "What's the difference between snowball and avalanche, and which do we use?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "says one of 'avalanche', 'snowball'",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a inform or explain answer",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o30",
+   "title": "Gym membership",
+   "score": 1.0,
+   "turns": [
+    {
+     "turn": 1,
+     "by": "jun",
+     "message": "Can we afford a ₱2,500 a month gym membership?",
+     "score": 1.0,
+     "error": null,
+     "checks": [
+      {
+       "name": "writer",
+       "passed": true
+      },
+      {
+       "name": "conversation",
+       "passed": true
+      },
+      {
+       "name": "answered",
+       "passed": true
+      },
+      {
+       "name": "numbers",
+       "passed": true
+      },
+      {
+       "name": "files nothing",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"Kako can't test\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say \"can't test that\"",
+       "passed": true
+      },
+      {
+       "name": "doesn't say 'cannot answer'",
+       "passed": true
+      },
+      {
+       "name": "a simulate or advise answer",
+       "passed": true
+      },
+      {
+       "name": "names its sources",
+       "passed": true
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

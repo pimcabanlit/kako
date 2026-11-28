@@ -165,7 +165,7 @@ def test_the_saved_test_set_runs() -> None:
     assert specialists.questions == 22
     assert specialists.score == Decimal("1.0000")
     assert specialists.checks_passed == 102
-    assert single.score == Decimal("0.9071")
+    assert single.score == Decimal("0.9221")
     assert set(specialists.scores) == {f"q{n:02}" for n in range(1, 23)}
     assert read_dreaming_run() is not None
 

@@ -347,7 +347,7 @@ async def test_the_metrics_from_stored_rows(
     assert "datapack_metrics" not in calls
 
     assert found["test_set"]["specialists"]["score_pct"] == "100.0"
-    assert found["test_set"]["single"]["score_pct"] == "90.7"
+    assert found["test_set"]["single"]["score_pct"] == "92.2"
     preference = found["preference"]
     assert preference["measured"] is True
     assert [q["id"] for q in preference["questions"]] == ["q10", "q12", "q16", "q21"]
