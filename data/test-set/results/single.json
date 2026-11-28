@@ -1,19 +1,19 @@
 {
  "architecture": "single",
  "mode": "replay",
- "run_at": "2026-11-24T14:04:24+00:00",
+ "run_at": "2026-11-28T01:08:50+00:00",
  "deployments": {
-  "recorded": "gpt-5.4"
+  "recorded": "claude-opus-5-5"
  },
  "questions": 22,
- "score": 0.9071,
+ "score": 0.9221,
  "checks_passed": 90,
  "checks_total": 102,
  "answered": 22,
- "model_calls": 41,
- "input_tokens": 247330,
- "output_tokens": 17591,
- "cost_usd": "0.485335",
+ "model_calls": 38,
+ "input_tokens": 516214,
+ "output_tokens": 23644,
+ "cost_usd": "1.042702",
  "meko_calls": 66,
  "results": [
   {
@@ -44,7 +44,7 @@
     {
      "name": "2 to 4 options",
      "passed": true,
-     "detail": "3 options"
+     "detail": "2 options"
     },
     {
      "name": "offers account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
@@ -67,12 +67,12 @@
      "passed": true
     }
    ],
-   "model_calls": 3,
-   "input_tokens": 18340,
-   "output_tokens": 1570,
-   "cost_usd": "0.037145",
+   "model_calls": 2,
+   "input_tokens": 27100,
+   "output_tokens": 1461,
+   "cost_usd": "0.102117",
    "meko_calls": 3,
-   "seconds": 0.9,
+   "seconds": 0.8,
    "error": null
   },
   {
@@ -97,10 +97,10 @@
      "passed": true
     }
    ],
-   "model_calls": 2,
-   "input_tokens": 11066,
-   "output_tokens": 320,
-   "cost_usd": "0.013169",
+   "model_calls": 1,
+   "input_tokens": 12812,
+   "output_tokens": 701,
+   "cost_usd": "0.031180",
    "meko_calls": 3,
    "seconds": 0.7,
    "error": null
@@ -131,10 +131,10 @@
      "passed": true
     }
    ],
-   "model_calls": 2,
-   "input_tokens": 10856,
-   "output_tokens": 355,
-   "cost_usd": "0.022961",
+   "model_calls": 1,
+   "input_tokens": 12820,
+   "output_tokens": 696,
+   "cost_usd": "0.031120",
    "meko_calls": 3,
    "seconds": 0.7,
    "error": null
@@ -166,9 +166,9 @@
     }
    ],
    "model_calls": 1,
-   "input_tokens": 5402,
-   "output_tokens": 339,
-   "cost_usd": "0.011390",
+   "input_tokens": 13369,
+   "output_tokens": 549,
+   "cost_usd": "0.030925",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -204,9 +204,9 @@
     }
    ],
    "model_calls": 1,
-   "input_tokens": 5387,
-   "output_tokens": 354,
-   "cost_usd": "0.011578",
+   "input_tokens": 13279,
+   "output_tokens": 1266,
+   "cost_usd": "0.044815",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -250,10 +250,10 @@
      "passed": false
     }
    ],
-   "model_calls": 2,
-   "input_tokens": 11142,
-   "output_tokens": 340,
-   "cost_usd": "0.019708",
+   "model_calls": 3,
+   "input_tokens": 41846,
+   "output_tokens": 1736,
+   "cost_usd": "0.067038",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -285,12 +285,12 @@
      "detail": "0 options"
     }
    ],
-   "model_calls": 1,
-   "input_tokens": 5298,
-   "output_tokens": 306,
-   "cost_usd": "0.011787",
+   "model_calls": 3,
+   "input_tokens": 39140,
+   "output_tokens": 827,
+   "cost_usd": "0.041424",
    "meko_calls": 3,
-   "seconds": 0.5,
+   "seconds": 0.6,
    "error": null
   },
   {
@@ -315,12 +315,12 @@
      "passed": true
     }
    ],
-   "model_calls": 1,
-   "input_tokens": 5487,
-   "output_tokens": 351,
-   "cost_usd": "0.011783",
+   "model_calls": 2,
+   "input_tokens": 27056,
+   "output_tokens": 1038,
+   "cost_usd": "0.045418",
    "meko_calls": 3,
-   "seconds": 0.7,
+   "seconds": 0.6,
    "error": null
   },
   {
@@ -328,8 +328,8 @@
    "on": "2026-09-15",
    "known_at": "2026-09-15T09:00:00+08:00",
    "message": "What is 13th-month pay, and when does Jun get his?",
-   "score": 0.75,
-   "passed": 3,
+   "score": 1.0,
+   "passed": 4,
    "total": 4,
    "checks": [
     {
@@ -342,7 +342,7 @@
     },
     {
      "name": "says 'December'",
-     "passed": false
+     "passed": true
     },
     {
      "name": "0 to 0 options",
@@ -350,12 +350,12 @@
      "detail": "0 options"
     }
    ],
-   "model_calls": 1,
-   "input_tokens": 5284,
-   "output_tokens": 632,
-   "cost_usd": "0.016642",
+   "model_calls": 2,
+   "input_tokens": 25596,
+   "output_tokens": 704,
+   "cost_usd": "0.034352",
    "meko_calls": 3,
-   "seconds": 0.7,
+   "seconds": 0.6,
    "error": null
   },
   {
@@ -363,8 +363,8 @@
    "on": "2026-10-20",
    "known_at": "2026-10-20T22:00:00+08:00",
    "message": "Should we throw everything at the credit card to finish it sooner?",
-   "score": 0.8,
-   "passed": 4,
+   "score": 1.0,
+   "passed": 5,
    "total": 5,
    "checks": [
     {
@@ -377,7 +377,7 @@
     },
     {
      "name": "states 16 months",
-     "passed": false
+     "passed": true
     },
     {
      "name": "doesn't recommend account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
@@ -389,9 +389,9 @@
     }
    ],
    "model_calls": 2,
-   "input_tokens": 11681,
-   "output_tokens": 1116,
-   "cost_usd": "0.026071",
+   "input_tokens": 27161,
+   "output_tokens": 1582,
+   "cost_usd": "0.057581",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -422,10 +422,10 @@
      "passed": true
     }
    ],
-   "model_calls": 2,
-   "input_tokens": 11400,
-   "output_tokens": 596,
-   "cost_usd": "0.017568",
+   "model_calls": 1,
+   "input_tokens": 13202,
+   "output_tokens": 668,
+   "cost_usd": "0.032470",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -435,8 +435,8 @@
    "on": "2026-10-20",
    "known_at": "2026-10-20T22:00:00+08:00",
    "message": "What if we moved the ₱5,050 from the emergency fund to the card instead?",
-   "score": 1.0,
-   "passed": 7,
+   "score": 0.4286,
+   "passed": 3,
    "total": 7,
    "checks": [
     {
@@ -453,26 +453,26 @@
     },
     {
      "name": "1 to 4 options",
-     "passed": true,
-     "detail": "1 options"
+     "passed": false,
+     "detail": "0 options"
     },
     {
      "name": "offers account:emergency-fund ₱0.00, debt:credit-card ₱9,050.00",
-     "passed": true
+     "passed": false
     },
     {
      "name": "cites debt.payoff_months@debt:credit-card",
-     "passed": true
+     "passed": false
     },
     {
      "name": "cites fact:preference.debt_vs_flexibility",
-     "passed": true
+     "passed": false
     }
    ],
-   "model_calls": 3,
-   "input_tokens": 18688,
-   "output_tokens": 879,
-   "cost_usd": "0.025633",
+   "model_calls": 2,
+   "input_tokens": 27316,
+   "output_tokens": 1365,
+   "cost_usd": "0.052788",
    "meko_calls": 3,
    "seconds": 0.7,
    "error": null
@@ -503,12 +503,12 @@
      "passed": true
     }
    ],
-   "model_calls": 1,
-   "input_tokens": 5692,
-   "output_tokens": 389,
-   "cost_usd": "0.017473",
+   "model_calls": 3,
+   "input_tokens": 42152,
+   "output_tokens": 961,
+   "cost_usd": "0.050284",
    "meko_calls": 3,
-   "seconds": 0.7,
+   "seconds": 0.6,
    "error": null
   },
   {
@@ -538,9 +538,9 @@
     }
    ],
    "model_calls": 1,
-   "input_tokens": 6046,
-   "output_tokens": 183,
-   "cost_usd": "0.009220",
+   "input_tokens": 13245,
+   "output_tokens": 608,
+   "cost_usd": "0.031485",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -567,10 +567,10 @@
      "passed": true
     }
    ],
-   "model_calls": 3,
-   "input_tokens": 18617,
-   "output_tokens": 2028,
-   "cost_usd": "0.042404",
+   "model_calls": 2,
+   "input_tokens": 27066,
+   "output_tokens": 1222,
+   "cost_usd": "0.048831",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -599,19 +599,19 @@
     {
      "name": "2 to 4 options",
      "passed": true,
-     "detail": "3 options"
+     "detail": "2 options"
     },
     {
      "name": "cites fact:preference.debt_vs_flexibility",
      "passed": true
     }
    ],
-   "model_calls": 3,
-   "input_tokens": 20933,
-   "output_tokens": 3497,
-   "cost_usd": "0.068212",
+   "model_calls": 2,
+   "input_tokens": 28116,
+   "output_tokens": 1771,
+   "cost_usd": "0.064418",
    "meko_calls": 3,
-   "seconds": 0.7,
+   "seconds": 0.6,
    "error": null
   },
   {
@@ -654,9 +654,9 @@
     }
    ],
    "model_calls": 2,
-   "input_tokens": 11946,
-   "output_tokens": 407,
-   "cost_usd": "0.014947",
+   "input_tokens": 27478,
+   "output_tokens": 961,
+   "cost_usd": "0.044716",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -687,12 +687,12 @@
      "passed": true
     }
    ],
-   "model_calls": 2,
-   "input_tokens": 11932,
-   "output_tokens": 195,
-   "cost_usd": "0.011156",
+   "model_calls": 1,
+   "input_tokens": 13399,
+   "output_tokens": 623,
+   "cost_usd": "0.032555",
    "meko_calls": 3,
-   "seconds": 0.6,
+   "seconds": 0.5,
    "error": null
   },
   {
@@ -700,8 +700,8 @@
    "on": "2026-12-01",
    "known_at": "2026-12-01T12:00:00+08:00",
    "message": "Are we on track for the house fund?",
-   "score": 0.75,
-   "passed": 3,
+   "score": 1.0,
+   "passed": 4,
    "total": 4,
    "checks": [
     {
@@ -714,7 +714,7 @@
     },
     {
      "name": "states ₱5,000.00",
-     "passed": false
+     "passed": true
     },
     {
      "name": "says 'on track'",
@@ -722,9 +722,9 @@
     }
    ],
    "model_calls": 1,
-   "input_tokens": 5875,
-   "output_tokens": 297,
-   "cost_usd": "0.010791",
+   "input_tokens": 13534,
+   "output_tokens": 772,
+   "cost_usd": "0.036210",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -751,10 +751,10 @@
      "passed": true
     }
    ],
-   "model_calls": 1,
-   "input_tokens": 6082,
-   "output_tokens": 237,
-   "cost_usd": "0.010120",
+   "model_calls": 2,
+   "input_tokens": 28461,
+   "output_tokens": 1502,
+   "cost_usd": "0.059328",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null
@@ -764,8 +764,8 @@
    "on": "2026-12-01",
    "known_at": "2026-12-01T12:00:00+08:00",
    "message": "Should we put the whole surplus on the card now to clear it in a few months?",
-   "score": 0.8,
-   "passed": 4,
+   "score": 1.0,
+   "passed": 5,
    "total": 5,
    "checks": [
     {
@@ -778,7 +778,7 @@
     },
     {
      "name": "states 7 months",
-     "passed": false
+     "passed": true
     },
     {
      "name": "doesn't recommend account:emergency-fund ₱0.00, debt:credit-card ₱25,050.00, goal:house-fund ₱0.00",
@@ -789,10 +789,10 @@
      "passed": true
     }
    ],
-   "model_calls": 3,
-   "input_tokens": 20113,
-   "output_tokens": 1658,
-   "cost_usd": "0.038577",
+   "model_calls": 2,
+   "input_tokens": 28470,
+   "output_tokens": 1617,
+   "cost_usd": "0.062287",
    "meko_calls": 3,
    "seconds": 0.7,
    "error": null
@@ -820,10 +820,10 @@
      "detail": "0 options"
     }
    ],
-   "model_calls": 3,
-   "input_tokens": 20063,
-   "output_tokens": 1542,
-   "cost_usd": "0.037000",
+   "model_calls": 1,
+   "input_tokens": 13596,
+   "output_tokens": 1014,
+   "cost_usd": "0.041360",
    "meko_calls": 3,
    "seconds": 0.6,
    "error": null

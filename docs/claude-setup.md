@@ -83,9 +83,10 @@ agent's call, so a model or account that refuses them fails here first. Exit 1 o
 ## What has been run
 
 - Nov 27: built and tested with a fake API (`tests/test_claude_chat.py`): no key, no call, no spend.
-- Nov 27: `kako check-models` passed on both models. Recorded on Claude, after two schema fixes
-  (strict only on structured tools, and loose where a keyword such as `maxItems` isn't supported)
-  and an orchestrator prompt that says why a plan goes to the specialists: sessions 2 and 4, the
-  test set with specialists (92.2%) and without the preference (70.7%), and dreaming's labelled set
-  (15 of 15), about US$2.22 in all. The single agent, the open set and the conversation set are
-  still Foundry's or not yet recorded. Details: [tuning-log.md](tuning-log.md) entry 17.
+- Nov 27 and 28: `kako check-models` passed on both models. Every recording is now Claude's, after
+  two schema fixes (strict only on structured tools, and loose where a keyword such as `maxItems`
+  isn't supported) and two orchestrator prompt changes (why a plan goes to the specialists; a named
+  move is a plan's option): sessions 2 and 4, the test set with specialists (100%), the single agent
+  (92.2%), without the preference (70.7%), the conversation set (100%), the open set (99.7%) and
+  dreaming's labelled set (15 of 15), about US$5.51 in all. Details: [tuning-log.md](tuning-log.md)
+  entry 17.

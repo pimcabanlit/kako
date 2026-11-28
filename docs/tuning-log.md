@@ -933,3 +933,37 @@ it led to.
   its sessions now sit in the brief as earlier sessions).
 - **Spent today:** about **US$2.95** in all, under the daily cap of US$3. The single agent and the
   open set (about US$2.10) are tomorrow's, as Pim chose.
+- **Day 2 (Nov 28), prediction (written before the runs):**
+  - **Single agent** (`kako test-set --architecture single`, Opus alone with every read tool, on the
+    test set's household): 88% to 96%, under the specialists' 100% since `single.md` didn't get
+    yesterday's plan wording (a named move as an option); the likeliest misses are q06, q12 and q17
+    again. About 40 to 50 calls, **US$0.70 to US$1.00**.
+  - **Open set** (`kako conversations --set open`, specialists, 30 one-turn questions, on a household
+    `kako demo run` set up): 80% to 92% of checks as entry 16 predicted, no flat "can't", nothing
+    filed except o27; most questions 1 or 2 calls at about US$0.03 to US$0.05 each, o26 (a plan)
+    more: **US$1.00 to US$1.50**.
+- **Day 2 run:** `KAKO_MODEL_MODE=record uv run kako test-set --architecture single` on the test
+  set's household (`test-set-single.json`), and `KAKO_MODEL_MODE=record uv run kako conversations
+  --set open` on a household `kako demo run` set up (`open-questions-specialists.json`), then each
+  replayed with `--save` on a fresh database and datapack.
+
+  | | Model calls | Tokens | Cost |
+  | --- | --- | --- | --- |
+  | Test set, single agent | 38 | 539,858 | US$1.0427 |
+  | Open set, specialists | 65 | 1,017,908 | US$1.5193 |
+  | **Day 2** | | | **US$2.56** |
+
+- **Day 2 result:**
+  - **Single agent: 92.2%** (90 of 102), inside 88% to 96%, against 90.7% on Foundry. Its only
+    misses are q06, q12 and q17, as predicted: `single.md` still answers a named move as a
+    `simulate`. The single agent now trails the specialists (100%) by those three questions, and
+    costs about the same (US$1.04 against US$1.13), with half the calls. Bringing `single.md` the same
+    wording is a follow-up; it would make the baseline fairer, not the product better.
+  - **Open set: 99.7%** (308 of 309 checks over 30 questions), above the predicted 80% to 92%. The one
+    miss: o26 (a plan to pay down the card) offered 1 option where the set expects 2 to 4, from
+    yesterday's "or just their own move" wording. No flat "can't", nothing filed but o27. US$1.52, a
+    little over the predicted top of US$1.50.
+- **In all for entry 17:** about **US$5.51** over two days (US$2.95 on Nov 27, US$2.56 on Nov 28),
+  each day under the cap. Every recording Kako replays now comes from Claude: sessions 2 and 4, the
+  test set for both architectures and without the preference, the conversation set, the open set and
+  dreaming's labelled set.
